@@ -2,38 +2,49 @@
 import { getMusicSignal } from "./providers/music.js";
 import { getSelfReportSignal } from "./providers/selfreport.js";
 import { getAmbientSignal } from "./providers/ambient.js";
+import { getGitSignal } from "./providers/git.js";
 import { deriveCadence, buildReframe, loadOverrides, applyOverrides } from "./cadence.js";
 import { render } from "./inject.js";
 import type { Signal, UserState, StateWithCadence } from "./types.js";
 
 const TOTAL_BUDGET_MS = 1500;
 
-async function readStdin(): Promise<void> {
-  if (process.stdin.isTTY) return;
-  for await (const _ of process.stdin) {
-    // drain — claude code writes hook input here; we don't currently use it
+// Claude Code writes a JSON payload to stdin; it includes `cwd` (the project
+// dir). We read it so the git provider inspects the RIGHT repo, not wherever
+// the hook binary happens to live.
+async function readStdin(): Promise<{ cwd?: string }> {
+  if (process.stdin.isTTY) return {};
+  let raw = "";
+  for await (const chunk of process.stdin) raw += chunk;
+  try {
+    return JSON.parse(raw) as { cwd?: string };
+  } catch {
+    return {};
   }
 }
 
-async function collectSignals(): Promise<Signal[]> {
-  const [music, report, ambient] = await Promise.allSettled([
+async function collectSignals(cwd: string): Promise<Signal[]> {
+  const [music, report, ambient, git] = await Promise.allSettled([
     getMusicSignal(),
     getSelfReportSignal(),
     getAmbientSignal(new Date()),
+    getGitSignal(cwd),
   ]);
   const signals: Signal[] = [];
   if (music.status === "fulfilled" && music.value) signals.push(music.value);
   if (report.status === "fulfilled" && report.value) signals.push(report.value);
   if (ambient.status === "fulfilled" && ambient.value) signals.push(ambient.value);
+  if (git.status === "fulfilled" && git.value) signals.push(git.value);
   return signals;
 }
 
 async function main() {
-  await readStdin();
+  const { cwd } = await readStdin();
+  const projectDir = cwd ?? process.cwd();
 
   const [signals, overrides] = await Promise.all([
     Promise.race<Signal[]>([
-      collectSignals(),
+      collectSignals(projectDir),
       new Promise<Signal[]>((resolve) => setTimeout(() => resolve([]), TOTAL_BUDGET_MS)),
     ]),
     loadOverrides(),

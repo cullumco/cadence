@@ -92,17 +92,27 @@ order). Across tiers this is intentional (self-report > ambient), but *within*
 ambient the ordering is arbitrary. Fine for now; if it bites, move to a
 weighted/voting model per dial instead of last-write-wins.
 
+## Turn git from flavor into nudges (when ready)
+
+`git.ts` ships as FLAVOR ONLY — it renders `git: 6 dirty, mid-conflict` but does
+not move dials. The nudge code is stubbed dormant in `deriveCadence` (`void git`).
+Candidate nudges to enable once the flavor proves trustworthy in real use:
+- `conflicted` → proactivity low (verify, don't barrel — you're in the weeds)
+- `commitsLastHour >= 3` → pace high (flow state)
+This is THE highest-value steer (moves dials from what-you-said to what-you're-
+doing); held back only to ship-and-observe per the "all flavor for now" call.
+
 ## Other deferred provider/feature ideas
 
-- **`git.ts` provider** — commits/hr, time-since-commit, dirty files, conflict/
-  rebase state. Highest-value *context* signal; the honest debug oracle. (Typed
-  in `types.ts` as `GitSignal`, not yet implemented.)
 - **`activity.ts` provider** — prompt cadence + length from the hook's stdin JSON
   (`minSinceLastPrompt`, `promptLength`). (Typed as `ActivitySignal`.)
-- **`place.ts` provider** — wifi SSID, external displays. (Typed as `PlaceSignal`;
-  weather + battery now live in `ambient.ts`.)
-- **More ambient nudges** — calendar density (next-meeting proximity), macOS Focus
-  mode, display count, ambient light. All cheap, all backlogged.
+- **wifi SSID fragility** — `ipconfig getsummary` needs Location Services
+  permission on recent macOS, so SSID is often empty for downloaders. Degrades to
+  absent (not a bug). If we want it reliable, prompt for the permission or drop it.
+- **macOS Focus / DND** — wanted, but no cheap reliable read found (the
+  controlcenter defaults key is unreliable). Needs more research or a helper.
+- **More ambient nudges** — calendar density (next-meeting proximity), ambient
+  light, active-app focus. All cheap, all backlogged.
 - **`energyToMode` boundary** — the sad-slowcore think-vs-debug call in `vibe.ts`
   is still a placeholder; decide whether music should ever lean `debug` at all,
   or leave `debug` entirely to the git provider.

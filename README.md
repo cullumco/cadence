@@ -38,13 +38,18 @@ what you actually typed.
 **Signals → dials → a reframe lens.**
 
 1. **Signals** — what Cadence can sense right now:
-   - **ambient** — time of day, day of week, weather (opt-in), power state.
-     Zero setup, works on every OS. The one signal that's always there:
-     `context: friday afternoon, rainy`.
+   - **ambient** — time of day, day of week, weather (opt-in), battery, machine
+     uptime/load, dark mode, displays, wifi. Mostly zero-setup, cross-platform.
+     The one signal that's always there: `context: friday afternoon, rainy`.
+   - **git** — commits this hour, dirty files, mid-merge/rebase, read from the
+     project you're in: `git: 6 dirty, mid-conflict`. Cross-platform.
    - **music** — what's playing (via macOS now-playing, any player), turned into
      a clean *vibe* (mood words) via [MusicBrainz](https://musicbrainz.org). No
      Spotify login, no API key, no Premium.
    - **self-report** — what you tell it: `cadence state "two beers, shipping"`.
+
+   Time/day and self-report move the dials; the rest render as context the agent
+   reads (flavor). Git's nudges are built but dormant — see `BACKLOG.md`.
 2. **Dials** — four independent knobs, each `low | medium | high`, inferred from
    the signals (or pinned by you):
    - **pace** — deliberate ↔ fast

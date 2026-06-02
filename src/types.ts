@@ -61,6 +61,15 @@ export interface AmbientSignal {
   hour: number; // 0–23, for nudge thresholds
   weather?: string; // "rainy", "clear", "snowy" … only if location configured
   onBattery?: boolean; // macOS: unplugged → likely mobile
+  batteryPct?: number; // macOS: 0–100, "8% left → wrap up"
+  // machine vitals (cross-platform, pure Node)
+  uptimeHours?: number; // os.uptime() — long uptime → fatigue
+  loadHigh?: boolean; // os.loadavg vs cpu count — busy machine
+  // mac context (best-effort shell-outs; flavor only)
+  focus?: boolean; // Do Not Disturb / Focus on → heads-down
+  displays?: number; // external monitors → "at the desk"
+  network?: string; // wifi SSID → home / office / café
+  darkMode?: boolean; // UI dark mode → night session
 }
 
 export type Signal =

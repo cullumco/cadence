@@ -1,8 +1,19 @@
 import { exec } from "node:child_process";
 import { readFile } from "node:fs/promises";
-import { homedir } from "node:os";
+import { homedir, uptime, loadavg, cpus } from "node:os";
 import { join } from "node:path";
 import type { AmbientSignal } from "../types.js";
+
+// One-liner shell helper for the best-effort macOS probes. Always resolves
+// (never throws) so a missing command can't break the hook.
+function sh(cmd: string, ms = 500): Promise<string | null> {
+  return new Promise((resolve) => {
+    const child = exec(cmd, { timeout: ms, windowsHide: true }, (err, out) =>
+      resolve(err ? null : out.trim())
+    );
+    child.on("error", () => resolve(null));
+  });
+}
 
 /* ─────────────────────────────────────────────────────────────────────────
  * Ambient context provider — the cheapest signals, biggest reach.
@@ -30,18 +41,50 @@ function partOfDay(hour: number): AmbientSignal["partOfDay"] {
   return "late night";
 }
 
-async function getBattery(): Promise<boolean | undefined> {
-  if (process.platform !== "darwin") return undefined;
-  return new Promise((resolve) => {
-    const child = exec("pmset -g batt", { timeout: 600 }, (err, stdout) => {
-      if (err) return resolve(undefined);
-      // "Now drawing from 'Battery Power'" vs "'AC Power'"
-      if (/Battery Power/.test(stdout)) resolve(true);
-      else if (/AC Power/.test(stdout)) resolve(false);
-      else resolve(undefined);
-    });
-    child.on("error", () => resolve(undefined));
-  });
+async function getBattery(): Promise<{ onBattery?: boolean; pct?: number }> {
+  if (process.platform !== "darwin") return {};
+  const out = await sh("pmset -g batt", 600);
+  if (!out) return {};
+  const onBattery = /Battery Power/.test(out)
+    ? true
+    : /AC Power/.test(out)
+      ? false
+      : undefined;
+  const pctMatch = out.match(/(\d+)%/);
+  const pct = pctMatch ? Number(pctMatch[1]) : undefined;
+  return { onBattery, pct };
+}
+
+// ── machine vitals: pure Node, cross-platform, effectively free ──────────────
+function getVitals(): { uptimeHours: number; loadHigh: boolean } {
+  const uptimeHours = Math.round((uptime() / 3600) * 10) / 10;
+  // 1-min load average relative to core count; >0.8/core ⇒ busy.
+  const cores = Math.max(1, cpus().length);
+  const load1 = loadavg()[0] ?? 0;
+  return { uptimeHours, loadHigh: load1 / cores > 0.8 };
+}
+
+// ── mac context: best-effort shell-outs, all flavor (no dial nudges) ─────────
+async function getMacContext(): Promise<{
+  focus?: boolean;
+  displays?: number;
+  network?: string;
+  darkMode?: boolean;
+}> {
+  if (process.platform !== "darwin") return {};
+  const [dark, ssid, displays] = await Promise.all([
+    sh("defaults read -g AppleInterfaceStyle"), // "Dark", or error (=light)
+    sh("ipconfig getsummary en0 | awk -F ' SSID : ' '/ SSID : / {print $2}'", 700),
+    // fast display count via AppleScript (~100ms) — NOT system_profiler (1-3s)
+    sh(`osascript -e 'tell application "System Events" to count of desktops'`, 700),
+  ]);
+
+  const ctx: { focus?: boolean; displays?: number; network?: string; darkMode?: boolean } = {};
+  if (dark != null) ctx.darkMode = /dark/i.test(dark);
+  if (ssid) ctx.network = ssid.split("\n")[0]?.trim() || undefined;
+  const n = displays ? Number(displays) : NaN;
+  if (Number.isFinite(n) && n > 0) ctx.displays = n;
+  return ctx;
 }
 
 interface CadenceConfig {
@@ -90,8 +133,13 @@ async function getWeather(): Promise<string | undefined> {
 
 export async function getAmbientSignal(now: Date): Promise<AmbientSignal> {
   const hour = now.getHours();
-  // weather + battery run in parallel; time/day are free and synchronous.
-  const [weather, onBattery] = await Promise.all([getWeather(), getBattery()]);
+  const vitals = getVitals(); // sync, free
+  // all probes run in parallel; each resolves to a safe default on failure.
+  const [weather, battery, mac] = await Promise.all([
+    getWeather(),
+    getBattery(),
+    getMacContext(),
+  ]);
 
   return {
     source: "ambient",
@@ -100,6 +148,13 @@ export async function getAmbientSignal(now: Date): Promise<AmbientSignal> {
     isWeekend: now.getDay() === 0 || now.getDay() === 6,
     hour,
     weather,
-    onBattery,
+    onBattery: battery.onBattery,
+    batteryPct: battery.pct,
+    uptimeHours: vitals.uptimeHours,
+    loadHigh: vitals.loadHigh,
+    focus: mac.focus,
+    displays: mac.displays,
+    network: mac.network,
+    darkMode: mac.darkMode,
   };
 }

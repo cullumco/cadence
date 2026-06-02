@@ -5,6 +5,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { tagsToVibe } from "../dist/vibe.js";
 import { deriveCadence, buildReframe, applyOverrides } from "../dist/cadence.js";
+import { render } from "../dist/inject.js";
 
 // ── tagsToVibe ──────────────────────────────────────────────────────────────
 test("tagsToVibe: high-energy genres read fast + aggressive", () => {
@@ -107,6 +108,38 @@ test("ambient is overridden by a stronger signal — 'shipping' beats 'it's late
     ])
   );
   assert.equal(c.pace, "high"); // self-report wins over the late-night nudge
+});
+
+// ── flavor signals render but don't move dials (the "all flavor" promise) ────
+const renderOnly = (signals) => {
+  const cadence = deriveCadence(stateWith(signals));
+  return { cadence, block: render({ signals, capturedAt: 0, cadence, pinned: [], reframe: "" }) };
+};
+
+test("git renders as flavor and does NOT move dials", () => {
+  const { cadence, block } = renderOnly([
+    { source: "git", commitsLastHour: 5, filesDirty: 3, conflicted: true },
+  ]);
+  assert.match(block, /git: 5 commits\/hr, 3 dirty, mid-conflict/);
+  // all-flavor: even a conflict leaves dials neutral (no nudge wired yet)
+  assert.deepEqual(cadence, { pace: "medium", tone: "medium", posture: "medium", proactivity: "medium" });
+});
+
+test("git renders a clean tree distinctly", () => {
+  const { block } = renderOnly([
+    { source: "git", commitsLastHour: 0, filesDirty: 0, conflicted: false },
+  ]);
+  assert.match(block, /git: clean tree/);
+});
+
+test("ambient machine vitals render only when noteworthy", () => {
+  const { block } = renderOnly([
+    { source: "ambient", partOfDay: "afternoon", dayOfWeek: "tuesday", isWeekend: false,
+      hour: 16, uptimeHours: 280.5, loadHigh: true, displays: 2 },
+  ]);
+  assert.match(block, /up 280\.5h/);
+  assert.match(block, /machine busy/);
+  assert.match(block, /2 displays/);
 });
 
 // ── buildReframe ────────────────────────────────────────────────────────────

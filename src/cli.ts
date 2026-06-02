@@ -5,6 +5,7 @@ import { join } from "node:path";
 import { getMusicSignal } from "./providers/music.js";
 import { getSelfReportSignal } from "./providers/selfreport.js";
 import { getAmbientSignal } from "./providers/ambient.js";
+import { getGitSignal } from "./providers/git.js";
 import {
   deriveCadence,
   buildReframe,
@@ -44,15 +45,17 @@ async function cmdClear() {
 
 async function cmdTest() {
   const signals: Signal[] = [];
-  const [music, report, ambient, overrides] = await Promise.all([
+  const [music, report, ambient, git, overrides] = await Promise.all([
     getMusicSignal().catch(() => null),
     getSelfReportSignal().catch(() => null),
     getAmbientSignal(new Date()).catch(() => null),
+    getGitSignal(process.cwd()).catch(() => null),
     loadOverrides(),
   ]);
   if (music) signals.push(music);
   if (report) signals.push(report);
   if (ambient) signals.push(ambient);
+  if (git) signals.push(git);
 
   if (signals.length === 0 && Object.keys(overrides).length === 0) {
     console.log('  (no signals — play something, set: cadence state "...", or pin a dial: cadence set pace fast)');

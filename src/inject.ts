@@ -25,13 +25,14 @@ function renderReport(r: SelfReportSignal): string {
 }
 
 function renderGit(g: GitSignal): string {
+  // Human-readable work-state, e.g. "3 commits/hr, 5 dirty, mid-merge"
   const parts = [
-    `commits_last_hour=${g.commitsLastHour}`,
-    g.minSinceLastCommit != null ? `min_since_commit=${g.minSinceLastCommit}` : null,
-    `files_dirty=${g.filesDirty}`,
-    g.conflicted ? "conflicted=true" : null,
+    g.commitsLastHour > 0 ? `${g.commitsLastHour} commit${g.commitsLastHour === 1 ? "" : "s"}/hr` : null,
+    g.filesDirty > 0 ? `${g.filesDirty} dirty` : "clean tree",
+    g.minSinceLastCommit != null ? `last commit ${g.minSinceLastCommit}m ago` : null,
+    g.conflicted ? "mid-conflict" : null,
   ].filter(Boolean);
-  return `    git: { ${parts.join(" ")} }`;
+  return `    git: ${parts.join(", ")}`;
 }
 
 function renderActivity(a: ActivitySignal): string {
@@ -51,11 +52,19 @@ function renderPlace(p: PlaceSignal): string {
 }
 
 function renderAmbient(a: AmbientSignal): string {
-  // Human-readable atmosphere line, e.g. "friday afternoon, rainy, unplugged"
+  // Human-readable atmosphere line, e.g.
+  //   "friday late night, rainy, unplugged 8%, dark mode, on Home-wifi, up 14h"
   const parts = [
     a.isWeekend ? `${a.dayOfWeek} ${a.partOfDay}` : a.partOfDay,
     a.weather ?? null,
-    a.onBattery === true ? "unplugged" : null,
+    a.onBattery === true
+      ? `unplugged${a.batteryPct != null ? ` ${a.batteryPct}%` : ""}`
+      : null,
+    a.darkMode === true ? "dark mode" : null,
+    a.displays != null && a.displays > 1 ? `${a.displays} displays` : null,
+    a.network ? `on ${a.network}` : null,
+    a.loadHigh ? "machine busy" : null,
+    a.uptimeHours != null && a.uptimeHours >= 12 ? `up ${a.uptimeHours}h` : null,
   ].filter(Boolean);
   return `    context: ${parts.join(", ")}`;
 }

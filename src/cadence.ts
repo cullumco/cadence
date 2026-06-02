@@ -109,11 +109,12 @@ export function deriveCadence(state: UserState): Cadence {
     if (/\b(focused|formal|work|serious|crunch)\b/.test(t)) c.tone = "high";
   }
 
-  // ── git work-rhythm → pace / proactivity (when the provider exists) ───────
-  if (git) {
-    if (git.conflicted) c.proactivity = "low"; // in the weeds — verify, don't barrel
-    if (git.commitsLastHour >= 3) c.pace = "high"; // flow state
-  }
+  // ── git: FLAVOR ONLY for now (renders as context, no dial nudges yet) ─────
+  // Candidate nudges, deliberately dormant until we've watched real output:
+  //   conflicted → proactivity low (verify, don't barrel)
+  //   commitsLastHour >= 3 → pace high (flow state)
+  // See BACKLOG: turn these on once the flavor proves trustworthy.
+  void git;
 
   // ── activity → pace (returning from a break = slow back down) ─────────────
   if (activity?.minSinceLastPrompt != null && activity.minSinceLastPrompt > 30) {
