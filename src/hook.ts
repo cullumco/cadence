@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 import { getMusicSignal } from "./providers/music.js";
 import { getSelfReportSignal } from "./providers/selfreport.js";
+import { getAmbientSignal } from "./providers/ambient.js";
 import { deriveCadence, buildReframe, loadOverrides, applyOverrides } from "./cadence.js";
 import { render } from "./inject.js";
 import type { Signal, UserState, StateWithCadence } from "./types.js";
@@ -15,13 +16,15 @@ async function readStdin(): Promise<void> {
 }
 
 async function collectSignals(): Promise<Signal[]> {
-  const [music, report] = await Promise.allSettled([
+  const [music, report, ambient] = await Promise.allSettled([
     getMusicSignal(),
     getSelfReportSignal(),
+    getAmbientSignal(new Date()),
   ]);
   const signals: Signal[] = [];
   if (music.status === "fulfilled" && music.value) signals.push(music.value);
   if (report.status === "fulfilled" && report.value) signals.push(report.value);
+  if (ambient.status === "fulfilled" && ambient.value) signals.push(ambient.value);
   return signals;
 }
 

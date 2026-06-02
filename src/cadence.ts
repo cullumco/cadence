@@ -9,6 +9,7 @@ import type {
   SelfReportSignal,
   GitSignal,
   ActivitySignal,
+  AmbientSignal,
 } from "./types.js";
 
 export const DIALS = ["pace", "tone", "posture", "proactivity"] as const;
@@ -53,6 +54,9 @@ export function deriveCadence(state: UserState): Cadence {
   const activity = state.signals.find(
     (s): s is ActivitySignal => s.source === "activity"
   );
+  const ambient = state.signals.find(
+    (s): s is AmbientSignal => s.source === "ambient"
+  );
 
   // Start neutral; each signal nudges individual dials.
   const c: Cadence = {
@@ -61,6 +65,19 @@ export function deriveCadence(state: UserState): Cadence {
     posture: "medium",
     proactivity: "medium",
   };
+
+  // ── ambient → soft nudges FIRST (weakest), so stronger signals below win ──
+  // Atmosphere, not orders: it colors the default, then music/self-report/git
+  // can override. "It's late" shouldn't beat "I'm shipping."
+  if (ambient) {
+    if (ambient.hour >= 22 || ambient.hour < 6) c.pace = "low"; // late → gentler
+    if (ambient.partOfDay === "early morning") c.pace = "low"; // easing in
+    if (ambient.isWeekend) c.tone = "low"; // looser on weekends
+    if (ambient.weather && /rain|snow|fog|storm|cloud/.test(ambient.weather)) {
+      c.tone = "low"; // gloomy out → warmer in
+    }
+    if (ambient.onBattery) c.pace = "high"; // mobile/untethered → quick hits
+  }
 
   // ── music energy → pace (only pace; leave tone/posture to other signals) ──
   if (music?.energy != null) {

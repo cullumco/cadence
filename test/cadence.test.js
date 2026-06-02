@@ -84,6 +84,31 @@ test("applyOverrides: no overrides → unchanged, nothing pinned", () => {
   assert.deepEqual(pinned, []);
 });
 
+// ── ambient nudges ──────────────────────────────────────────────────────────
+test("ambient: late night gently lowers pace", () => {
+  const c = deriveCadence(
+    stateWith([{ source: "ambient", partOfDay: "late night", dayOfWeek: "tuesday", isWeekend: false, hour: 2 }])
+  );
+  assert.equal(c.pace, "low");
+});
+
+test("ambient: weekend warms the tone", () => {
+  const c = deriveCadence(
+    stateWith([{ source: "ambient", partOfDay: "afternoon", dayOfWeek: "saturday", isWeekend: true, hour: 15 }])
+  );
+  assert.equal(c.tone, "low");
+});
+
+test("ambient is overridden by a stronger signal — 'shipping' beats 'it's late'", () => {
+  const c = deriveCadence(
+    stateWith([
+      { source: "ambient", partOfDay: "late night", dayOfWeek: "tuesday", isWeekend: false, hour: 2 },
+      { source: "self_report", text: "shipping, locked in", setAt: 0 },
+    ])
+  );
+  assert.equal(c.pace, "high"); // self-report wins over the late-night nudge
+});
+
 // ── buildReframe ────────────────────────────────────────────────────────────
 test("buildReframe: always defers to the user's literal words", () => {
   const lens = buildReframe({ pace: "high", tone: "low", posture: "high", proactivity: "high" });

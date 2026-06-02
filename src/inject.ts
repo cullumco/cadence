@@ -5,6 +5,7 @@ import type {
   ActivitySignal,
   GitSignal,
   PlaceSignal,
+  AmbientSignal,
 } from "./types.js";
 import { DIAL_WORDS } from "./cadence.js";
 
@@ -44,11 +45,19 @@ function renderActivity(a: ActivitySignal): string {
 function renderPlace(p: PlaceSignal): string {
   const parts = [
     p.network ? `network="${p.network}"` : null,
-    p.onBattery != null ? `on_battery=${p.onBattery}` : null,
     p.displays != null ? `displays=${p.displays}` : null,
-    p.weather ? `weather="${p.weather}"` : null,
   ].filter(Boolean);
   return `    place: { ${parts.join(" ")} }`;
+}
+
+function renderAmbient(a: AmbientSignal): string {
+  // Human-readable atmosphere line, e.g. "friday afternoon, rainy, unplugged"
+  const parts = [
+    a.isWeekend ? `${a.dayOfWeek} ${a.partOfDay}` : a.partOfDay,
+    a.weather ?? null,
+    a.onBattery === true ? "unplugged" : null,
+  ].filter(Boolean);
+  return `    context: ${parts.join(", ")}`;
 }
 
 function renderCadence(
@@ -72,6 +81,7 @@ export function render(state: StateWithCadence): string {
     else if (sig.source === "git") lines.push(renderGit(sig));
     else if (sig.source === "activity") lines.push(renderActivity(sig));
     else if (sig.source === "place") lines.push(renderPlace(sig));
+    else if (sig.source === "ambient") lines.push(renderAmbient(sig));
   }
   // Render even with zero signals if the user pinned dials — a hand-set board
   // is itself a signal worth injecting.

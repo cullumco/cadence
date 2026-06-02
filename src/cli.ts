@@ -4,6 +4,7 @@ import { homedir } from "node:os";
 import { join } from "node:path";
 import { getMusicSignal } from "./providers/music.js";
 import { getSelfReportSignal } from "./providers/selfreport.js";
+import { getAmbientSignal } from "./providers/ambient.js";
 import {
   deriveCadence,
   buildReframe,
@@ -43,13 +44,15 @@ async function cmdClear() {
 
 async function cmdTest() {
   const signals: Signal[] = [];
-  const [music, report, overrides] = await Promise.all([
+  const [music, report, ambient, overrides] = await Promise.all([
     getMusicSignal().catch(() => null),
     getSelfReportSignal().catch(() => null),
+    getAmbientSignal(new Date()).catch(() => null),
     loadOverrides(),
   ]);
   if (music) signals.push(music);
   if (report) signals.push(report);
+  if (ambient) signals.push(ambient);
 
   if (signals.length === 0 && Object.keys(overrides).length === 0) {
     console.log('  (no signals — play something, set: cadence state "...", or pin a dial: cadence set pace fast)');
@@ -139,6 +142,34 @@ async function cmdDials() {
   console.log("  unpin:    cadence unset <dial>   (or: cadence unset all)\n");
 }
 
+// Weather is opt-in: it only activates once a location is configured. No
+// silent geolocation — the user provides coordinates explicitly.
+async function cmdLocation(args: string[]) {
+  const [lat, lon, ...nameParts] = args;
+  if (!lat || !lon) {
+    console.log("  usage: cadence set-location <lat> <lon> [name]");
+    console.log("  e.g.   cadence set-location 40.71 -74.01 NYC");
+    console.log("  (find yours at https://www.latlong.net — weather stays off until set)");
+    return;
+  }
+  const latNum = Number(lat);
+  const lonNum = Number(lon);
+  if (!Number.isFinite(latNum) || !Number.isFinite(lonNum)) {
+    console.error("  lat and lon must be numbers");
+    process.exit(1);
+  }
+  await mkdir(CADENCE_DIR, { recursive: true });
+  let cfg: Record<string, unknown> = {};
+  try {
+    cfg = JSON.parse(await readFile(CONFIG_FILE, "utf-8"));
+  } catch {
+    // none
+  }
+  cfg["location"] = { lat: latNum, lon: lonNum, name: nameParts.join(" ") || undefined };
+  await writeFile(CONFIG_FILE, JSON.stringify(cfg, null, 2), "utf-8");
+  console.log(`  location set${nameParts.length ? ` (${nameParts.join(" ")})` : ""} — weather is now on`);
+}
+
 const HELP = `
   cadence — agents that read the room
 
@@ -154,6 +185,9 @@ const HELP = `
     cadence unset <dial>        un-pin a dial (or: cadence unset all)
                                 dials: pace, tone, posture, proactivity
                                 (env also works: CADENCE_PACE=fast)
+
+  ambient (time & day are automatic; weather is opt-in):
+    cadence set-location <lat> <lon> [name]   turn on weather for your area
 `;
 
 async function main() {
@@ -171,6 +205,8 @@ async function main() {
       return cmdUnset(rest);
     case "dials":
       return cmdDials();
+    case "set-location":
+      return cmdLocation(rest);
     case undefined:
     case "help":
     case "--help":

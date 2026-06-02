@@ -84,6 +84,14 @@ dials (or just color the vibe) — **only if the user indicates them as an input
 - Open Q: do esoteric signals move dials, or only render as `vibe`/flavor so they
   never override real work signals? (Lean: flavor-only unless the user maps them.)
 
+## Known nuance: intra-tier nudge collisions
+
+When two *ambient* nudges touch the same dial, the later one silently wins (e.g.
+late-night says low-pace, unplugged says high-pace → unplugged wins by source
+order). Across tiers this is intentional (self-report > ambient), but *within*
+ambient the ordering is arbitrary. Fine for now; if it bites, move to a
+weighted/voting model per dial instead of last-write-wins.
+
 ## Other deferred provider/feature ideas
 
 - **`git.ts` provider** — commits/hr, time-since-commit, dirty files, conflict/
@@ -91,8 +99,10 @@ dials (or just color the vibe) — **only if the user indicates them as an input
   in `types.ts` as `GitSignal`, not yet implemented.)
 - **`activity.ts` provider** — prompt cadence + length from the hook's stdin JSON
   (`minSinceLastPrompt`, `promptLength`). (Typed as `ActivitySignal`.)
-- **`place.ts` provider** — wifi SSID, on-battery, external displays, weather.
-  (Typed as `PlaceSignal`.)
+- **`place.ts` provider** — wifi SSID, external displays. (Typed as `PlaceSignal`;
+  weather + battery now live in `ambient.ts`.)
+- **More ambient nudges** — calendar density (next-meeting proximity), macOS Focus
+  mode, display count, ambient light. All cheap, all backlogged.
 - **`energyToMode` boundary** — the sad-slowcore think-vs-debug call in `vibe.ts`
   is still a placeholder; decide whether music should ever lean `debug` at all,
   or leave `debug` entirely to the git provider.

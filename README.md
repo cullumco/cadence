@@ -38,6 +38,9 @@ what you actually typed.
 **Signals → dials → a reframe lens.**
 
 1. **Signals** — what Cadence can sense right now:
+   - **ambient** — time of day, day of week, weather (opt-in), power state.
+     Zero setup, works on every OS. The one signal that's always there:
+     `context: friday afternoon, rainy`.
    - **music** — what's playing (via macOS now-playing, any player), turned into
      a clean *vibe* (mood words) via [MusicBrainz](https://musicbrainz.org). No
      Spotify login, no API key, no Premium.
@@ -141,9 +144,9 @@ immediately; the mapping is opinionated and meant to be yours.
 
 See [`BACKLOG.md`](BACKLOG.md). Highlights:
 
-- **More signals** — `git` (commit cadence, conflict state), typing tempo,
-  wifi/location, time-of-day. Git is the highest-value one: it moves the dials
-  from *what you said* to *what you're actually doing*.
+- **More signals** — `git` (commit cadence, conflict state), typing tempo, wifi.
+  Git is the highest-value one: it moves the dials from *what you said* to *what
+  you're actually doing*.
 - **After-the-fact injection** — refine the cadence mid-task (`PostToolUse`) and
   enforce it at the finish line (`Stop`), not just before the prompt.
 - **Opt-in flavor providers** — horoscope, moon phase, for those who want them.

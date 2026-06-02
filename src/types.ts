@@ -46,9 +46,21 @@ export interface GitSignal {
 export interface PlaceSignal {
   source: "place";
   network?: string; // wifi SSID — home / office / coffeeshop
-  onBattery?: boolean; // unplugged → likely mobile
   displays?: number; // external monitors → "at the desk, dug in"
-  weather?: string; // optional atmosphere, from coarse location
+}
+
+/* Ambient context — cheap, mostly-local atmosphere. time/day are universal and
+ * dependency-free (the one signal that works on every OS, never absent);
+ * weather is opt-in (needs a config-set location + network); battery is macOS.
+ * Renders as flavor AND applies soft dial nudges (see deriveCadence). */
+export interface AmbientSignal {
+  source: "ambient";
+  partOfDay: "early morning" | "morning" | "midday" | "afternoon" | "evening" | "late night";
+  dayOfWeek: string; // "monday" … "sunday"
+  isWeekend: boolean;
+  hour: number; // 0–23, for nudge thresholds
+  weather?: string; // "rainy", "clear", "snowy" … only if location configured
+  onBattery?: boolean; // macOS: unplugged → likely mobile
 }
 
 export type Signal =
@@ -56,7 +68,8 @@ export type Signal =
   | SelfReportSignal
   | ActivitySignal
   | GitSignal
-  | PlaceSignal;
+  | PlaceSignal
+  | AmbientSignal;
 
 export interface UserState {
   signals: Signal[];
