@@ -1,0 +1,40 @@
+{
+  "name": "@cullumco/cadence",
+  "version": "0.0.1",
+  "description": "Agents that read the room. A Claude Code hook that injects embodied user state into every prompt.",
+  "type": "module",
+  "bin": {
+    "cadence": "./bin/cadence.js"
+  },
+  "files": [
+    "dist",
+    "bin",
+    "README.md"
+  ],
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc --watch",
+    "test": "node --test \"test/**/*.test.js\"",
+    "hook": "node dist/hook.js",
+    "cli": "node dist/cli.js"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "devDependencies": {
+    "@types/node": "^20.11.0",
+    "typescript": "^5.4.0"
+  },
+  "keywords": [
+    "claude-code",
+    "claude",
+    "spotify",
+    "context",
+    "agent",
+    "hook",
+    "cadence",
+    "context-engineering"
+  ],
+  "license": "MIT",
+  "author": "Cullum&Co"
+}

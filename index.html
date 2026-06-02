@@ -1,0 +1,387 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Cadence — agents that read the room</title>
+<meta name="description" content="Claude Code has one input channel: text. Cadence is the second.">
+<meta property="og:title" content="Cadence — agents that read the room">
+<meta property="og:description" content="Claude Code has one input channel: text. Cadence is the second. A Cullum&Co project.">
+<meta property="og:type" content="website">
+<style>
+  :root {
+    --paper: #faf8f3;
+    --paper-2: #f3f0e8;
+    --ink: #1a1a1a;
+    --muted: #6b6b66;
+    --rule: rgba(26, 26, 26, 0.1);
+    --accent: #c1442e;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  html {
+    background: var(--paper);
+    color: var(--ink);
+    font-family: -apple-system, BlinkMacSystemFont, "Inter", system-ui, sans-serif;
+    font-size: 17px;
+    line-height: 1.6;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  body {
+    max-width: 720px;
+    margin: 0 auto;
+    padding: 5rem 2rem 5rem;
+  }
+
+  ::selection {
+    background: var(--accent);
+    color: var(--paper);
+  }
+
+  /* navigation */
+  nav {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 6rem;
+    font-size: 0.875rem;
+    letter-spacing: 0.01em;
+  }
+
+  nav .mark {
+    font-weight: 500;
+    letter-spacing: -0.01em;
+    color: var(--ink);
+    text-decoration: none;
+  }
+
+  nav .right {
+    color: var(--muted);
+    display: flex;
+    gap: 1.5rem;
+    align-items: baseline;
+  }
+
+  nav a {
+    color: var(--muted);
+    text-decoration: none;
+    transition: color 0.15s ease;
+  }
+
+  nav a:hover { color: var(--ink); }
+
+  /* hero */
+  h1 {
+    font-family: "Iowan Old Style", "Palatino Linotype", Palatino, "Times New Roman", Georgia, serif;
+    font-size: clamp(2.625rem, 7vw, 4.25rem);
+    line-height: 1.04;
+    letter-spacing: -0.02em;
+    font-weight: 400;
+    margin-bottom: 2rem;
+  }
+
+  .lede {
+    font-size: 1.1875rem;
+    line-height: 1.5;
+    color: var(--ink);
+    max-width: 30rem;
+    margin-bottom: 3.5rem;
+  }
+
+  /* live state strip — gestures at what the product produces */
+  .now-playing {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    font-family: ui-monospace, "SF Mono", "JetBrains Mono", Menlo, Monaco, monospace;
+    font-size: 0.8125rem;
+    color: var(--muted);
+    margin-bottom: 6rem;
+    padding-bottom: 2rem;
+    border-bottom: 1px solid var(--rule);
+    flex-wrap: wrap;
+  }
+
+  .now-playing .label {
+    color: var(--ink);
+    font-weight: 500;
+  }
+
+  .dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: var(--accent);
+    box-shadow: 0 0 0 0 rgba(193, 68, 46, 0.5);
+    animation: pulse 2.2s ease-in-out infinite;
+    flex-shrink: 0;
+  }
+
+  @keyframes pulse {
+    0%, 100% { opacity: 1; box-shadow: 0 0 0 0 rgba(193, 68, 46, 0.4); }
+    50% { opacity: 0.4; box-shadow: 0 0 0 6px rgba(193, 68, 46, 0); }
+  }
+
+  /* sections */
+  section { margin-bottom: 5rem; }
+
+  h2 {
+    font-family: "Iowan Old Style", "Palatino Linotype", Palatino, Georgia, serif;
+    font-size: 1.625rem;
+    line-height: 1.2;
+    letter-spacing: -0.01em;
+    font-weight: 400;
+    margin-bottom: 1.5rem;
+  }
+
+  p {
+    margin-bottom: 1.125rem;
+    max-width: 36rem;
+  }
+
+  p:last-child { margin-bottom: 0; }
+
+  em {
+    font-family: "Iowan Old Style", "Palatino Linotype", Palatino, Georgia, serif;
+    font-style: italic;
+    font-size: 1.02em;
+  }
+
+  /* three-up components grid */
+  .components {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 2.5rem;
+    margin-top: 2rem;
+  }
+
+  @media (min-width: 640px) {
+    .components { grid-template-columns: repeat(3, 1fr); gap: 2rem; }
+  }
+
+  .component .step {
+    font-family: ui-monospace, "SF Mono", Menlo, monospace;
+    font-size: 0.6875rem;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--accent);
+    margin-bottom: 0.625rem;
+  }
+
+  .component h3 {
+    font-family: "Iowan Old Style", "Palatino Linotype", Palatino, Georgia, serif;
+    font-size: 1.125rem;
+    font-weight: 400;
+    margin-bottom: 0.625rem;
+    letter-spacing: -0.005em;
+  }
+
+  .component p {
+    font-size: 0.9375rem;
+    color: var(--ink);
+    margin: 0;
+    line-height: 1.55;
+  }
+
+  .component code {
+    font-family: ui-monospace, "SF Mono", Menlo, monospace;
+    font-size: 0.85em;
+    background: var(--paper-2);
+    padding: 0.0625rem 0.375rem;
+    border-radius: 2px;
+  }
+
+  /* code block */
+  pre {
+    font-family: ui-monospace, "SF Mono", "JetBrains Mono", Menlo, Monaco, monospace;
+    font-size: 0.8125rem;
+    line-height: 1.65;
+    background: var(--paper-2);
+    border: 1px solid var(--rule);
+    padding: 1.5rem;
+    overflow-x: auto;
+    margin: 1.75rem 0 0;
+    border-radius: 3px;
+    color: var(--ink);
+  }
+
+  pre .tag { color: var(--accent); }
+  pre .key { color: var(--muted); }
+
+  /* sibling project block */
+  .sibling {
+    border-top: 1px solid var(--rule);
+    padding-top: 4rem;
+    margin-top: 5rem;
+  }
+
+  .sibling .pair {
+    font-family: "Iowan Old Style", "Palatino Linotype", Palatino, Georgia, serif;
+    font-style: italic;
+    font-size: 1.375rem;
+    line-height: 1.4;
+    margin: 2rem 0 0;
+    color: var(--ink);
+    letter-spacing: -0.005em;
+  }
+
+  /* install */
+  .install-cmd {
+    font-family: ui-monospace, "SF Mono", "JetBrains Mono", Menlo, Monaco, monospace;
+    font-size: 0.875rem;
+    background: var(--ink);
+    color: var(--paper);
+    padding: 1rem 1.25rem;
+    border-radius: 3px;
+    margin-top: 1.5rem;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.75rem;
+  }
+
+  .install-cmd .prompt { color: var(--accent); }
+
+  .small {
+    font-size: 0.875rem;
+    color: var(--muted);
+    margin-top: 1.5rem;
+  }
+
+  /* links */
+  a.inline {
+    color: var(--ink);
+    text-decoration: underline;
+    text-decoration-thickness: 1px;
+    text-underline-offset: 3px;
+    text-decoration-color: rgba(26, 26, 26, 0.3);
+    transition: text-decoration-color 0.15s ease;
+  }
+
+  a.inline:hover { text-decoration-color: var(--ink); }
+
+  /* footer */
+  footer {
+    margin-top: 7rem;
+    padding-top: 2rem;
+    border-top: 1px solid var(--rule);
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    font-size: 0.8125rem;
+    color: var(--muted);
+    font-family: ui-monospace, "SF Mono", Menlo, monospace;
+    letter-spacing: 0.01em;
+    flex-wrap: wrap;
+    gap: 1rem;
+  }
+
+  footer a {
+    color: var(--muted);
+    text-decoration: none;
+  }
+
+  footer a:hover { color: var(--ink); }
+  footer .right { display: flex; gap: 1.5rem; }
+
+  @media (max-width: 480px) {
+    body { padding: 3rem 1.5rem 4rem; }
+    nav { margin-bottom: 4rem; }
+    nav .right span { display: none; }
+    section { margin-bottom: 4rem; }
+  }
+</style>
+</head>
+<body>
+
+<nav>
+  <a href="/" class="mark">Cadence</a>
+  <div class="right">
+    <a href="https://github.com">github</a>
+    <span>a <a href="https://cullum.co" style="text-decoration: underline; text-decoration-color: rgba(107,107,102,0.4); text-underline-offset: 2px;">Cullum&amp;Co</a> project</span>
+  </div>
+</nav>
+
+<h1>Agents that read the room.</h1>
+
+<p class="lede">Claude Code has one input channel: text. Cadence is the second.</p>
+
+<div class="now-playing">
+  <span class="dot"></span>
+  <span class="label">now playing</span>
+  <span>Daniel Caesar · vibe: sexy, chilled · pace fast · tone warm</span>
+</div>
+
+<section>
+  <h2>Your agent has never met you.</h2>
+  <p>It doesn't know you're three beers in or up at 2am. It doesn't know you've been heads-down since six, or that the music playing is the reason you're thinking clearly. It sees the prompt. That's it.</p>
+  <p>But the prompt is a sliver of what's actually in the room. The rest — your energy, your tempo, the state you're coding in — is the context shaping everything you do. It never reaches the model.</p>
+  <p>Cadence is the channel for the rest of it.</p>
+</section>
+
+<section>
+  <h2>How it works.</h2>
+  <div class="components">
+    <div class="component">
+      <div class="step">01 — Signals</div>
+      <h3>Read the room.</h3>
+      <p>What's playing becomes a vibe — read at the OS level, turned into mood words. The <code>cadence state</code> command lets you say what you already know: <em>"two beers, shipping."</em></p>
+    </div>
+    <div class="component">
+      <div class="step">02 — Dials</div>
+      <h3>Four knobs, not one mode.</h3>
+      <p>Pace, tone, posture, proactivity — each inferred independently, or pinned by hand. High-energy-but-mellow reads as <em>fast pace, warm tone</em>. No single label could.</p>
+    </div>
+    <div class="component">
+      <div class="step">03 — Reframe</div>
+      <h3>A lens, not a leash.</h3>
+      <p>A sentence telling the agent how to <em>read</em> your prompt given the cadence. It never rewrites your words — and always defers to them.</p>
+    </div>
+  </div>
+</section>
+
+<section>
+  <h2>What the agent actually sees.</h2>
+  <p>Every prompt carries a state block. Inspectable. Diffable. You always see exactly what your agent saw.</p>
+  <pre><span class="tag">&lt;user_state&gt;</span>
+  <span class="key">signals:</span>
+    music: "Loose" — Daniel Caesar
+    vibe: sexy, chilled
+    self_report: "two beers, shipping"
+  <span class="key">cadence:</span>
+    { pace=fast tone=warm posture=decisive proactivity=act-freely }
+  <span class="key">reframe:</span> read my prompt as someone in this cadence meant it —
+    fast and tight, make the call, act without checking in.
+    If my words clearly mean otherwise, follow my words.
+<span class="tag">&lt;/user_state&gt;</span></pre>
+</section>
+
+<section>
+  <h2>Install.</h2>
+  <p>A Claude Code hook. macOS, Node 20+. No Spotify login, no API key — it reads what's already playing.</p>
+  <div class="install-cmd">
+    <span class="prompt">$</span>
+    <span>git clone github.com/cullumco/cadence &amp;&amp; cd cadence &amp;&amp; npm install &amp;&amp; npm run build &amp;&amp; npm link</span>
+  </div>
+  <p class="small">Then wire one hook into <code>~/.claude/settings.json</code> — see the <a href="https://github.com/cullumco/cadence" class="inline">README</a>.</p>
+</section>
+
+<section class="sibling">
+  <h2>One channel of many.</h2>
+  <p>Cadence is part of a larger bet: <strong>context surface area is the bottleneck for agentic engineering, not model capability.</strong> The prompt is a sliver of what the agent should see.</p>
+  <p><a href="https://kettel.vercel.app" class="inline">Kettel</a> argues the same claim from a different angle — structured, multi-author context, ratified by teams before agents execute.</p>
+  <p class="pair">Kettel makes the room. Cadence reads it.</p>
+</section>
+
+<footer>
+  <span>© Cullum&amp;Co · 2026</span>
+  <span class="right">
+    <a href="https://github.com">github</a>
+    <a href="mailto:scott@cullum.co">contact</a>
+  </span>
+</footer>
+
+</body>
+</html>

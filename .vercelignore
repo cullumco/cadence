@@ -1,0 +1,10 @@
+node_modules
+src
+dist
+bin
+.claude
+package.json
+package-lock.json
+tsconfig.json
+.gitignore
+README.md
