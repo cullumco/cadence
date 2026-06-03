@@ -1,16 +1,24 @@
 # Cadence — Backlog
 
 Future versions and capabilities, captured during the Spotify→embodied-state pivot.
-V1 scope is deliberately small: **before-only** injection (a `UserPromptSubmit`
-reframe lens). Everything below is intentionally deferred.
+Claude Code is the alpha surface; the product is the ambient context layer
+underneath it. V1 scope is deliberately small: **before-only** injection (a
+`UserPromptSubmit` reframe lens). Everything below is intentionally deferred.
 
 ---
 
 ## The big idea: from one-shot prefix to a feedback loop
 
-Today Cadence injects once, *before* Claude works — so it can only reframe how
-to **read** the prompt from *ambient* state (music, mood, git-at-rest). It guesses
-your cadence; it can't see the actual work yet.
+Today Cadence starts on Claude Code hooks, because they are the fastest alpha
+surface for proving the feel. The long-term shape stays adapter-agnostic:
+
+```
+signals -> cadence dials -> context envelope -> adapter-specific delivery
+```
+
+In the first hook, Cadence injects once, *before* Claude works — so it can only
+reframe how to **read** the prompt from *ambient* state (music, mood, git-at-rest).
+It guesses your cadence; it can't see the actual work yet.
 
 But `additionalContext` can also be injected by `PostToolUse`, `PostToolBatch`,
 and `Stop` hooks (verified against Claude Code docs). Those fire *after* the work
@@ -20,7 +28,7 @@ grow Cadence from a prompt-prefix into a loop around the whole turn:
 ```
 UserPromptSubmit  → set the reading lens   (predictive, ambient)   ← V1, done
 PostToolUse       → refine / course-correct (observed work)         ← V2
-Stop              → enforce at the finish line                       ← V3
+Stop              → conservative finish-line guard                   ← V1.1, done
 ```
 
 ---
@@ -47,8 +55,13 @@ state against the last-injected mode.
 
 ## V3 — Finish-line enforcement (Stop)
 
-**Idea:** the `Stop` hook fires when Claude thinks it's done, can inject context
-*and* decide whether to continue. This is where cadence actually *bites*.
+**V1.1 shipped:** a conservative `Stop` hook now blocks only one class of miss:
+explicit shipping / act-freely cadence plus a soft handoff ending ("want me to
+do that next?", "let me know if..."). It checks `stop_hook_active` to avoid
+recursive blocks.
+
+**Larger idea:** the `Stop` hook fires when Claude thinks it's done and can
+decide whether to continue. This is where cadence actually *bites*.
 
 - `ship` cadence + Claude stopping to ask a clarifying question → "user is
   shipping; don't stop to ask, make the call and finish."
@@ -66,6 +79,16 @@ at the moment that most shapes the felt experience (decisive vs. deliberate fini
 
 Lens at start → refine during → enforce at end. Most powerful, most tokens, most
 complexity. Only worth it once V2/V3 each prove their gating keeps noise down.
+
+## Adapter expansion
+
+Keep the core reusable before adding more surfaces. Claude Code-specific pieces
+should stay in hook/adapter files; providers, dial derivation, stop decisions,
+and renderers should remain portable. Candidate future surfaces:
+- a JSON context CLI for any agent shell
+- MCP/resource-style context exposure
+- Codex/Cursor-style adapters if their hooks/context APIs support it
+- a thin Claude Code plugin wrapper once the hook shape settles
 
 ---
 
@@ -104,8 +127,9 @@ doing); held back only to ship-and-observe per the "all flavor for now" call.
 
 ## Other deferred provider/feature ideas
 
-- **`activity.ts` provider** — prompt cadence + length from the hook's stdin JSON
-  (`minSinceLastPrompt`, `promptLength`). (Typed as `ActivitySignal`.)
+- **`activity.ts` provider** — first cut shipped: prompt length plus minutes
+  since the last prompt from the `UserPromptSubmit` payload. Future refinement:
+  use prompt length itself as a nudge once real output shows the boundary.
 - **wifi SSID fragility** — `ipconfig getsummary` needs Location Services
   permission on recent macOS, so SSID is often empty for downloaders. Degrades to
   absent (not a bug). If we want it reliable, prompt for the permission or drop it.
@@ -118,11 +142,11 @@ doing); held back only to ship-and-observe per the "all flavor for now" call.
   or leave `debug` entirely to the git provider.
 - **`reframe` tone reconciliation** — the reframe lenses now defer to the user's
   words; make sure no other rendered line contradicts that humility.
-- **Tests** — project has none. `isVibeTag`, `tagsToVibe`, `deriveMode`, and
-  `energyToMode` are all pure and the obvious first targets.
-- **README + landing page** — both still claim Spotify audio-features and a
-  `claude plugin install` that doesn't exist. Update to the OS-now-playing +
-  MusicBrainz-vibe + reframe-lens reality.
+- **Tests** — baseline smoke coverage exists for `tagsToVibe`, `deriveCadence`,
+  overrides, rendering, and the reframe lens. Keep extending around providers
+  and hook input/output as the loop grows.
+- **Landing page** — keep copy aligned with the OS-now-playing +
+  MusicBrainz-vibe + reframe-lens reality as install/distribution changes.
 - **Genre→affect table growth** — `GENRE_AFFECT` in `vibe.ts` is small/hand-
   authored; extend as artists miss, or compute means from the Kaggle 114k-track
   dataset (per deep-research finding — no published table exists).

@@ -11,6 +11,7 @@ import {
   buildReframe,
   loadOverrides,
   applyOverrides,
+  resolveDialLevel,
   DIALS,
   DIAL_WORDS,
 } from "./cadence.js";
@@ -70,17 +71,6 @@ async function cmdTest() {
 
 const LEVELS: DialLevel[] = ["low", "medium", "high"];
 
-// Accept EITHER the level ("high") or the human word ("fast") — the user
-// thinks in the words the dials board shows, not the internal levels.
-function resolveLevel(dial: keyof Cadence, input: string): DialLevel | null {
-  const v = input.toLowerCase();
-  if ((LEVELS as string[]).includes(v)) return v as DialLevel;
-  for (const lvl of LEVELS) {
-    if (DIAL_WORDS[dial][lvl].toLowerCase() === v) return lvl;
-  }
-  return null;
-}
-
 async function cmdSet(args: string[]) {
   const [dial, value] = args;
   if (!dial || !value) {
@@ -93,7 +83,7 @@ async function cmdSet(args: string[]) {
     process.exit(1);
   }
   const d = dial as keyof Cadence;
-  const level = resolveLevel(d, value);
+  const level = resolveDialLevel(d, value);
   if (!level) {
     const words = LEVELS.map((l) => DIAL_WORDS[d][l]).join(" | ");
     console.error(`  "${value}" isn't valid for ${dial}. Use: ${words}  (or low|medium|high)`);

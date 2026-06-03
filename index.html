@@ -4,9 +4,9 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Cadence — agents that read the room</title>
-<meta name="description" content="Claude Code has one input channel: text. Cadence is the second.">
+<meta name="description" content="An ambient context layer for Claude Code. Cadence gives agents the room around the prompt.">
 <meta property="og:title" content="Cadence — agents that read the room">
-<meta property="og:description" content="Claude Code has one input channel: text. Cadence is the second. A Cullum&Co project.">
+<meta property="og:description" content="An ambient context layer for Claude Code. Cadence gives agents the room around the prompt.">
 <meta property="og:type" content="website">
 <style>
   :root {
@@ -240,6 +240,8 @@
     display: inline-flex;
     align-items: center;
     gap: 0.75rem;
+    max-width: 100%;
+    overflow-x: auto;
   }
 
   .install-cmd .prompt { color: var(--accent); }
@@ -299,14 +301,14 @@
 <nav>
   <a href="/" class="mark">Cadence</a>
   <div class="right">
-    <a href="https://github.com">github</a>
+    <a href="https://github.com/cullumco/cadence">github</a>
     <span>a <a href="https://cullum.co" style="text-decoration: underline; text-decoration-color: rgba(107,107,102,0.4); text-underline-offset: 2px;">Cullum&amp;Co</a> project</span>
   </div>
 </nav>
 
 <h1>Agents that read the room.</h1>
 
-<p class="lede">Claude Code has one input channel: text. Cadence is the second.</p>
+<p class="lede">The missing input is not another instruction. It is the room around the prompt.</p>
 
 <div class="now-playing">
   <span class="dot"></span>
@@ -315,10 +317,10 @@
 </div>
 
 <section>
-  <h2>Your agent has never met you.</h2>
-  <p>It doesn't know you're three beers in or up at 2am. It doesn't know you've been heads-down since six, or that the music playing is the reason you're thinking clearly. It sees the prompt. That's it.</p>
-  <p>But the prompt is a sliver of what's actually in the room. The rest — your energy, your tempo, the state you're coding in — is the context shaping everything you do. It never reaches the model.</p>
-  <p>Cadence is the channel for the rest of it.</p>
+  <h2>Your prompt is not the whole ask.</h2>
+  <p>It doesn't say you are tired but still shipping. It doesn't say you just came back from a long break, or that the repo is clean, or that you want the agent to stop asking permission and make the call.</p>
+  <p>Cadence gives Claude Code that missing layer: ambient signals, a self-reported state, four simple dials, and a lens for reading what you meant.</p>
+  <p>Claude Code is the alpha surface. The product is the context layer underneath it.</p>
 </section>
 
 <section>
@@ -327,7 +329,7 @@
     <div class="component">
       <div class="step">01 — Signals</div>
       <h3>Read the room.</h3>
-      <p>What's playing becomes a vibe — read at the OS level, turned into mood words. The <code>cadence state</code> command lets you say what you already know: <em>"two beers, shipping."</em></p>
+      <p>Time, git state, prompt rhythm, music, and self-report become visible context. The <code>/cadence:state</code> skill lets you say what you already know: <em>"two beers, shipping."</em></p>
     </div>
     <div class="component">
       <div class="step">02 — Dials</div>
@@ -337,7 +339,7 @@
     <div class="component">
       <div class="step">03 — Reframe</div>
       <h3>A lens, not a leash.</h3>
-      <p>A sentence telling the agent how to <em>read</em> your prompt given the cadence. It never rewrites your words — and always defers to them.</p>
+      <p>A sentence tells the agent how to <em>read</em> your prompt given the cadence. A conservative Stop hook catches soft endings when you asked it to ship.</p>
     </div>
   </div>
 </section>
@@ -349,6 +351,8 @@
   <span class="key">signals:</span>
     music: "Loose" — Daniel Caesar
     vibe: sexy, chilled
+    git: clean tree
+    activity: { prompt_len=47 }
     self_report: "two beers, shipping"
   <span class="key">cadence:</span>
     { pace=fast tone=warm posture=decisive proactivity=act-freely }
@@ -359,13 +363,13 @@
 </section>
 
 <section>
-  <h2>Install.</h2>
-  <p>A Claude Code hook. macOS, Node 20+. No Spotify login, no API key — it reads what's already playing.</p>
+  <h2>Try it.</h2>
+  <p>A Claude Code alpha adapter. Install it locally, then run one skill to see what Cadence sees.</p>
   <div class="install-cmd">
     <span class="prompt">$</span>
-    <span>git clone github.com/cullumco/cadence &amp;&amp; cd cadence &amp;&amp; npm install &amp;&amp; npm run build &amp;&amp; npm link</span>
+    <span>git clone https://github.com/cullumco/cadence.git ~/cadence &amp;&amp; cd ~/cadence &amp;&amp; npm install &amp;&amp; npm run build &amp;&amp; claude --plugin-dir ~/cadence</span>
   </div>
-  <p class="small">Then wire one hook into <code>~/.claude/settings.json</code> — see the <a href="https://github.com/cullumco/cadence" class="inline">README</a>.</p>
+  <p class="small">Inside Claude Code, run <code>/cadence:try</code>, then <code>/cadence:state shipping, locked in</code>. No Spotify login, no API key — music is read at the OS level when available.</p>
 </section>
 
 <section class="sibling">
@@ -378,7 +382,7 @@
 <footer>
   <span>© Cullum&amp;Co · 2026</span>
   <span class="right">
-    <a href="https://github.com">github</a>
+    <a href="https://github.com/cullumco/cadence">github</a>
     <a href="mailto:scott@cullum.co">contact</a>
   </span>
 </footer>

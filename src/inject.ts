@@ -9,11 +9,18 @@ import type {
 } from "./types.js";
 import { DIAL_WORDS } from "./cadence.js";
 
+function quote(value: string): string {
+  return JSON.stringify(value)
+    .replace(/</g, "\\u003c")
+    .replace(/>/g, "\\u003e")
+    .replace(/&/g, "\\u0026");
+}
+
 function renderMusic(m: MusicSignal): string[] {
   if (!m.track) return [];
   const lines = [
-    `    music: "${m.track}"${m.artist ? ` — ${m.artist}` : ""}${
-      m.player ? ` (${m.player})` : ""
+    `    music: ${quote(m.track)}${m.artist ? ` — ${quote(m.artist)}` : ""}${
+      m.player ? ` (${quote(m.player)})` : ""
     }`,
   ];
   if (m.vibe) lines.push(`    vibe: ${m.vibe}`);
@@ -21,7 +28,7 @@ function renderMusic(m: MusicSignal): string[] {
 }
 
 function renderReport(r: SelfReportSignal): string {
-  return `    self_report: "${r.text.replace(/"/g, '\\"')}"`;
+  return `    self_report: ${quote(r.text)}`;
 }
 
 function renderGit(g: GitSignal): string {
@@ -45,7 +52,7 @@ function renderActivity(a: ActivitySignal): string {
 
 function renderPlace(p: PlaceSignal): string {
   const parts = [
-    p.network ? `network="${p.network}"` : null,
+    p.network ? `network=${quote(p.network)}` : null,
     p.displays != null ? `displays=${p.displays}` : null,
   ].filter(Boolean);
   return `    place: { ${parts.join(" ")} }`;
@@ -62,7 +69,7 @@ function renderAmbient(a: AmbientSignal): string {
       : null,
     a.darkMode === true ? "dark mode" : null,
     a.displays != null && a.displays > 1 ? `${a.displays} displays` : null,
-    a.network ? `on ${a.network}` : null,
+    a.network ? `on ${quote(a.network)}` : null,
     a.loadHigh ? "machine busy" : null,
     a.uptimeHours != null && a.uptimeHours >= 12 ? `up ${a.uptimeHours}h` : null,
   ].filter(Boolean);

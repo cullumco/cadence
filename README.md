@@ -3,7 +3,8 @@
 > Agents that read the room.
 > Claude Code has one input channel: text. Cadence is the second.
 
-A Claude Code hook that injects your current **embodied state** — what you're
+Cadence is an ambient context layer for agents. The current alpha surface is a
+Claude Code hook: it injects your current **embodied state** — what you're
 listening to, what you told it, how you want it to respond — into every prompt,
 then asks Claude to *read your prompt through that lens*. The agent stops being
 deaf to the room.
@@ -29,9 +30,9 @@ Before Claude sees your prompt, Cadence injects a `<user_state>` block:
 </user_state>
 ```
 
-It doesn't constrain Claude or rewrite your prompt — it gives Claude the context
-your words are missing, and a lens for reading them. The lens always defers to
-what you actually typed.
+It doesn't constrain the agent or rewrite your prompt — it gives the model the
+context your words are missing, and a lens for reading them. The lens always
+defers to what you actually typed.
 
 ## How it works
 
@@ -43,6 +44,8 @@ what you actually typed.
      The one signal that's always there: `context: friday afternoon, rainy`.
    - **git** — commits this hour, dirty files, mid-merge/rebase, read from the
      project you're in: `git: 6 dirty, mid-conflict`. Cross-platform.
+   - **activity** — prompt length and minutes since your last prompt, read from
+     the hook payload: `activity: { min_since_prompt=45 prompt_len=123 }`.
    - **music** — what's playing (via macOS now-playing, any player), turned into
      a clean *vibe* (mood words) via [MusicBrainz](https://musicbrainz.org). No
      Spotify login, no API key, no Premium.
@@ -56,9 +59,9 @@ what you actually typed.
    - **tone** — warm ↔ crisp
    - **posture** — exploratory ↔ decisive
    - **proactivity** — ask-first ↔ act-freely
-3. **Reframe** — a sentence composed from the dials telling Claude how to *read*
-   your prompt. Generated fresh each time; always ends "if my words clearly mean
-   otherwise, follow my words."
+3. **Reframe** — a sentence composed from the dials telling the agent how to
+   *read* your prompt. Generated fresh each time; always ends "if my words
+   clearly mean otherwise, follow my words."
 
 The dials are independent on purpose — high-energy-but-mellow music can read as
 "fast pace, warm tone," something a single ship/think/debug label could never
@@ -70,40 +73,48 @@ express.
   Music.app). The self-report and dials work everywhere; only the music signal
   is macOS-only.
 - **Node 20+**
-- Claude Code
+- Claude Code for the alpha adapter
 
 ## Install
+
+### Alpha plugin install
+
+Until the npm package is published, test the plugin locally:
 
 ```bash
 git clone https://github.com/cullumco/cadence ~/cadence
 cd ~/cadence
 npm install
-npm run build
-npm link        # puts the `cadence` command on your PATH
+npm run verify:alpha
+claude --plugin-dir ~/cadence
 ```
 
-### Wire it into Claude Code
+Then, inside Claude Code:
 
-Add to `~/.claude/settings.json` (or a project's `.claude/settings.json`).
-Replace the path with where you cloned it:
-
-```json
-{
-  "hooks": {
-    "UserPromptSubmit": [
-      {
-        "matcher": "",
-        "hooks": [
-          { "type": "command", "command": "node /absolute/path/to/cadence/dist/hook.js" }
-        ]
-      }
-    ]
-  }
-}
+```text
+/cadence:try
+/cadence:state shipping, locked in
 ```
 
-The hook has a ~1.5s budget and exits silently when it has nothing to say, so it
-never blocks or slows a prompt.
+Once `@cullumco/cadence` is published to npm, the install path becomes:
+
+```text
+/plugin marketplace add cullumco/cadence
+/plugin install cadence@cadence
+/reload-plugins
+/cadence:try
+```
+
+For maintainers, `npm run verify:alpha` is the release gate: it builds,
+validates the Claude plugin and marketplace manifests, runs tests, dry-packs the
+npm package, and checks that the hook, skill, and plugin files are included.
+It also installs the packed tarball into a temporary consumer project and
+smoke-tests the installed `cadence` binary and prompt hook.
+
+The prompt hook has a ~1.5s budget and exits silently when it has nothing to
+say, so it never blocks or slows a prompt. The Stop hook is conservative: it
+only intervenes when you're explicitly in a shipping / act-freely cadence and
+Claude tries to end with a soft handoff like "want me to do that next?"
 
 ### Music vibe (optional, macOS only)
 
@@ -119,6 +130,13 @@ cadence state "two beers, shipping"   # set self-reported state (expires in 4h)
 cadence state                         # print current self-report
 cadence clear                         # clear it
 cadence test                          # preview exactly what the hook would inject
+```
+
+From inside Claude Code, the plugin skill gives the same self-report path:
+
+```text
+/cadence:state two beers, shipping
+/cadence:try
 ```
 
 ### Driving the dials by hand
@@ -145,15 +163,51 @@ composes the lens. That's where your taste lives — which signal moves which di
 and how the lens reads. A working baseline ships so it runs end-to-end
 immediately; the mapping is opinionated and meant to be yours.
 
+## Adapter posture
+
+Claude Code is the alpha surface, not the whole product. The agnostic product
+shape is:
+
+```
+signals -> cadence dials -> context envelope -> adapter-specific delivery
+```
+
+Today the adapter-specific delivery is Claude Code's `UserPromptSubmit` and
+`Stop` hooks. The core signal types, cadence derivation, reframe lens, and
+rendering are kept separate so future adapters can deliver the same cadence
+state through other agent surfaces.
+
+## Alpha release checklist
+
+Before publishing:
+
+```bash
+npm run verify:alpha
+npm publish --dry-run
+npm run release:alpha
+```
+
+The package is scoped and configured for public npm publish via
+`publishConfig.access = "public"`. After npm publish, push the repository with
+`.claude-plugin/marketplace.json` so testers can add the marketplace:
+
+```text
+/plugin marketplace add cullumco/cadence
+/plugin install cadence@cadence
+```
+
+GitHub Actions runs the alpha gate from `.github/workflows/alpha.yml` once this
+repo is pushed.
+
 ## What's next
 
 See [`BACKLOG.md`](BACKLOG.md). Highlights:
 
-- **More signals** — `git` (commit cadence, conflict state), typing tempo, wifi.
+- **More signals** — stronger `git` nudges, calendar density, wifi/place.
   Git is the highest-value one: it moves the dials from *what you said* to *what
   you're actually doing*.
-- **After-the-fact injection** — refine the cadence mid-task (`PostToolUse`) and
-  enforce it at the finish line (`Stop`), not just before the prompt.
+- **After-the-fact injection** — refine the cadence mid-task (`PostToolUse`),
+  building on the conservative finish-line `Stop` guard that now ships.
 - **Opt-in flavor providers** — horoscope, moon phase, for those who want them.
 
 ## Caveats

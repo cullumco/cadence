@@ -1,0 +1,20 @@
+{
+  "name": "cadence",
+  "displayName": "Cadence",
+  "version": "0.1.0",
+  "description": "Ambient context for Claude Code: embodied signals, cadence dials, and finish-line guardrails.",
+  "author": {
+    "name": "Cullum&Co",
+    "url": "https://cullum.co"
+  },
+  "homepage": "https://github.com/cullumco/cadence",
+  "repository": "https://github.com/cullumco/cadence",
+  "license": "MIT",
+  "keywords": [
+    "context",
+    "hooks",
+    "cadence",
+    "ambient-context",
+    "claude-code"
+  ]
+}

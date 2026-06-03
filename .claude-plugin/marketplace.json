@@ -1,0 +1,29 @@
+{
+  "name": "cadence",
+  "description": "Ambient context plugins from Cullum&Co.",
+  "owner": {
+    "name": "Cullum&Co",
+    "email": "scott@cullum.co"
+  },
+  "plugins": [
+    {
+      "name": "cadence",
+      "displayName": "Cadence",
+      "description": "Agents that read the room: embodied state, cadence dials, and conservative finish-line guardrails for Claude Code.",
+      "source": {
+        "source": "npm",
+        "package": "@cullumco/cadence"
+      },
+      "category": "Productivity",
+      "tags": [
+        "context",
+        "hooks",
+        "agents",
+        "claude-code"
+      ],
+      "homepage": "https://github.com/cullumco/cadence",
+      "repository": "https://github.com/cullumco/cadence",
+      "license": "MIT"
+    }
+  ]
+}

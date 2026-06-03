@@ -1,20 +1,40 @@
 {
   "name": "@cullumco/cadence",
-  "version": "0.0.1",
-  "description": "Agents that read the room. A Claude Code hook that injects embodied user state into every prompt.",
+  "version": "0.1.0",
+  "description": "Agents that read the room. Ambient context, cadence dials, and finish-line guardrails for Claude Code.",
   "type": "module",
   "bin": {
-    "cadence": "./bin/cadence.js"
+    "cadence": "bin/cadence"
+  },
+  "homepage": "https://github.com/cullumco/cadence",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/cullumco/cadence.git"
+  },
+  "bugs": {
+    "url": "https://github.com/cullumco/cadence/issues"
+  },
+  "publishConfig": {
+    "access": "public"
   },
   "files": [
+    ".claude-plugin",
+    "hooks",
+    "skills",
     "dist",
     "bin",
-    "README.md"
+    "README.md",
+    "ALPHA.md"
   ],
   "scripts": {
     "build": "tsc",
     "dev": "tsc --watch",
     "test": "node --test \"test/**/*.test.js\"",
+    "prepack": "npm run build",
+    "prepublishOnly": "node scripts/verify-alpha.mjs --no-install-smoke",
+    "release:alpha": "node scripts/release-alpha.mjs",
+    "verify:alpha": "node scripts/verify-alpha.mjs",
+    "plugin:validate": "claude plugin validate --strict .claude-plugin/plugin.json && claude plugin validate --strict .claude-plugin/marketplace.json",
     "hook": "node dist/hook.js",
     "cli": "node dist/cli.js"
   },

@@ -167,6 +167,18 @@ function isLevel(v: unknown): v is DialLevel {
   return typeof v === "string" && (LEVELS as string[]).includes(v);
 }
 
+// Accept EITHER the internal level ("high") or the human word ("fast").
+// This keeps config/env pins aligned with the CLI and the rendered board.
+export function resolveDialLevel(dial: keyof Cadence, input: unknown): DialLevel | null {
+  if (typeof input !== "string") return null;
+  const v = input.toLowerCase();
+  if (isLevel(v)) return v;
+  for (const lvl of LEVELS) {
+    if (DIAL_WORDS[dial][lvl].toLowerCase() === v) return lvl;
+  }
+  return null;
+}
+
 export async function loadOverrides(): Promise<DialOverrides> {
   const ov: DialOverrides = {};
 
@@ -174,7 +186,8 @@ export async function loadOverrides(): Promise<DialOverrides> {
   try {
     const cfg = JSON.parse(await readFile(CONFIG_FILE, "utf-8")) as Record<string, unknown>;
     for (const dial of DIALS) {
-      if (isLevel(cfg[dial])) ov[dial] = cfg[dial] as DialLevel;
+      const level = resolveDialLevel(dial, cfg[dial]);
+      if (level) ov[dial] = level;
     }
   } catch {
     // no config file — fine
@@ -182,8 +195,8 @@ export async function loadOverrides(): Promise<DialOverrides> {
 
   // env vars override the file
   for (const dial of DIALS) {
-    const raw = process.env[`CADENCE_${dial.toUpperCase()}`]?.toLowerCase();
-    if (isLevel(raw)) ov[dial] = raw;
+    const level = resolveDialLevel(dial, process.env[`CADENCE_${dial.toUpperCase()}`]);
+    if (level) ov[dial] = level;
   }
 
   return ov;
