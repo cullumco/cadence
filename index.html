@@ -225,19 +225,15 @@
   .install-cmd {
     font-family: ui-monospace, "SF Mono", "JetBrains Mono", Menlo, Monaco, monospace;
     font-size: 0.875rem;
+    line-height: 1.7;
     background: var(--ink);
     color: var(--paper);
     padding: 1rem 1.25rem;
     border-radius: 3px;
-    margin-top: 1.5rem;
-    display: inline-flex;
-    align-items: center;
-    gap: 0.75rem;
+    margin: 1.5rem 0 0;
     max-width: 100%;
     overflow-x: auto;
   }
-
-  .install-cmd .prompt { color: var(--accent); }
 
   .small {
     font-size: 0.875rem;
@@ -360,12 +356,12 @@
 
 <section>
   <h2>Try it.</h2>
-  <p>A Claude Code alpha adapter. Install it locally, then run one skill to see what Cadence sees.</p>
-  <div class="install-cmd">
-    <span class="prompt">$</span>
-    <span>git clone https://github.com/cullumco/cadence.git ~/cadence &amp;&amp; cd ~/cadence &amp;&amp; npm install &amp;&amp; npm run build &amp;&amp; claude --plugin-dir ~/cadence</span>
-  </div>
-  <p class="small">Inside Claude Code, run <code>/cadence:try</code>, then <code>/cadence:state shipping, locked in</code>. No Spotify login, no API key — music is read at the OS level when available.</p>
+  <p>Cadence ships as a Claude Code plugin. Four commands to install, then one skill to see what Cadence sees.</p>
+  <pre class="install-cmd">/plugin marketplace add cullumco/cadence
+/plugin install cadence@cadence
+/reload-plugins
+/cadence:try</pre>
+  <p class="small">Then set a self-report: <code>/cadence:state shipping, locked in</code>. No Spotify login, no API key — music is read at the OS level when available.</p>
 </section>
 
 <section class="sibling">

@@ -77,26 +77,7 @@ express.
 
 ## Install
 
-### Alpha plugin install
-
-Until the npm package is published, test the plugin locally:
-
-```bash
-git clone https://github.com/cullumco/cadence ~/cadence
-cd ~/cadence
-npm install
-npm run verify:alpha
-claude --plugin-dir ~/cadence
-```
-
-Then, inside Claude Code:
-
-```text
-/cadence:try
-/cadence:state shipping, locked in
-```
-
-Once `@cullumco/cadence` is published to npm, the install path becomes:
+In Claude Code:
 
 ```text
 /plugin marketplace add cullumco/cadence
@@ -105,11 +86,14 @@ Once `@cullumco/cadence` is published to npm, the install path becomes:
 /cadence:try
 ```
 
-For maintainers, `npm run verify:alpha` is the release gate: it builds,
-validates the Claude plugin and marketplace manifests, runs tests, dry-packs the
-npm package, and checks that the hook, skill, and plugin files are included.
-It also installs the packed tarball into a temporary consumer project and
-smoke-tests the installed `cadence` binary and prompt hook.
+Then set a self-report so you can feel the difference:
+
+```text
+/cadence:state shipping, locked in
+```
+
+Alpha testers running from source — while `@cullumco/cadence` is pending npm
+publish — see [`ALPHA.md`](ALPHA.md).
 
 The prompt hook has a ~1.5s budget and exits silently when it has nothing to
 say, so it never blocks or slows a prompt. The Stop hook is conservative: it
@@ -188,16 +172,13 @@ npm run release:alpha
 ```
 
 The package is scoped and configured for public npm publish via
-`publishConfig.access = "public"`. After npm publish, push the repository with
-`.claude-plugin/marketplace.json` so testers can add the marketplace:
+`publishConfig.access = "public"`. The repo already ships
+`.claude-plugin/marketplace.json`, so once `@cullumco/cadence` lands on npm,
+the canonical install at the top of this README starts working end-to-end.
 
-```text
-/plugin marketplace add cullumco/cadence
-/plugin install cadence@cadence
-```
-
-GitHub Actions runs the alpha gate from `.github/workflows/alpha.yml` on every
-push to `main`.
+A GitHub Actions workflow exists at `.github/workflows/alpha.yml` but is
+currently disabled — re-enable with `gh workflow enable Alpha` when you want
+the gate to run on every push to `main`.
 
 ## What's next
 
