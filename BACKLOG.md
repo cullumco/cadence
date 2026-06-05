@@ -115,15 +115,14 @@ order). Across tiers this is intentional (self-report > ambient), but *within*
 ambient the ordering is arbitrary. Fine for now; if it bites, move to a
 weighted/voting model per dial instead of last-write-wins.
 
-## Turn git from flavor into nudges (when ready)
+## Git nudges — SHIPPED (2026-06-05)
 
-`git.ts` ships as FLAVOR ONLY — it renders `git: 6 dirty, mid-conflict` but does
-not move dials. The nudge code is stubbed dormant in `deriveCadence` (`void git`).
-Candidate nudges to enable once the flavor proves trustworthy in real use:
+Enabled after the flavor proved trustworthy in real use:
 - `conflicted` → proactivity low (verify, don't barrel — you're in the weeds)
 - `commitsLastHour >= 3` → pace high (flow state)
-This is THE highest-value steer (moves dials from what-you-said to what-you're-
-doing); held back only to ship-and-observe per the "all flavor for now" call.
+Applied below self-report in the hierarchy, so "I'm shipping" beats a
+mid-conflict read. Watch for false positives (e.g. rebase-heavy workflows
+reading as flow state) before adding more git nudges.
 
 ## Other deferred provider/feature ideas
 

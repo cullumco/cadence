@@ -152,13 +152,30 @@ const renderOnly = (signals) => {
   return { cadence, block: render({ signals, capturedAt: 0, cadence, pinned: [], reframe: "" }) };
 };
 
-test("git renders as flavor and does NOT move dials", () => {
+test("git nudges: flow-state commits drive pace, conflict lowers proactivity", () => {
   const { cadence, block } = renderOnly([
     { source: "git", commitsLastHour: 5, filesDirty: 3, conflicted: true },
   ]);
   assert.match(block, /git: 5 commits\/hr, 3 dirty, mid-conflict/);
-  // all-flavor: even a conflict leaves dials neutral (no nudge wired yet)
+  assert.equal(cadence.pace, "high"); // >=3 commits/hr → flow state
+  assert.equal(cadence.proactivity, "low"); // mid-conflict → verify, don't barrel
+  assert.equal(cadence.posture, "medium"); // git doesn't touch posture/tone
+  assert.equal(cadence.tone, "medium");
+});
+
+test("git nudges: quiet clean repo leaves dials neutral", () => {
+  const { cadence } = renderOnly([
+    { source: "git", commitsLastHour: 0, filesDirty: 0, conflicted: false },
+  ]);
   assert.deepEqual(cadence, { pace: "medium", tone: "medium", posture: "medium", proactivity: "medium" });
+});
+
+test("git nudges: self-report outranks git — 'shipping' beats mid-conflict", () => {
+  const cadence = deriveCadence(stateWith([
+    { source: "git", commitsLastHour: 0, filesDirty: 6, conflicted: true },
+    { source: "self_report", text: "shipping, locked in", setAt: 0 },
+  ]));
+  assert.equal(cadence.proactivity, "high"); // the user's word wins
 });
 
 test("git renders a clean tree distinctly", () => {

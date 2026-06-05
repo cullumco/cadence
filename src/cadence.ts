@@ -89,6 +89,15 @@ export function deriveCadence(state: UserState): Cadence {
     c.tone = "low";
   }
 
+  // ── git → pace / proactivity (what you're DOING, not what you said) ───────
+  // Enabled 2026-06-05 after the flavor proved trustworthy in real use.
+  // Applied below self-report on purpose: "I'm shipping" beats a mid-conflict
+  // read — the user's explicit word stays the higher authority.
+  if (git) {
+    if (git.commitsLastHour >= 3) c.pace = "high"; // flow state
+    if (git.conflicted) c.proactivity = "low"; // verify, don't barrel
+  }
+
   // ── self-report → posture / proactivity / tone (you know your state) ──────
   if (report) {
     const t = report.text.toLowerCase();
@@ -109,13 +118,8 @@ export function deriveCadence(state: UserState): Cadence {
     if (/\b(focused|formal|work|serious|crunch)\b/.test(t)) c.tone = "high";
   }
 
-  // ── git: FLAVOR ONLY for now (renders as context, no dial nudges yet) ─────
-  // Candidate nudges, deliberately dormant until we've watched real output:
-  //   conflicted → proactivity low (verify, don't barrel)
-  //   commitsLastHour >= 3 → pace high (flow state)
+  // Still-dormant candidate nudges (see BACKLOG):
   //   ambient focus on → proactivity high (heads-down = fewer check-ins)
-  // See BACKLOG: turn these on once the flavor proves trustworthy.
-  void git;
 
   // ── activity → pace (returning from a break = slow back down) ─────────────
   if (activity?.minSinceLastPrompt != null && activity.minSinceLastPrompt > 30) {

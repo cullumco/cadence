@@ -78,8 +78,10 @@ Same words. The room around them changed, and the agent finally saw it.
      Spotify login, no API key, no Premium.
    - **self-report** — what you tell it: `cadence state "two beers, shipping"`.
 
-   Time/day and self-report move the dials; the rest render as context the agent
-   reads (flavor). Git's nudges are built but dormant — see `BACKLOG.md`.
+   Time/day, self-report, and git move the dials (git reads *what you're
+   doing*: 3+ commits/hr → fast pace, mid-conflict → verify-first); the rest
+   render as context the agent reads (flavor). Self-report always outranks
+   inference — "I'm shipping" beats a mid-conflict read.
 2. **Dials** — four independent knobs, each `low | medium | high`, inferred from
    the signals (or pinned by you):
    - **pace** — deliberate ↔ fast
