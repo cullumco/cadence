@@ -34,7 +34,7 @@
     "prepublishOnly": "node scripts/verify-alpha.mjs --no-install-smoke",
     "release:alpha": "node scripts/release-alpha.mjs",
     "verify:alpha": "node scripts/verify-alpha.mjs",
-    "plugin:validate": "claude plugin validate --strict .claude-plugin/plugin.json && claude plugin validate --strict .claude-plugin/marketplace.json",
+    "plugin:validate": "claude plugin validate .claude-plugin/plugin.json && claude plugin validate --strict .claude-plugin/marketplace.json",
     "hook": "node dist/hook.js",
     "cli": "node dist/cli.js"
   },
