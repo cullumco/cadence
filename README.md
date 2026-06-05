@@ -196,8 +196,8 @@ The package is scoped and configured for public npm publish via
 /plugin install cadence@cadence
 ```
 
-GitHub Actions runs the alpha gate from `.github/workflows/alpha.yml` once this
-repo is pushed.
+GitHub Actions runs the alpha gate from `.github/workflows/alpha.yml` on every
+push to `main`.
 
 ## What's next
 

@@ -31,8 +31,9 @@ a shipping cadence, the Stop hook should discourage permission-seeking endings.
 
 ## Published Install
 
-After `@cullumco/cadence` is published to npm and this repo is pushed with
-`.claude-plugin/marketplace.json`:
+This repo is live at https://github.com/cullumco/cadence with
+`.claude-plugin/marketplace.json` in place. Once `@cullumco/cadence` is
+published to npm, the install path becomes:
 
 ```text
 /plugin marketplace add cullumco/cadence
@@ -69,11 +70,9 @@ defense.
 
 ## Current External Requirements
 
-- A GitHub repository must exist at the marketplace path users will add.
 - An npm account with access to the `@cullumco` scope must publish the package.
 
-Current checks:
-- `@cullumco/cadence` is not published on npm yet.
-- `cullumco/cadence`, `scullum-fortivus/cadence`, and `Fortivuscares/cadence`
-  do not currently exist on GitHub from the authenticated account available in
-  this workspace.
+Current state:
+- GitHub: https://github.com/cullumco/cadence is live (public, MIT). CI
+  runs `npm run verify:alpha` on every push to `main`.
+- npm: `@cullumco/cadence` is not published yet.
