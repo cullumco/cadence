@@ -21,8 +21,8 @@ Before Claude sees your prompt, Cadence injects a `<user_state>` block:
 ```
 <user_state>
   signals:
-    music: "Loose" — Daniel Caesar (Spotify)
-    vibe: sexy, chilled
+    music: "You Fail Me" — Converge (Spotify)
+    vibe: aggressive, energetic
     self_report: "two beers, shipping"
   cadence:  # inferred from signals, advisory
     { pace=fast tone=warm posture=decisive proactivity=act-freely }
