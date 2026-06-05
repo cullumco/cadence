@@ -28,6 +28,7 @@ function sh(cmd: string, ms = 500): Promise<string | null> {
  * ───────────────────────────────────────────────────────────────────────── */
 
 const CONFIG_FILE = join(homedir(), ".cadence", "config.json");
+const DND_ASSERTIONS = join(homedir(), "Library", "DoNotDisturb", "DB", "Assertions.json");
 const WEATHER_TIMEOUT_MS = 900;
 const DAYS = ["sunday", "monday", "tuesday", "wednesday", "thursday", "friday", "saturday"];
 
@@ -64,6 +65,27 @@ function getVitals(): { uptimeHours: number; loadHigh: boolean } {
   return { uptimeHours, loadHigh: load1 / cores > 0.8 };
 }
 
+// Focus / DND — tri-state, read straight from the private donotdisturbd DB
+// (~1ms, no subprocess). Exported for the darwin smoke test.
+//   true      → a Focus mode is asserted (manually toggled on this device)
+//   false     → file read OK, no assertion records → focus is off
+//   undefined → unreadable: terminal lacks Full Disk Access (TCC denies the
+//               read silently — hook subprocesses never get a prompt), file
+//               moved, or shape changed → "unavailable", never "off"
+// Known gap: SCHEDULED/geofenced Focus writes no assertion record (detecting
+// it needs ModeConfigurations.json schedule math — backlogged).
+export async function getFocus(): Promise<boolean | undefined> {
+  if (process.platform !== "darwin") return undefined;
+  try {
+    const raw = await readFile(DND_ASSERTIONS, "utf-8");
+    const json = JSON.parse(raw) as { data?: { storeAssertionRecords?: unknown[] }[] };
+    const records = json.data?.[0]?.storeAssertionRecords;
+    return Array.isArray(records) && records.length > 0;
+  } catch {
+    return undefined;
+  }
+}
+
 // ── mac context: best-effort shell-outs, all flavor (no dial nudges) ─────────
 async function getMacContext(): Promise<{
   focus?: boolean;
@@ -72,15 +94,19 @@ async function getMacContext(): Promise<{
   darkMode?: boolean;
 }> {
   if (process.platform !== "darwin") return {};
-  const [dark, ssid, displays] = await Promise.all([
+  const [dark, ssid, displays, focus] = await Promise.all([
     sh("defaults read -g AppleInterfaceStyle"), // "Dark", or error (=light)
     sh("ipconfig getsummary en0 | awk -F ' SSID : ' '/ SSID : / {print $2}'", 700),
     // fast display count via AppleScript (~100ms) — NOT system_profiler (1-3s)
     sh(`osascript -e 'tell application "System Events" to count of desktops'`, 700),
+    getFocus(),
   ]);
 
   const ctx: { focus?: boolean; displays?: number; network?: string; darkMode?: boolean } = {};
-  if (dark != null) ctx.darkMode = /dark/i.test(dark);
+  // `defaults read` exits non-zero when the key is unset — which is exactly
+  // what light mode looks like. So error/null ⇒ light, not unknown.
+  ctx.darkMode = dark != null && /dark/i.test(dark);
+  ctx.focus = focus;
   if (ssid) ctx.network = ssid.split("\n")[0]?.trim() || undefined;
   const n = displays ? Number(displays) : NaN;
   if (Number.isFinite(n) && n > 0) ctx.displays = n;

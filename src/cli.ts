@@ -16,6 +16,7 @@ import {
   DIAL_WORDS,
 } from "./cadence.js";
 import { render } from "./inject.js";
+import { renderSignalsTable } from "./signals-view.js";
 import type { Signal, UserState, Cadence, DialLevel } from "./types.js";
 
 const CADENCE_DIR = join(homedir(), ".cadence");
@@ -75,6 +76,22 @@ async function cmdTest() {
     return;
   }
   console.log("\n" + block + "\n");
+}
+
+// The legibility view: every signal Cadence can read — live value, or the
+// reason it's absent. Unlike `test`, this never goes silent.
+async function cmdSignals() {
+  const [music, report, ambient, git] = await Promise.all([
+    getMusicSignal().catch(() => null),
+    getSelfReportSignal().catch(() => null),
+    getAmbientSignal(new Date()).catch(() => null),
+    getGitSignal(process.cwd()).catch(() => null),
+  ]);
+  console.log(
+    "\n" +
+      renderSignalsTable({ music, report, ambient, git, now: Date.now(), platform: process.platform }) +
+      "\n"
+  );
 }
 
 const LEVELS: DialLevel[] = ["low", "medium", "high"];
@@ -284,6 +301,7 @@ const HELP = `
     cadence state               print current self-reported state
     cadence clear               clear self-reported state
     cadence test                preview what the hook would inject right now
+    cadence signals             every signal — live value, or why it's absent
 
   dials (your determination — pinned dials override inference):
     cadence dials               show the mixing board and what's pinned
@@ -307,6 +325,8 @@ async function main() {
       return cmdClear();
     case "test":
       return cmdTest();
+    case "signals":
+      return cmdSignals();
     case "set":
       return cmdSet(rest);
     case "unset":

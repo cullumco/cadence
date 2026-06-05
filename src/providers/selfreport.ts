@@ -4,7 +4,7 @@ import { join } from "node:path";
 import type { SelfReportSignal } from "../types.js";
 
 const STATE_FILE = join(homedir(), ".cadence", "state.txt");
-const STALE_AFTER_MS = 4 * 60 * 60 * 1000;
+export const STALE_AFTER_MS = 4 * 60 * 60 * 1000;
 
 export async function getSelfReportSignal(): Promise<SelfReportSignal | null> {
   try {

@@ -67,6 +67,7 @@ function renderAmbient(a: AmbientSignal): string {
     a.onBattery === true
       ? `unplugged${a.batteryPct != null ? ` ${a.batteryPct}%` : ""}`
       : null,
+    a.focus === true ? "focus on" : null,
     a.darkMode === true ? "dark mode" : null,
     a.displays != null && a.displays > 1 ? `${a.displays} displays` : null,
     a.network ? `on ${quote(a.network)}` : null,

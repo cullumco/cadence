@@ -133,8 +133,12 @@ doing); held back only to ship-and-observe per the "all flavor for now" call.
 - **wifi SSID fragility** — `ipconfig getsummary` needs Location Services
   permission on recent macOS, so SSID is often empty for downloaders. Degrades to
   absent (not a bug). If we want it reliable, prompt for the permission or drop it.
-- **macOS Focus / DND** — wanted, but no cheap reliable read found (the
-  controlcenter defaults key is unreliable). Needs more research or a helper.
+- **macOS Focus / DND** — manual-Focus detection ships: ambient.ts `getFocus()`
+  reads `~/Library/DoNotDisturb/DB/Assertions.json` directly (tri-state; needs
+  the terminal to have Full Disk Access, degrades to absent without it).
+  Remaining gap: SCHEDULED/geofenced Focus writes no assertion record —
+  detecting it needs ModeConfigurations.json schedule math. Render-only flavor
+  for now; `focus on → proactivity high` is a dormant candidate nudge.
 - **More ambient nudges** — calendar density (next-meeting proximity), ambient
   light, active-app focus. All cheap, all backlogged.
 - **`energyToMode` boundary** — the sad-slowcore think-vs-debug call in `vibe.ts`

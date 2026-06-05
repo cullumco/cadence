@@ -113,6 +113,7 @@ export function deriveCadence(state: UserState): Cadence {
   // Candidate nudges, deliberately dormant until we've watched real output:
   //   conflicted → proactivity low (verify, don't barrel)
   //   commitsLastHour >= 3 → pace high (flow state)
+  //   ambient focus on → proactivity high (heads-down = fewer check-ins)
   // See BACKLOG: turn these on once the flavor proves trustworthy.
   void git;
 

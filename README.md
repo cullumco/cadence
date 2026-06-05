@@ -9,6 +9,9 @@ listening to, what you told it, how you want it to respond — into every prompt
 then asks Claude to *read your prompt through that lens*. The agent stops being
 deaf to the room.
 
+**macOS-only (alpha).** Most signals read the Mac around you; other platforms
+degrade to self-report + dials + time/git.
+
 A [Cullum&Co](https://cullum.co) project.
 
 ## What it does
@@ -34,14 +37,38 @@ It doesn't constrain the agent or rewrite your prompt — it gives the model the
 context your words are missing, and a lens for reading them. The lens always
 defers to what you actually typed.
 
+## Same prompt, different room
+
+> "how should I structure the retry logic?"
+
+**Without Cadence** — every prompt reads the same. You get the survey: four
+options, a trade-off table, and a closing "Would you like me to implement one
+of these?"
+
+**With Cadence, shipping cadence** — hardcore at 3 commits/hr, state set to
+`"ship mode"` → `{ pace=fast posture=decisive proactivity=act-freely }`. You
+get the call, made: exponential backoff with jitter, three attempts, here's
+the diff, tests pass.
+
+**With Cadence, thinking cadence** — ambient music, state set to
+`"thinking through tradeoffs"` → `{ pace=deliberate posture=exploratory }`.
+You get the options laid out patiently, trade-offs actually explored, no
+pressure to pick one yet.
+
+Same words. The room around them changed, and the agent finally saw it.
+
 ## How it works
 
 **Signals → dials → a reframe lens.**
 
 1. **Signals** — what Cadence can sense right now:
    - **ambient** — time of day, day of week, weather (opt-in), battery, machine
-     uptime/load, dark mode, displays, wifi. Mostly zero-setup, cross-platform.
-     The one signal that's always there: `context: friday afternoon, rainy`.
+     uptime/load, dark mode, displays, wifi, Focus/DND. Mostly zero-setup;
+     time/day work everywhere, the Mac-context probes are macOS. The one signal
+     that's always there: `context: friday afternoon, rainy, focus on`.
+     (Focus detection reads the DND database directly, so it needs your
+     terminal to have Full Disk Access — `cadence signals` tells you if it
+     doesn't.)
    - **git** — commits this hour, dirty files, mid-merge/rebase, read from the
      project you're in: `git: 6 dirty, mid-conflict`. Cross-platform.
    - **activity** — prompt length and minutes since your last prompt, read from
@@ -69,9 +96,11 @@ express.
 
 ## Requirements
 
-- **macOS** (the now-playing reader uses AppleScript against Spotify.app /
-  Music.app). The self-report and dials work everywhere; only the music signal
-  is macOS-only.
+- **macOS.** Cadence is mac-only for the alpha: music (AppleScript
+  now-playing), battery, dark mode, displays, wifi, and Focus/DND all read the
+  Mac around you. On other platforms it still runs — self-report, dials,
+  time/day, and git work anywhere, the rest degrade silently — but the product
+  is built for the Mac.
 - **Node 20+**
 - Claude Code for the alpha adapter
 
@@ -114,7 +143,13 @@ cadence state "two beers, shipping"   # set self-reported state (expires in 4h)
 cadence state                         # print current self-report
 cadence clear                         # clear it
 cadence test                          # preview exactly what the hook would inject
+cadence signals                       # every signal — live value, or why it's absent
 ```
+
+`cadence signals` is the legibility view: it never goes silent. Every signal
+Cadence knows how to read is listed with its live value, or the exact reason
+it's absent — opt-in not taken, below a render threshold, missing permission
+(Focus needs Full Disk Access), or platform-gated.
 
 From inside Claude Code, the plugin skill gives the same self-report path:
 
@@ -184,17 +219,26 @@ the gate to run on every push to `main`.
 
 See [`BACKLOG.md`](BACKLOG.md). Highlights:
 
-- **More signals** — stronger `git` nudges, calendar density, wifi/place.
-  Git is the highest-value one: it moves the dials from *what you said* to *what
-  you're actually doing*.
+- **Git nudges** — the highest-value next step: built but dormant, they move
+  the dials from *what you said* to *what you're actually doing*.
+- **More signals** — candidates on the bench:
+  - **calendar density** — a meeting in 20 minutes should read as `pace=fast,
+    posture=decisive`; a clear afternoon as room to explore.
+  - **typing tempo** — prompt rhythm beyond length: rapid-fire short prompts vs.
+    one long considered one.
+  - **focused app** — what's frontmost next to the terminal (docs? a profiler?
+    Slack?).
+  - **scheduled Focus** — manual Focus detection ships now; scheduled/geofenced
+    Focus needs schedule math against `ModeConfigurations.json`.
 - **After-the-fact injection** — refine the cadence mid-task (`PostToolUse`),
   building on the conservative finish-line `Stop` guard that now ships.
 - **Opt-in flavor providers** — horoscope, moon phase, for those who want them.
 
 ## Caveats
 
-- **macOS-only music.** The now-playing reader is AppleScript. Other platforms
-  get self-report + dials, just no music vibe.
+- **macOS-only.** The alpha targets the Mac: music, battery, dark mode,
+  displays, wifi, and Focus are all macOS probes. Other platforms get
+  self-report + dials + time/git; everything else degrades silently.
 - **Spotify's Web API is not used** and not needed — Spotify deprecated audio
   features for new apps (2024) and gated dev-mode behind Premium (2026). Cadence
   reads what's playing at the OS level instead.

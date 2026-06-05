@@ -303,6 +303,7 @@
   <span class="dot"></span>
   <span class="label">example state</span>
   <span>Daniel Caesar · vibe: sexy, chilled · pace fast · tone warm</span>
+  <span style="margin-left:auto;">macOS · alpha</span>
 </div>
 
 <section>
@@ -318,7 +319,7 @@
     <div class="component">
       <div class="step">01 — Signals</div>
       <h3>Read the room.</h3>
-      <p>Time, weather, battery, git state, prompt rhythm, music, and self-report become visible context. The <code>/cadence:state</code> skill lets you say what you already know: <em>"two beers, shipping."</em></p>
+      <p>Time, weather, battery, Focus mode, git state, prompt rhythm, music, and self-report become visible context. The <code>/cadence:state</code> skill lets you say what you already know: <em>"two beers, shipping."</em></p>
     </div>
     <div class="component">
       <div class="step">02 — Dials</div>
@@ -341,7 +342,7 @@
     music: "Loose" — "Daniel Caesar" (Spotify)
     vibe: sexy, chilled
     self_report: "two beers, shipping"
-    context: saturday afternoon, rainy
+    context: saturday afternoon, rainy, focus on
     git: clean tree
     activity: { prompt_len=47 }
   <span class="key">cadence:</span>  <span class="key"># inferred from signals, advisory</span>
@@ -355,13 +356,36 @@
 </section>
 
 <section>
+  <h2>Same prompt, different room.</h2>
+  <p class="pair" style="font-size:1.125rem; margin:0 0 2rem;">"how should I structure the retry logic?"</p>
+  <div class="components">
+    <div class="component">
+      <div class="step">Without Cadence</div>
+      <h3>The survey.</h3>
+      <p>Every prompt reads the same. Four options, a trade-off table, and a closing <em>"Would you like me to implement one of these?"</em></p>
+    </div>
+    <div class="component">
+      <div class="step">Shipping cadence</div>
+      <h3>The call, made.</h3>
+      <p>Hardcore at 3 commits/hr, state: <code>"ship mode"</code>. Exponential backoff with jitter, three attempts, here's the diff, tests pass.</p>
+    </div>
+    <div class="component">
+      <div class="step">Thinking cadence</div>
+      <h3>Room to explore.</h3>
+      <p>Ambient music, state: <code>"thinking through tradeoffs"</code>. Options laid out patiently, trade-offs actually explored, no pressure to pick yet.</p>
+    </div>
+  </div>
+  <p class="small">Same words. The room around them changed, and the agent finally saw it.</p>
+</section>
+
+<section>
   <h2>Try it.</h2>
   <p>Cadence ships as a Claude Code plugin. Four commands to install, then one skill to see what Cadence sees.</p>
   <pre class="install-cmd">/plugin marketplace add cullumco/cadence
 /plugin install cadence@cadence
 /reload-plugins
 /cadence:try</pre>
-  <p class="small">Then set a self-report: <code>/cadence:state shipping, locked in</code>. No Spotify login, no API key — music is read at the OS level when available.</p>
+  <p class="small">macOS only for the alpha — the signals read the Mac around you. Then set a self-report: <code>/cadence:state shipping, locked in</code>. No Spotify login, no API key — music is read at the OS level when available.</p>
 </section>
 
 <section class="sibling">
