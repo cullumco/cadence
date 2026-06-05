@@ -37,6 +37,8 @@ do not re-ask.
 - `marketplace.json` has no per-plugin version field — nothing to bump there.
 - The npm downloads API takes ~24h to index a first publish; "not found"
   from api.npmjs.org right after publishing is normal.
+- `npm view` itself can serve the OLD version for ~15s after publish
+  (registry read-replica lag) — wait and re-check before declaring failure.
 - Plugin installers get the new version through npm (`source: npm`), so
   publishing is what actually ships hook changes to users — pushing main
   alone does not.
