@@ -33,25 +33,24 @@ Stop              → conservative finish-line guard                   ← V1.1,
 
 ---
 
-## V2 — "After-the-fact" refinement (PostToolUse)
+## V2 — "After-the-fact" refinement (PostToolUse) — first cut SHIPPED (2026-06-05)
 
-**Idea:** once Claude's tools reveal what's *actually* happening, inject a
-correction when the observed work contradicts or sharpens the ambient cadence.
+`src/posttool.ts` ships the conservative cut. One material event: the repo
+entering/leaving a merge-rebase conflict, observed after git-ish Bash calls.
 
-- Example: ambient said `ship`, but tool output shows 3 `git reset --hard` +
-  an unresolved merge conflict → inject "this is debug now: lead with hypotheses."
-- A merge conflict / failing test surfacing in a tool result is a *far* stronger
-  debug signal than music ever was.
+Answers to the open questions, as built:
+- **Dedup/throttle:** speak only on conflict-state TRANSITIONS, tracked per
+  session in `~/.cadence/workstate.json` (pruned to 20 sessions). Two gates:
+  `shouldCheck()` (only Bash commands mentioning git — plus a `"Bash"` matcher
+  in hooks.json so the process doesn't even spawn otherwise) and
+  `refineContext()` (edge-triggered, both directions, silent on no-change).
+- **Tool output parsing:** sidestepped — we don't parse `tool_response` at
+  all; we re-observe the repo with the existing git provider instead.
 
-**Hard constraint — must be conditional.** A `PostToolUse` hook fires on *every*
-tool call; injecting every time would spam context. Discipline: **speak only when
-the observed work changes the cadence read.** Silent otherwise. Needs a cheap
-"has the situation materially shifted?" gate, probably comparing observed work
-state against the last-injected mode.
-
-**Open questions:**
-- What's the dedup/throttle so we inject at most once per mode-change, not per tool?
-- How to read tool results without parsing every tool's bespoke output shape?
+**Next material events to consider** (same transition discipline):
+- failing-test transitions (needs a cheap, tool-agnostic "tests failed" read)
+- `git reset --hard` streaks / force-pushes → thrash signal
+- dirty-file count exploding mid-task
 
 ## V3 — Finish-line enforcement (Stop)
 

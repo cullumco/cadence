@@ -442,3 +442,30 @@ test("scheduleActive: disabled trigger and junk shapes read as not active", asyn
     assert.equal(scheduleActive(junk, at(12, 0)), false);
   }
 });
+
+// ── PostToolUse refinement (V2, conservative) ───────────────────────────────
+test("posttool shouldCheck: only git-ish Bash commands warrant a look", async () => {
+  const { shouldCheck } = await import("../dist/posttool.js");
+  assert.equal(shouldCheck({ tool_name: "Bash", tool_input: { command: "git merge main" } }), true);
+  assert.equal(shouldCheck({ tool_name: "Bash", tool_input: { command: "npm test" } }), false);
+  assert.equal(shouldCheck({ tool_name: "Edit", tool_input: { command: "git merge" } }), false);
+  assert.equal(shouldCheck({ tool_name: "Bash", tool_input: {} }), false);
+  assert.equal(shouldCheck({}), false);
+});
+
+test("posttool refineContext: speaks only on conflict-state transitions", async () => {
+  const { refineContext } = await import("../dist/posttool.js");
+  // edges that speak
+  assert.match(refineContext(false, true) ?? "", /entered a merge\/rebase conflict/);
+  assert.match(refineContext(undefined, true) ?? "", /entered a merge\/rebase conflict/);
+  assert.match(refineContext(true, false) ?? "", /conflict is resolved/);
+  // non-edges stay silent — the spam-prevention contract
+  assert.equal(refineContext(true, true), null);
+  assert.equal(refineContext(false, false), null);
+  assert.equal(refineContext(undefined, false), null); // first clean observation
+});
+
+test("posttool refineContext: injected text defers to the user's words", async () => {
+  const { refineContext } = await import("../dist/posttool.js");
+  assert.match(refineContext(false, true) ?? "", /follow their words/);
+});

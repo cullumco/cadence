@@ -232,8 +232,10 @@ See [`BACKLOG.md`](BACKLOG.md). Highlights:
     Slack?).
   - **deeper Focus** — manual + scheduled Focus detection ship now; geofenced/
     iPhone-synced Focus leaves no local trace and stays undetectable.
-- **After-the-fact injection** — refine the cadence mid-task (`PostToolUse`),
-  building on the conservative finish-line `Stop` guard that now ships.
+- **After-the-fact injection** — the first cut ships: a `PostToolUse` hook
+  watches git-ish commands and speaks exactly once when the repo enters or
+  leaves a merge/rebase conflict ("this is debug now" / "conflict resolved").
+  Next material events: failing-test transitions, reset/force-push thrash.
 - **Opt-in flavor providers** — horoscope, moon phase, for those who want them.
 
 ## Caveats
