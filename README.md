@@ -230,8 +230,8 @@ See [`BACKLOG.md`](BACKLOG.md). Highlights:
     one long considered one.
   - **focused app** — what's frontmost next to the terminal (docs? a profiler?
     Slack?).
-  - **scheduled Focus** — manual Focus detection ships now; scheduled/geofenced
-    Focus needs schedule math against `ModeConfigurations.json`.
+  - **deeper Focus** — manual + scheduled Focus detection ship now; geofenced/
+    iPhone-synced Focus leaves no local trace and stays undetectable.
 - **After-the-fact injection** — refine the cadence mid-task (`PostToolUse`),
   building on the conservative finish-line `Stop` guard that now ships.
 - **Opt-in flavor providers** — horoscope, moon phase, for those who want them.

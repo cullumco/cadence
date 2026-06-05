@@ -28,7 +28,9 @@ function sh(cmd: string, ms = 500): Promise<string | null> {
  * ───────────────────────────────────────────────────────────────────────── */
 
 const CONFIG_FILE = join(homedir(), ".cadence", "config.json");
-const DND_ASSERTIONS = join(homedir(), "Library", "DoNotDisturb", "DB", "Assertions.json");
+const DND_DIR = join(homedir(), "Library", "DoNotDisturb", "DB");
+const DND_ASSERTIONS = join(DND_DIR, "Assertions.json");
+const DND_MODE_CONFIGS = join(DND_DIR, "ModeConfigurations.json");
 const WEATHER_TIMEOUT_MS = 900;
 const DAYS = ["sunday", "monday", "tuesday", "wednesday", "thursday", "friday", "saturday"];
 
@@ -65,25 +67,79 @@ function getVitals(): { uptimeHours: number; loadHigh: boolean } {
   return { uptimeHours, loadHigh: load1 / cores > 0.8 };
 }
 
+// Is any SCHEDULED Focus window active right now? Pure function over the
+// parsed ModeConfigurations.json (exported for fixture tests). The shape is
+// Apple-private but stable Monterey→Tahoe: each mode's triggers carry
+// enabledSetting (2 = on) and a start/end time-of-day window that may wrap
+// midnight (22:00 → 07:00). Anything unexpected reads as "not active".
+export function scheduleActive(json: unknown, now: Date): boolean {
+  try {
+    const configs = (
+      json as { data?: { modeConfigurations?: Record<string, unknown> }[] }
+    )?.data?.[0]?.modeConfigurations;
+    if (!configs || typeof configs !== "object") return false;
+    const minutes = now.getHours() * 60 + now.getMinutes();
+    for (const mode of Object.values(configs)) {
+      const triggers = (
+        mode as { triggers?: { triggers?: unknown[] } }
+      )?.triggers?.triggers;
+      if (!Array.isArray(triggers)) continue;
+      for (const t of triggers) {
+        const trig = t as {
+          enabledSetting?: number;
+          timePeriodStartTimeHour?: number;
+          timePeriodStartTimeMinute?: number;
+          timePeriodEndTimeHour?: number;
+          timePeriodEndTimeMinute?: number;
+        };
+        if (trig?.enabledSetting !== 2) continue; // 2 = schedule enabled
+        const { timePeriodStartTimeHour: sh, timePeriodEndTimeHour: eh } = trig;
+        if (typeof sh !== "number" || typeof eh !== "number") continue;
+        const start = sh * 60 + (trig.timePeriodStartTimeMinute ?? 0);
+        const end = eh * 60 + (trig.timePeriodEndTimeMinute ?? 0);
+        const active =
+          start < end
+            ? minutes >= start && minutes < end
+            : minutes >= start || minutes < end; // window wraps midnight
+        if (active) return true;
+      }
+    }
+    return false;
+  } catch {
+    return false;
+  }
+}
+
 // Focus / DND — tri-state, read straight from the private donotdisturbd DB
 // (~1ms, no subprocess). Exported for the darwin smoke test.
-//   true      → a Focus mode is asserted (manually toggled on this device)
-//   false     → file read OK, no assertion records → focus is off
+//   true      → a Focus mode is asserted (manual toggle) OR a scheduled
+//               Focus window is active right now
+//   false     → assertions read OK, none set, no schedule active → off
 //   undefined → unreadable: terminal lacks Full Disk Access (TCC denies the
 //               read silently — hook subprocesses never get a prompt), file
 //               moved, or shape changed → "unavailable", never "off"
-// Known gap: SCHEDULED/geofenced Focus writes no assertion record (detecting
-// it needs ModeConfigurations.json schedule math — backlogged).
-export async function getFocus(): Promise<boolean | undefined> {
+// Remaining gap: geofenced/iPhone-synced Focus writes neither an assertion
+// nor a local schedule — undetectable from this Mac.
+export async function getFocus(now: Date = new Date()): Promise<boolean | undefined> {
   if (process.platform !== "darwin") return undefined;
+  let manual: boolean | undefined;
   try {
     const raw = await readFile(DND_ASSERTIONS, "utf-8");
     const json = JSON.parse(raw) as { data?: { storeAssertionRecords?: unknown[] }[] };
     const records = json.data?.[0]?.storeAssertionRecords;
-    return Array.isArray(records) && records.length > 0;
+    manual = Array.isArray(records) && records.length > 0;
   } catch {
-    return undefined;
+    manual = undefined;
   }
+  if (manual) return true;
+  // Manual focus is off (or unknowable) — a scheduled window may still be on.
+  try {
+    const raw = await readFile(DND_MODE_CONFIGS, "utf-8");
+    if (scheduleActive(JSON.parse(raw), now)) return true;
+  } catch {
+    // both files unreadable → truly unknown
+  }
+  return manual;
 }
 
 // ── mac context: best-effort shell-outs, all flavor (no dial nudges) ─────────

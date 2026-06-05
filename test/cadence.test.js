@@ -384,3 +384,52 @@ test("ambient: getFocus resolves to a tri-state without throwing", {
   const focus = await getFocus();
   assert.ok([true, false, undefined].includes(focus), `unexpected: ${focus}`);
 });
+
+// ── scheduled Focus (ModeConfigurations.json schedule math) ─────────────────
+const modeConfigFixture = (trigger) => ({
+  data: [{
+    modeConfigurations: {
+      "com.apple.donotdisturb.mode.default": {
+        mode: { name: "Do Not Disturb" },
+        triggers: { triggers: [trigger] },
+      },
+    },
+  }],
+});
+const at = (h, m) => new Date(2026, 5, 5, h, m); // local time, like the probe
+
+test("scheduleActive: inside an enabled window", async () => {
+  const { scheduleActive } = await import("../dist/providers/ambient.js");
+  const cfg = modeConfigFixture({
+    enabledSetting: 2,
+    timePeriodStartTimeHour: 9, timePeriodStartTimeMinute: 0,
+    timePeriodEndTimeHour: 17, timePeriodEndTimeMinute: 30,
+  });
+  assert.equal(scheduleActive(cfg, at(15, 0)), true);
+  assert.equal(scheduleActive(cfg, at(17, 30)), false); // end is exclusive
+  assert.equal(scheduleActive(cfg, at(8, 59)), false);
+});
+
+test("scheduleActive: window wrapping midnight (22:00–07:00)", async () => {
+  const { scheduleActive } = await import("../dist/providers/ambient.js");
+  const cfg = modeConfigFixture({
+    enabledSetting: 2,
+    timePeriodStartTimeHour: 22, timePeriodStartTimeMinute: 0,
+    timePeriodEndTimeHour: 7, timePeriodEndTimeMinute: 0,
+  });
+  assert.equal(scheduleActive(cfg, at(23, 30)), true);
+  assert.equal(scheduleActive(cfg, at(3, 0)), true);
+  assert.equal(scheduleActive(cfg, at(12, 0)), false);
+});
+
+test("scheduleActive: disabled trigger and junk shapes read as not active", async () => {
+  const { scheduleActive } = await import("../dist/providers/ambient.js");
+  const disabled = modeConfigFixture({
+    enabledSetting: 1, // schedule exists but is toggled off
+    timePeriodStartTimeHour: 0, timePeriodEndTimeHour: 23,
+  });
+  assert.equal(scheduleActive(disabled, at(12, 0)), false);
+  for (const junk of [null, {}, { data: [] }, { data: [{ modeConfigurations: "nope" }] }, modeConfigFixture({ enabledSetting: 2 })]) {
+    assert.equal(scheduleActive(junk, at(12, 0)), false);
+  }
+});
