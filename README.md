@@ -92,7 +92,7 @@ Then set a self-report so you can feel the difference:
 /cadence:state shipping, locked in
 ```
 
-Alpha testers running from source — while `@cullumco/cadence` is pending npm
+Alpha testers running from source — while `@cullum.co/cadence` is pending npm
 publish — see [`ALPHA.md`](ALPHA.md).
 
 The prompt hook has a ~1.5s budget and exits silently when it has nothing to
@@ -173,7 +173,7 @@ npm run release:alpha
 
 The package is scoped and configured for public npm publish via
 `publishConfig.access = "public"`. The repo already ships
-`.claude-plugin/marketplace.json`, so once `@cullumco/cadence` lands on npm,
+`.claude-plugin/marketplace.json`, so once `@cullum.co/cadence` lands on npm,
 the canonical install at the top of this README starts working end-to-end.
 
 A GitHub Actions workflow exists at `.github/workflows/alpha.yml` but is

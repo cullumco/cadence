@@ -19,7 +19,7 @@ npm run build         # tsc → ./dist
 npm run dev           # tsc --watch
 npm test              # node --test test/cadence.test.js  (see warning below)
 npm run verify:alpha  # release gate: build + plugin validate + tests + dry-pack + consumer-install smoke test
-npm run release:alpha # full gate + npm publish (requires @cullumco npm auth)
+npm run release:alpha # full gate + npm publish (requires @cullum.co npm auth)
 
 npm run hook          # run dist/hook.js (UserPromptSubmit) directly
 npm run cli           # run dist/cli.js (the `cadence` CLI) directly

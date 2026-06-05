@@ -1,5 +1,5 @@
 {
-  "name": "@cullumco/cadence",
+  "name": "@cullum.co/cadence",
   "version": "0.1.0",
   "description": "Agents that read the room. Ambient context, cadence dials, and finish-line guardrails for Claude Code.",
   "type": "module",

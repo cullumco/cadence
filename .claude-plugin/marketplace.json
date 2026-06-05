@@ -12,7 +12,7 @@
       "description": "Agents that read the room: embodied state, cadence dials, and conservative finish-line guardrails for Claude Code.",
       "source": {
         "source": "npm",
-        "package": "@cullumco/cadence"
+        "package": "@cullum.co/cadence"
       },
       "category": "Productivity",
       "tags": [

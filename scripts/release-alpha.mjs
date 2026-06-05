@@ -26,7 +26,7 @@ if (!whoami) {
 }
 
 console.log(`npm authenticated as ${whoami}`);
-console.log("Publishing @cullumco/cadence alpha...");
+console.log("Publishing @cullum.co/cadence alpha...");
 run("npm", ["publish"]);
 
 console.log("Alpha published. Push the repository containing .claude-plugin/marketplace.json next.");

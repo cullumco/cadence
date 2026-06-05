@@ -88,7 +88,7 @@ if (installSmoke) {
       cwd: consumerDir,
       capture: true,
     });
-    const installedRoot = join(consumerDir, "node_modules", "@cullumco", "cadence");
+    const installedRoot = join(consumerDir, "node_modules", "@cullum.co", "cadence");
     const plugin = JSON.parse(
       await readFile(join(installedRoot, ".claude-plugin", "plugin.json"), "utf-8")
     );
