@@ -115,14 +115,7 @@
     height: 6px;
     border-radius: 50%;
     background: var(--accent);
-    box-shadow: 0 0 0 0 rgba(193, 68, 46, 0.5);
-    animation: pulse 2.2s ease-in-out infinite;
     flex-shrink: 0;
-  }
-
-  @keyframes pulse {
-    0%, 100% { opacity: 1; box-shadow: 0 0 0 0 rgba(193, 68, 46, 0.4); }
-    50% { opacity: 0.4; box-shadow: 0 0 0 6px rgba(193, 68, 46, 0); }
   }
 
   /* sections */
@@ -312,7 +305,7 @@
 
 <div class="now-playing">
   <span class="dot"></span>
-  <span class="label">now playing</span>
+  <span class="label">example state</span>
   <span>Daniel Caesar · vibe: sexy, chilled · pace fast · tone warm</span>
 </div>
 
@@ -329,7 +322,7 @@
     <div class="component">
       <div class="step">01 — Signals</div>
       <h3>Read the room.</h3>
-      <p>Time, git state, prompt rhythm, music, and self-report become visible context. The <code>/cadence:state</code> skill lets you say what you already know: <em>"two beers, shipping."</em></p>
+      <p>Time, weather, battery, git state, prompt rhythm, music, and self-report become visible context. The <code>/cadence:state</code> skill lets you say what you already know: <em>"two beers, shipping."</em></p>
     </div>
     <div class="component">
       <div class="step">02 — Dials</div>
@@ -349,16 +342,19 @@
   <p>Every prompt carries a state block. Inspectable. Diffable. You always see exactly what your agent saw.</p>
   <pre><span class="tag">&lt;user_state&gt;</span>
   <span class="key">signals:</span>
-    music: "Loose" — Daniel Caesar
+    music: "Loose" — "Daniel Caesar" (Spotify)
     vibe: sexy, chilled
+    self_report: "two beers, shipping"
+    context: saturday afternoon, rainy
     git: clean tree
     activity: { prompt_len=47 }
-    self_report: "two beers, shipping"
-  <span class="key">cadence:</span>
+  <span class="key">cadence:</span>  <span class="key"># inferred from signals, advisory</span>
     { pace=fast tone=warm posture=decisive proactivity=act-freely }
-  <span class="key">reframe:</span> read my prompt as someone in this cadence meant it —
-    fast and tight, make the call, act without checking in.
-    If my words clearly mean otherwise, follow my words.
+  <span class="key">reframe:</span> read my prompt as someone in this cadence meant it: keep
+    it fast and tight — answer first, trim the preamble; make the call rather
+    than offering a menu of options; act without stopping to check in; keep
+    the tone warm and casual. If my words clearly mean otherwise, follow my
+    words.
 <span class="tag">&lt;/user_state&gt;</span></pre>
 </section>
 
