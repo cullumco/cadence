@@ -1,9 +1,10 @@
-import { exec } from "node:child_process";
+import { execFile } from "node:child_process";
 import { readFile, writeFile, mkdir } from "node:fs/promises";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import type { MusicSignal } from "../types.js";
 import { tagsToVibe } from "../vibe.js";
+import { debug } from "../debug.js";
 
 /* ─────────────────────────────────────────────────────────────────────────
  * Music = identity + vibe. No Spotify Web API, no auth, no Premium.
@@ -27,40 +28,74 @@ interface NowPlaying {
   player: string;
 }
 
-// `application "X" is running` does NOT launch X — safe to probe.
-const SCRIPT = `
-on tryApp(appName)
-  if application appName is running then
-    tell application appName
-      if player state is playing then
-        return appName & "|||" & (name of current track) & "|||" & (artist of current track)
-      end if
-    end tell
-  end if
-  return ""
-end tryApp
-set r to tryApp("Spotify")
-if r is "" then set r to tryApp("Music")
-return r
-`;
+// Spotify first (matches historical priority), then Apple Music.
+const PLAYERS = ["Spotify", "Music"] as const;
 
-function osascript(script: string): Promise<string> {
+/* The app name MUST be a literal inside the script: AppleScript resolves
+ * terms like `player state` against the target app's scripting dictionary
+ * at COMPILE time, so `tell application someVariable` is a guaranteed
+ * syntax error (-2741). One script per player, built from a template.
+ * Exported for the compile-check regression test. */
+export function playerScript(app: (typeof PLAYERS)[number]): string {
+  return `
+if application "${app}" is running then
+  tell application "${app}"
+    if player state is playing then
+      return (name of current track) & "|||" & (artist of current track)
+    end if
+  end tell
+end if
+return ""
+`;
+}
+
+/* Compiling `tell application "Spotify"` makes macOS locate the app — on a
+ * machine where it isn't installed that can pop a "Where is Spotify?"
+ * picker, from a background hook. pgrep the process list first so we only
+ * ever compile scripts for players that are actually running. */
+function isRunning(app: string): Promise<boolean> {
   return new Promise((resolve) => {
-    const child = exec(
-      `osascript -e ${JSON.stringify(script)}`,
-      { timeout: 800 },
-      (err, stdout) => resolve(err ? "" : stdout.trim())
+    const child = execFile("pgrep", ["-qx", app], { timeout: 500 }, (err) =>
+      resolve(!err)
     );
-    child.on("error", () => resolve(""));
+    child.on("error", () => resolve(false));
+  });
+}
+
+/* execFile, not exec: the script must reach osascript byte-for-byte as one
+ * argv entry. Routing it through a shell means a quoting layer (where `\n`
+ * inside double quotes stays a literal backslash-n — instant -2740). */
+export function osascript(script: string): Promise<string> {
+  return new Promise((resolve) => {
+    const child = execFile(
+      "osascript",
+      ["-e", script],
+      { timeout: 800 },
+      (err, stdout, stderr) => {
+        if (err) debug("music", `osascript failed: ${stderr.trim() || err.message}`);
+        resolve(err ? "" : stdout.trim());
+      }
+    );
+    child.on("error", (e) => {
+      debug("music", `osascript spawn failed: ${e.message}`);
+      resolve("");
+    });
   });
 }
 
 async function getNowPlaying(): Promise<NowPlaying | null> {
-  const out = await osascript(SCRIPT);
-  if (!out) return null;
-  const [player, track, artist] = out.split("|||");
-  if (!track || !artist) return null;
-  return { track, artist, player: player ?? "" };
+  for (const player of PLAYERS) {
+    if (!(await isRunning(player))) {
+      debug("music", `${player} not running`);
+      continue;
+    }
+    const out = await osascript(playerScript(player));
+    if (!out) continue; // running but paused/stopped (or script error, logged above)
+    const [track, artist] = out.split("|||");
+    if (!track || !artist) continue;
+    return { track, artist, player };
+  }
+  return null;
 }
 
 async function loadCache(): Promise<Record<string, string>> {
@@ -112,7 +147,8 @@ async function fetchTags(artist: string): Promise<string[] | null> {
       .filter((name) => isVibeTag(name, artist))
       .slice(0, MAX_TAGS);
     return cleaned.length ? cleaned : null;
-  } catch {
+  } catch (e) {
+    debug("music", `musicbrainz lookup failed for "${artist}": ${e instanceof Error ? e.message : String(e)}`);
     return null;
   } finally {
     clearTimeout(timer);

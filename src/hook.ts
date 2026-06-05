@@ -6,6 +6,7 @@ import { getGitSignal } from "./providers/git.js";
 import { getActivitySignal } from "./providers/activity.js";
 import { deriveCadence, buildReframe, loadOverrides, applyOverrides } from "./cadence.js";
 import { render } from "./inject.js";
+import { debug } from "./debug.js";
 import type { Signal, UserState, StateWithCadence } from "./types.js";
 
 const TOTAL_BUDGET_MS = 1500;
@@ -52,7 +53,12 @@ async function main() {
   const [signals, overrides] = await Promise.all([
     Promise.race<Signal[]>([
       collectSignals(projectDir, prompt),
-      new Promise<Signal[]>((resolve) => setTimeout(() => resolve([]), TOTAL_BUDGET_MS)),
+      new Promise<Signal[]>((resolve) =>
+        setTimeout(() => {
+          debug("hook", `signal collection exceeded ${TOTAL_BUDGET_MS}ms budget — injecting without signals`);
+          resolve([]);
+        }, TOTAL_BUDGET_MS)
+      ),
     ]),
     loadOverrides(),
   ]);

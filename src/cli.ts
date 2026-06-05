@@ -44,7 +44,9 @@ async function cmdClear() {
   console.log("  state cleared");
 }
 
-async function cmdTest() {
+// Collects live signals and renders the exact block the hook would inject,
+// or null when there's nothing to say. Shared by `test` and the bare command.
+async function buildPreview(): Promise<string | null> {
   const signals: Signal[] = [];
   const [music, report, ambient, git, overrides] = await Promise.all([
     getMusicSignal().catch(() => null),
@@ -58,15 +60,21 @@ async function cmdTest() {
   if (ambient) signals.push(ambient);
   if (git) signals.push(git);
 
-  if (signals.length === 0 && Object.keys(overrides).length === 0) {
-    console.log('  (no signals — play something, set: cadence state "...", or pin a dial: cadence set pace fast)');
-    return;
-  }
+  if (signals.length === 0 && Object.keys(overrides).length === 0) return null;
 
   const state: UserState = { signals, capturedAt: Date.now() };
   const { cadence, pinned } = applyOverrides(deriveCadence(state), overrides);
   const reframe = buildReframe(cadence);
-  console.log("\n" + render({ ...state, cadence, pinned, reframe }) + "\n");
+  return render({ ...state, cadence, pinned, reframe });
+}
+
+async function cmdTest() {
+  const block = await buildPreview();
+  if (!block) {
+    console.log('  (no signals — play something, set: cadence state "...", or pin a dial: cadence set pace fast)');
+    return;
+  }
+  console.log("\n" + block + "\n");
 }
 
 const LEVELS: DialLevel[] = ["low", "medium", "high"];
@@ -163,10 +171,115 @@ async function cmdLocation(args: string[]) {
   console.log(`  location set${nameParts.length ? ` (${nameParts.join(" ")})` : ""} — weather is now on`);
 }
 
+// Has the user ever told Cadence anything? (Signals like time-of-day always
+// exist, so "fresh install" is detected by absence of user INPUT, not signals.)
+async function hasUserInput(): Promise<boolean> {
+  const [state, config] = await Promise.all([
+    readFile(STATE_FILE, "utf-8").catch(() => ""),
+    readFile(CONFIG_FILE, "utf-8").catch(() => "{}"),
+  ]);
+  let cfg: Record<string, unknown> = {};
+  try {
+    cfg = JSON.parse(config) as Record<string, unknown>;
+  } catch {
+    // unreadable config = no input
+  }
+  return state.trim().length > 0 || Object.keys(cfg).length > 0;
+}
+
+const INPUTS_FOOTER = `  where you can input:
+    cadence state "..."              how you are right now (4h TTL)
+    cadence set <dial> <level>       pin a dial: ${DIALS.join(", ")}
+    cadence set-location <lat> <lon> opt into weather
+    cadence start                    interactive setup
+    cadence help                     everything else`;
+
+// Bare \`cadence\`: live status + where to input — not a help dump.
+async function cmdRoot() {
+  if (!(await hasUserInput())) {
+    console.log("\n  cadence — agents that read the room");
+    console.log("  It hasn't heard from you yet. Fastest start:\n");
+    console.log('    cadence start              guided setup (~30s)');
+    console.log('    cadence state "ship mode"  or just say how you are\n');
+    return;
+  }
+  const block = await buildPreview();
+  if (block) {
+    console.log("\n" + block + "\n");
+  } else {
+    console.log("\n  (no signals right now)\n");
+  }
+  console.log(INPUTS_FOOTER + "\n");
+}
+
+// Guided first run: three prompts, every one skippable, nothing destructive.
+async function cmdStart() {
+  if (!process.stdin.isTTY) {
+    console.log('  cadence start is interactive — run it in a terminal, or use: cadence state "..."');
+    return;
+  }
+  const { createInterface } = await import("node:readline/promises");
+  const rl = createInterface({ input: process.stdin, output: process.stdout });
+  try {
+    console.log("\n  cadence — agents that read the room");
+    console.log("  Three questions. Enter skips any of them; everything can be changed later.\n");
+
+    // 1 ── self-reported state: the highest-leverage input
+    const state = (await rl.question('  1/3  How are you right now? (e.g. "two beers, ship mode")\n       > ')).trim();
+    if (state) {
+      await mkdir(CADENCE_DIR, { recursive: true });
+      await writeFile(STATE_FILE, state, "utf-8");
+      console.log('       ✓ set — expires after 4h; update anytime: cadence state "..."\n');
+    } else {
+      console.log('       skipped — later: cadence state "..."\n');
+    }
+
+    // 2 ── dial pins: overrides, so only offered, never pushed
+    console.log(`  2/3  Pin any dials? Pins override inference until unset.`);
+    console.log(`       dials: ${DIALS.join(", ")} — levels: low|medium|high`);
+    for (;;) {
+      const ans = (await rl.question('       pin (e.g. "pace high", enter to continue) > ')).trim();
+      if (!ans) break;
+      const [dial, value] = ans.split(/\s+/);
+      if (!dial || !value || !(DIALS as readonly string[]).includes(dial)) {
+        console.log(`       format: <dial> <level>, dials: ${DIALS.join(", ")}`);
+        continue;
+      }
+      const d = dial as keyof Cadence;
+      const level = resolveDialLevel(d, value);
+      if (!level) {
+        console.log(`       "${value}" isn't valid for ${dial} — use low|medium|high`);
+        continue;
+      }
+      await cmdSet([dial, value]);
+    }
+    console.log();
+
+    // 3 ── weather: explicitly opt-in, mirrors cmdLocation's no-silent-geo rule
+    const loc = (await rl.question("  3/3  Weather? Give a location, or enter to leave it off.\n       lat lon [name] (e.g. 40.71 -74.01 NYC) > ")).trim();
+    if (loc) {
+      await cmdLocation(loc.split(/\s+/));
+    } else {
+      console.log("       skipped — weather stays off until: cadence set-location <lat> <lon>");
+    }
+
+    console.log("\n  Done. Here's exactly what the hook injects right now:");
+    await cmdTest();
+  } catch {
+    // Ctrl+D / Ctrl+C mid-wizard: every step saves as it goes, so an early
+    // exit just means "stop asking" — never an error, never a rollback.
+    console.log("\n  setup ended early — anything you answered is saved\n");
+  } finally {
+    rl.close();
+  }
+}
+
 const HELP = `
   cadence — agents that read the room
 
   daily:
+    cadence                     live status + where to input
+    cadence start               guided setup (state, dials, weather — all skippable)
     cadence state "..."         set self-reported state (e.g. "two beers, ship mode")
     cadence state               print current self-reported state
     cadence clear               clear self-reported state
@@ -186,6 +299,8 @@ const HELP = `
 async function main() {
   const [cmd, ...rest] = process.argv.slice(2);
   switch (cmd) {
+    case "start":
+      return cmdStart();
     case "state":
       return cmdState(rest);
     case "clear":
@@ -201,6 +316,7 @@ async function main() {
     case "set-location":
       return cmdLocation(rest);
     case undefined:
+      return cmdRoot(); // live status + inputs, not the help dump
     case "help":
     case "--help":
     case "-h":

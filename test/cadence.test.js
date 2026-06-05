@@ -244,3 +244,44 @@ test("decideStop: avoids recursive Stop-hook blocks", () => {
   );
   assert.equal(decision, null);
 });
+
+// ── music provider AppleScript ──────────────────────────────────────────────
+// Regression: the original script parameterized the app name
+// (`tell application appName`), which can never compile — AppleScript binds
+// terms like `player state` against the app's dictionary at COMPILE time.
+// The fail-silent osascript wrapper masked the error, so music was silently
+// dead for everyone. These tests actually compile the shipped scripts.
+// darwin-only: osascript doesn't exist elsewhere; provider degrades silently.
+test("music: player AppleScript compiles and runs (the -2741/-2740 regressions)", {
+  skip: process.platform !== "darwin" ? "macOS-only" : false,
+}, async () => {
+  const { playerScript, osascript } = await import("../dist/providers/music.js");
+
+  // Quoting regression (-2740): a multi-line script must survive the wrapper
+  // byte-for-byte. exec()'s shell quoting turned \n into literal backslash-n,
+  // so this goes through the REAL osascript wrapper, not a private execFile.
+  const echoed = await osascript('\nreturn "quoting-ok"\n');
+  assert.equal(echoed, "quoting-ok", "osascript wrapper mangled the script");
+
+  // Compile regression (-2741): `tell application` needs a LITERAL app name.
+  // "Music" ships with macOS, so its dictionary is always compilable, and the
+  // in-script `is running` guard makes execution inert when it's not playing.
+  // The wrapper swallows errors into "" — swap the final `return ""` for a
+  // sentinel so ANY successful run (playing or not) yields non-empty output.
+  const script = playerScript("Music").replace(/return ""\s*$/, 'return "compiled-ok"');
+  assert.notEqual(script, playerScript("Music"), "sentinel swap missed — template changed?");
+  const out = await osascript(script);
+  assert.notEqual(out, "", "script failed to compile/run (error swallowed by wrapper)");
+});
+
+test("music: player script template contains no dynamic tell target", async () => {
+  const { playerScript } = await import("../dist/providers/music.js");
+  for (const app of ["Spotify", "Music"]) {
+    const script = playerScript(app);
+    // every `tell application` must target a quoted literal, not a variable
+    for (const m of script.matchAll(/tell application (\S+)/g)) {
+      assert.match(m[1], /^"/, `dynamic tell target in: ${m[0]}`);
+    }
+    assert.ok(script.includes(`"${app}"`));
+  }
+});
