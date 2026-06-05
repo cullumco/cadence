@@ -14,7 +14,7 @@ The canonical install is the Claude Code marketplace:
 /cadence:try
 ```
 
-`marketplace.json` currently sources the plugin from `npm:@cullum.co/cadence`.
+`marketplace.json` currently sources the plugin from `npm:@cullumco/cadence`.
 `/plugin marketplace add` succeeds today (the repo is live), but
 `/plugin install` will fail to fetch until the npm package is published — use
 "Run from source" below as the alpha fallback in the meantime.
@@ -64,7 +64,7 @@ CI runs the same gate on GitHub Actions via `.github/workflows/alpha.yml`.
 
 ## Publish Command
 
-Once npm is authenticated with an account that can publish `@cullum.co/cadence`:
+Once npm is authenticated with an account that can publish `@cullumco/cadence`:
 
 ```bash
 npm run release:alpha
@@ -76,9 +76,9 @@ defense.
 
 ## Current External Requirements
 
-- An npm account with access to the `@cullum.co` scope must publish the package.
+- An npm account with access to the `@cullumco` scope must publish the package.
 
 Current state:
 - GitHub: https://github.com/cullumco/cadence is live (public, MIT). CI
   runs `npm run verify:alpha` on every push to `main`.
-- npm: `@cullum.co/cadence` is not published yet.
+- npm: `@cullumco/cadence` is not published yet.
