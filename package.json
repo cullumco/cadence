@@ -1,6 +1,6 @@
 {
   "name": "@cullumco/cadence",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "Agents that read the room. Ambient context, cadence dials, and finish-line guardrails for Claude Code. macOS-only alpha.",
   "type": "module",
   "bin": {
