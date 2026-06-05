@@ -29,6 +29,15 @@ test("tagsToVibe: unknown genres return null (no signal, not a guess)", () => {
   assert.equal(tagsToVibe(["polka", "yodeling"]), null);
 });
 
+test("tagsToVibe: most specific genre wins — post-rock is not rock", () => {
+  const v = tagsToVibe(["post-rock"]);
+  assert.ok(v);
+  assert.equal(v.energy, 0.5); // the post-rock row, not rock's 0.78
+  assert.ok(v.moods.includes("epic") || v.moods.includes("ethereal"));
+  const stoner = tagsToVibe(["stoner rock"]);
+  assert.equal(stoner.energy, 0.7); // stoner row beats the shorter rock key
+});
+
 test("tagsToVibe: caps moods at 4", () => {
   const v = tagsToVibe(["punk", "metal", "jazz", "ambient", "pop", "blues"]);
   assert.ok(v.moods.length <= 4);

@@ -52,11 +52,56 @@ const GENRE_AFFECT: Record<string, Affect> = {
   funk: { energy: 0.75, valence: 0.8, acoustic: 0.1, moods: ["happy", "energetic"] },
   disco: { energy: 0.8, valence: 0.85, acoustic: 0.1, moods: ["happy", "uplifting"] },
 
+  "post-hardcore": { energy: 0.85, valence: 0.45, acoustic: 0.05, moods: ["aggressive", "energetic"] },
+  "post-punk": { energy: 0.7, valence: 0.4, acoustic: 0.1, moods: ["dark", "energetic"] },
+  screamo: { energy: 0.9, valence: 0.3, acoustic: 0.03, moods: ["aggressive", "dark"] },
+  grindcore: { energy: 0.98, valence: 0.3, acoustic: 0.02, moods: ["aggressive", "scary"] },
+  grunge: { energy: 0.75, valence: 0.4, acoustic: 0.15, moods: ["aggressive", "dark"] },
+  emo: { energy: 0.7, valence: 0.35, acoustic: 0.2, moods: ["sad", "energetic"] },
+  stoner: { energy: 0.7, valence: 0.5, acoustic: 0.15, moods: ["dark", "energetic"] },
+  sludge: { energy: 0.65, valence: 0.25, acoustic: 0.1, moods: ["dark", "aggressive"] },
+  industrial: { energy: 0.8, valence: 0.35, acoustic: 0.02, moods: ["dark", "aggressive"] },
+  noise: { energy: 0.7, valence: 0.25, acoustic: 0.05, moods: ["scary", "aggressive"] },
+  trance: { energy: 0.85, valence: 0.65, acoustic: 0.02, moods: ["energetic", "uplifting"] },
+  dubstep: { energy: 0.85, valence: 0.5, acoustic: 0.02, moods: ["energetic", "dark"] },
+  edm: { energy: 0.85, valence: 0.7, acoustic: 0.02, moods: ["energetic", "uplifting"] },
+  trap: { energy: 0.75, valence: 0.5, acoustic: 0.05, moods: ["energetic", "dark"] },
+  drill: { energy: 0.75, valence: 0.4, acoustic: 0.05, moods: ["dark", "aggressive"] },
+  grime: { energy: 0.8, valence: 0.5, acoustic: 0.05, moods: ["aggressive", "energetic"] },
+  "k-pop": { energy: 0.8, valence: 0.8, acoustic: 0.08, moods: ["happy", "energetic"] },
+  "j-pop": { energy: 0.78, valence: 0.8, acoustic: 0.1, moods: ["happy", "uplifting"] },
+  "new wave": { energy: 0.7, valence: 0.65, acoustic: 0.08, moods: ["energetic", "happy"] },
+  synthpop: { energy: 0.7, valence: 0.7, acoustic: 0.05, moods: ["happy", "energetic"] },
+  "synth-pop": { energy: 0.7, valence: 0.7, acoustic: 0.05, moods: ["happy", "energetic"] },
+  reggaeton: { energy: 0.8, valence: 0.75, acoustic: 0.05, moods: ["sexy", "energetic"] },
+  latin: { energy: 0.75, valence: 0.75, acoustic: 0.3, moods: ["happy", "energetic"] },
+  salsa: { energy: 0.8, valence: 0.8, acoustic: 0.4, moods: ["happy", "energetic"] },
+  cumbia: { energy: 0.65, valence: 0.75, acoustic: 0.4, moods: ["happy"] },
+  afrobeat: { energy: 0.75, valence: 0.75, acoustic: 0.3, moods: ["happy", "energetic"] },
+  ska: { energy: 0.8, valence: 0.75, acoustic: 0.15, moods: ["happy", "energetic"] },
+  surf: { energy: 0.7, valence: 0.7, acoustic: 0.2, moods: ["happy", "energetic"] },
+  "math rock": { energy: 0.75, valence: 0.55, acoustic: 0.2, moods: ["energetic"] },
+
   // ── mid / groovy → ship-or-think depending on energy ─────────────────
   "r&b": { energy: 0.55, valence: 0.6, acoustic: 0.2, moods: ["sexy", "chilled"] },
   soul: { energy: 0.55, valence: 0.65, acoustic: 0.25, moods: ["romantic", "uplifting"] },
   reggae: { energy: 0.6, valence: 0.75, acoustic: 0.2, moods: ["chilled", "happy"] },
   indie: { energy: 0.6, valence: 0.55, acoustic: 0.3, moods: ["chilled"] },
+  alternative: { energy: 0.65, valence: 0.5, acoustic: 0.2, moods: ["energetic"] },
+  progressive: { energy: 0.65, valence: 0.5, acoustic: 0.15, moods: ["epic"] },
+  psychedelic: { energy: 0.6, valence: 0.55, acoustic: 0.3, moods: ["ethereal"] },
+  krautrock: { energy: 0.6, valence: 0.5, acoustic: 0.2, moods: ["ethereal", "energetic"] },
+  synthwave: { energy: 0.65, valence: 0.55, acoustic: 0.02, moods: ["energetic", "ethereal"] },
+  "city pop": { energy: 0.6, valence: 0.7, acoustic: 0.3, moods: ["happy", "chilled"] },
+  garage: { energy: 0.75, valence: 0.6, acoustic: 0.1, moods: ["energetic"] },
+  country: { energy: 0.55, valence: 0.6, acoustic: 0.7, moods: ["happy", "romantic"] },
+  bluegrass: { energy: 0.65, valence: 0.7, acoustic: 0.9, moods: ["happy", "uplifting"] },
+  americana: { energy: 0.45, valence: 0.5, acoustic: 0.8, moods: ["calm", "romantic"] },
+  gospel: { energy: 0.6, valence: 0.8, acoustic: 0.6, moods: ["uplifting", "epic"] },
+  swing: { energy: 0.65, valence: 0.75, acoustic: 0.6, moods: ["happy"] },
+  "big band": { energy: 0.65, valence: 0.7, acoustic: 0.6, moods: ["happy", "epic"] },
+  samba: { energy: 0.7, valence: 0.8, acoustic: 0.5, moods: ["happy"] },
+  flamenco: { energy: 0.6, valence: 0.5, acoustic: 0.85, moods: ["romantic", "epic"] },
 
   // ── low energy, organic → think ──────────────────────────────────────
   ambient: { energy: 0.2, valence: 0.5, acoustic: 0.6, moods: ["ethereal", "calm"] },
@@ -75,9 +120,22 @@ const GENRE_AFFECT: Record<string, Affect> = {
   "singer-songwriter": { energy: 0.4, valence: 0.5, acoustic: 0.7, moods: ["calm", "sad"] },
   "post-rock": { energy: 0.5, valence: 0.4, acoustic: 0.4, moods: ["epic", "ethereal"] },
   shoegaze: { energy: 0.55, valence: 0.4, acoustic: 0.3, moods: ["ethereal", "dark"] },
+  "dream pop": { energy: 0.45, valence: 0.5, acoustic: 0.3, moods: ["ethereal", "chilled"] },
+  "bedroom pop": { energy: 0.45, valence: 0.55, acoustic: 0.3, moods: ["chilled"] },
+  vaporwave: { energy: 0.35, valence: 0.45, acoustic: 0.1, moods: ["ethereal", "chilled"] },
+  idm: { energy: 0.55, valence: 0.45, acoustic: 0.05, moods: ["ethereal"] },
+  "bossa nova": { energy: 0.35, valence: 0.6, acoustic: 0.7, moods: ["chilled", "romantic"] },
+  "new age": { energy: 0.2, valence: 0.6, acoustic: 0.7, moods: ["calm", "ethereal"] },
+  soundtrack: { energy: 0.45, valence: 0.45, acoustic: 0.6, moods: ["epic"] },
+  opera: { energy: 0.5, valence: 0.45, acoustic: 0.9, moods: ["epic"] },
+  choral: { energy: 0.3, valence: 0.5, acoustic: 0.95, moods: ["ethereal", "epic"] },
 
   // ── low energy, low valence → debug-leaning ──────────────────────────
   blues: { energy: 0.45, valence: 0.35, acoustic: 0.5, moods: ["sad", "dark"] },
+  goth: { energy: 0.55, valence: 0.3, acoustic: 0.2, moods: ["dark"] },
+  gothic: { energy: 0.55, valence: 0.3, acoustic: 0.2, moods: ["dark"] },
+  darkwave: { energy: 0.6, valence: 0.35, acoustic: 0.1, moods: ["dark", "ethereal"] },
+  drone: { energy: 0.15, valence: 0.3, acoustic: 0.4, moods: ["dark", "ethereal"] },
   slowcore: { energy: 0.25, valence: 0.3, acoustic: 0.5, moods: ["sad", "dark"] },
   sad: { energy: 0.3, valence: 0.2, acoustic: 0.5, moods: ["sad"] },
   melancholy: { energy: 0.3, valence: 0.25, acoustic: 0.5, moods: ["sad", "dark"] },
@@ -90,15 +148,21 @@ export interface Vibe {
   energy: number; // averaged 0–1 — feeds the pace dial in cadence.ts
 }
 
+// Keys sorted longest-first so the most SPECIFIC row wins per tag: a
+// "post-rock" tag must hit the post-rock row, never fall through to "rock".
+// (Insertion-order matching silently mis-filed every sub-genre whose parent
+// appeared earlier in the table.)
+const GENRE_KEYS = Object.keys(GENRE_AFFECT).sort((a, b) => b.length - a.length);
+
 /** Match a list of raw tags against the affect table and aggregate. */
 export function tagsToVibe(tags: string[]): Vibe | null {
   const hits: Affect[] = [];
   for (const raw of tags) {
     const t = raw.toLowerCase();
-    for (const key in GENRE_AFFECT) {
+    for (const key of GENRE_KEYS) {
       if (t.includes(key)) {
         hits.push(GENRE_AFFECT[key]!);
-        break; // one row per tag — don't double-count "trip hop" as "hop"
+        break; // one row per tag — the longest (most specific) match wins
       }
     }
   }
