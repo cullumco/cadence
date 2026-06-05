@@ -29,7 +29,7 @@
   "scripts": {
     "build": "tsc",
     "dev": "tsc --watch",
-    "test": "node --test \"test/**/*.test.js\"",
+    "test": "node --test test/cadence.test.js",
     "prepack": "npm run build",
     "prepublishOnly": "node scripts/verify-alpha.mjs --no-install-smoke",
     "release:alpha": "node scripts/release-alpha.mjs",

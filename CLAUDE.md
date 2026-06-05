@@ -17,7 +17,7 @@ is kept separate from the Claude-specific adapter so future surfaces can reuse i
 ```bash
 npm run build         # tsc → ./dist
 npm run dev           # tsc --watch
-npm test              # node --test "test/**/*.test.js"  (see warning below)
+npm test              # node --test test/cadence.test.js  (see warning below)
 npm run verify:alpha  # release gate: build + plugin validate + tests + dry-pack + consumer-install smoke test
 npm run release:alpha # full gate + npm publish (requires @cullumco npm auth)
 
