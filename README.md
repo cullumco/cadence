@@ -12,7 +12,7 @@ deaf to the room.
 **macOS-only (alpha).** Most signals read the Mac around you; other platforms
 degrade to self-report + dials + time/git.
 
-A [Cullum&Co](https://cullum.co) project.
+A [Cullum&Co](https://cullum.co) project · [cullumco.github.io/cadence](https://cullumco.github.io/cadence/)
 
 ## What it does
 

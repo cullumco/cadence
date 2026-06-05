@@ -290,6 +290,7 @@
 <nav>
   <a href="/" class="mark">Cadence</a>
   <div class="right">
+    <a href="#install">install</a>
     <a href="https://github.com/cullumco/cadence">github</a>
     <span>a <a href="https://cullum.co" style="text-decoration: underline; text-decoration-color: rgba(107,107,102,0.4); text-underline-offset: 2px;">Cullum&amp;Co</a> project</span>
   </div>
@@ -311,6 +312,29 @@
   <p>It doesn't say you are tired but still shipping. It doesn't say you just came back from a long break, or that the repo is clean, or that you want the agent to stop asking permission and make the call.</p>
   <p>Cadence gives Claude Code that missing layer: ambient signals, a self-reported state, four simple dials, and a lens for reading what you meant.</p>
   <p>Claude Code is the alpha surface. The product is the context layer underneath it.</p>
+</section>
+
+<section>
+  <h2>Same prompt, different room.</h2>
+  <p class="pair" style="font-size:1.125rem; margin:0 0 2rem;">"how should I structure the retry logic?"</p>
+  <div class="components">
+    <div class="component">
+      <div class="step">Without Cadence</div>
+      <h3>The survey.</h3>
+      <p>Every prompt reads the same. Four options, a trade-off table, and a closing <em>"Would you like me to implement one of these?"</em></p>
+    </div>
+    <div class="component">
+      <div class="step">Shipping cadence</div>
+      <h3>The call, made.</h3>
+      <p>Hardcore at 3 commits/hr, state: <code>"ship mode"</code>. Exponential backoff with jitter, three attempts, here's the diff, tests pass.</p>
+    </div>
+    <div class="component">
+      <div class="step">Thinking cadence</div>
+      <h3>Room to explore.</h3>
+      <p>Ambient music, state: <code>"thinking through tradeoffs"</code>. Options laid out patiently, trade-offs actually explored, no pressure to pick yet.</p>
+    </div>
+  </div>
+  <p class="small">Same words. The room around them changed, and the agent finally saw it. <a href="#install" class="inline">Install it</a> and feel the difference in two minutes.</p>
 </section>
 
 <section>
@@ -355,30 +379,7 @@
 <span class="tag">&lt;/user_state&gt;</span></pre>
 </section>
 
-<section>
-  <h2>Same prompt, different room.</h2>
-  <p class="pair" style="font-size:1.125rem; margin:0 0 2rem;">"how should I structure the retry logic?"</p>
-  <div class="components">
-    <div class="component">
-      <div class="step">Without Cadence</div>
-      <h3>The survey.</h3>
-      <p>Every prompt reads the same. Four options, a trade-off table, and a closing <em>"Would you like me to implement one of these?"</em></p>
-    </div>
-    <div class="component">
-      <div class="step">Shipping cadence</div>
-      <h3>The call, made.</h3>
-      <p>Hardcore at 3 commits/hr, state: <code>"ship mode"</code>. Exponential backoff with jitter, three attempts, here's the diff, tests pass.</p>
-    </div>
-    <div class="component">
-      <div class="step">Thinking cadence</div>
-      <h3>Room to explore.</h3>
-      <p>Ambient music, state: <code>"thinking through tradeoffs"</code>. Options laid out patiently, trade-offs actually explored, no pressure to pick yet.</p>
-    </div>
-  </div>
-  <p class="small">Same words. The room around them changed, and the agent finally saw it.</p>
-</section>
-
-<section>
+<section id="install">
   <h2>Try it.</h2>
   <p>Cadence ships as a Claude Code plugin. Four commands to install, then one skill to see what Cadence sees.</p>
   <pre class="install-cmd">/plugin marketplace add cullumco/cadence
