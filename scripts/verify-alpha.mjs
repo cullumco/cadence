@@ -43,6 +43,10 @@ run("claude", ["plugin", "validate", ".claude-plugin/plugin.json"]);
 run("claude", ["plugin", "validate", "--strict", ".claude-plugin/marketplace.json"]);
 run("npm", ["test"]);
 
+// The single source of truth for the release version; the installed
+// plugin.json must agree so the two manifests can't drift apart.
+const { version: expectedVersion } = JSON.parse(await readFile("package.json", "utf-8"));
+
 const packOut = run("npm", ["pack", "--dry-run", "--json"], { capture: true });
 const [pack] = JSON.parse(packOut);
 const files = new Set(pack.files.map((file) => file.path));
@@ -56,6 +60,7 @@ const required = [
   "bin/cadence",
   "dist/hook.js",
   "dist/stop.js",
+  "dist/session-start.js",
   "dist/cli.js",
   "dist/providers/activity.js",
   "README.md",
@@ -92,14 +97,17 @@ if (installSmoke) {
     const plugin = JSON.parse(
       await readFile(join(installedRoot, ".claude-plugin", "plugin.json"), "utf-8")
     );
-    if (plugin.name !== "cadence" || plugin.version !== "0.1.0") {
-      console.error(`unexpected installed plugin manifest: ${JSON.stringify(plugin)}`);
+    if (plugin.name !== "cadence" || plugin.version !== expectedVersion) {
+      console.error(
+        `unexpected installed plugin manifest (want version ${expectedVersion}): ${JSON.stringify(plugin)}`
+      );
       process.exit(1);
     }
 
     const hooks = JSON.parse(await readFile(join(installedRoot, "hooks", "hooks.json"), "utf-8"));
     const promptHook = hooks.hooks?.UserPromptSubmit?.[0]?.hooks?.[0]?.command;
     const stopHook = hooks.hooks?.Stop?.[0]?.hooks?.[0]?.command;
+    const sessionStartHook = hooks.hooks?.SessionStart?.[0]?.hooks?.[0]?.command;
     if (!promptHook?.includes("${CLAUDE_PLUGIN_ROOT}/dist/hook.js")) {
       console.error(`unexpected prompt hook command: ${promptHook}`);
       process.exit(1);
@@ -108,8 +116,13 @@ if (installSmoke) {
       console.error(`unexpected Stop hook command: ${stopHook}`);
       process.exit(1);
     }
+    if (!sessionStartHook?.includes("${CLAUDE_PLUGIN_ROOT}/dist/session-start.js")) {
+      console.error(`unexpected SessionStart hook command: ${sessionStartHook}`);
+      process.exit(1);
+    }
     await mustExist(join(installedRoot, "dist", "hook.js"));
     await mustExist(join(installedRoot, "dist", "stop.js"));
+    await mustExist(join(installedRoot, "dist", "session-start.js"));
     await mustExist(join(installedRoot, "skills", "try", "SKILL.md"));
     await mustExist(join(installedRoot, "skills", "state", "SKILL.md"));
 
