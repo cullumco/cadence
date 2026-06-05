@@ -303,7 +303,7 @@
 <div class="now-playing">
   <span class="dot"></span>
   <span class="label">example state</span>
-  <span>Converge · vibe: aggressive, energetic · pace fast · tone warm</span>
+  <span id="example-state" style="transition: opacity .4s ease;">Converge · vibe: aggressive, energetic · pace fast</span>
   <span style="margin-left:auto;">macOS · alpha</span>
 </div>
 
@@ -403,6 +403,33 @@
     <a href="mailto:scott@cullum.co">contact</a>
   </span>
 </footer>
+
+<!-- Rotating example states. Every entry is what Cadence's real pipeline
+     emits for that artist (vibe words from the genre→affect table; pace from
+     energy; warm tone only for mellow vibes) — no invented combinations. -->
+<script>
+(function () {
+  var EXAMPLES = [
+    "Converge · vibe: aggressive, energetic · pace fast",
+    "Daniel Caesar · vibe: sexy, chilled · pace steady · tone warm",
+    "Brian Eno · vibe: ethereal, calm · pace deliberate · tone warm",
+    "Elder · vibe: dark, energetic · pace fast",
+    "Miles Davis · vibe: chilled, sexy · pace steady · tone warm",
+    "Carly Rae Jepsen · vibe: happy, uplifting · pace fast"
+  ];
+  var el = document.getElementById("example-state");
+  if (!el) return;
+  var i = 0;
+  setInterval(function () {
+    i = (i + 1) % EXAMPLES.length;
+    el.style.opacity = 0;
+    setTimeout(function () {
+      el.textContent = EXAMPLES[i];
+      el.style.opacity = 1;
+    }, 400);
+  }, 4500);
+})();
+</script>
 
 <!-- GoatCounter: privacy-friendly page analytics (no cookies, no PII).
      Dashboard: https://cullumco.goatcounter.com -->
