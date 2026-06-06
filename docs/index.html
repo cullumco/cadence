@@ -13,8 +13,21 @@
 <link rel="canonical" href="https://cadence.cullum.co/">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Archivo:ital,wght@0,400;0,500;0,700;0,800;1,400;1,700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Archivo:ital,wght@0,100..900;1,100..900&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
 <style>
+  /* Hoist custom properties so browsers can animate them via @property. */
+  @property --ember-r  { syntax: '<integer>';    initial-value: 240;    inherits: true; }
+  @property --ember-g  { syntax: '<integer>';    initial-value: 87;     inherits: true; }
+  @property --ember-b  { syntax: '<integer>';    initial-value: 31;     inherits: true; }
+  @property --glow-x   { syntax: '<percentage>'; initial-value: 78%;    inherits: true; }
+  @property --glow-y   { syntax: '<percentage>'; initial-value: -8%;    inherits: true; }
+  @property --glow-w   { syntax: '<length>';     initial-value: 1200px; inherits: true; }
+  @property --glow-h   { syntax: '<length>';     initial-value: 700px;  inherits: true; }
+  @property --glow-op  { syntax: '<number>';     initial-value: 0.15;   inherits: true; }
+  @property --h1-wt    { syntax: '<integer>';    initial-value: 800;    inherits: true; }
+  @property --h2-wt    { syntax: '<integer>';    initial-value: 800;    inherits: true; }
+  @property --hero-pad { syntax: '<length>';     initial-value: 6rem;   inherits: true; }
+
   :root {
     --bg:       #100e0c;
     --bg-2:     #181512;
@@ -34,7 +47,20 @@
     --live:     #79d98a;
     --sans:     "Archivo", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
     --mono:     "JetBrains Mono", ui-monospace, "SF Mono", Menlo, Monaco, monospace;
+    /* per-period glow + typography — overwritten by inline script */
+    --glow-x:   78%; --glow-y: -8%; --glow-w: 1200px; --glow-h: 700px; --glow-op: 0.15;
+    --h1-wt:    800; --h2-wt: 800;
+    --h1-tracking: -0.03em; --h1-lh: 0.96;
+    --hero-pad: 6rem;
+    /* transitions activate after first paint (instant class removed by rAF) */
+    transition:
+      --ember-r 0.7s ease, --ember-g 0.7s ease, --ember-b 0.7s ease,
+      --glow-x 0.8s ease,  --glow-y 0.8s ease,
+      --glow-w 0.8s ease,  --glow-h 0.8s ease,  --glow-op 0.7s ease,
+      --h1-wt 0.55s ease,  --h2-wt 0.55s ease,  --hero-pad 0.65s ease;
   }
+
+  html.instant, html.instant * { transition: none !important; }
 
   * { margin: 0; padding: 0; box-sizing: border-box; }
 
@@ -62,7 +88,7 @@
     z-index: -2;
     pointer-events: none;
     background:
-      radial-gradient(1200px 700px at 78% -8%, rgba(var(--ember-r), var(--ember-g), var(--ember-b), 0.14), transparent 60%),
+      radial-gradient(var(--glow-w) var(--glow-h) at var(--glow-x) var(--glow-y), rgba(var(--ember-r), var(--ember-g), var(--ember-b), var(--glow-op)), transparent 60%),
       radial-gradient(900px 600px at 8% 4%, rgba(121, 217, 138, 0.04), transparent 55%),
       linear-gradient(180deg, #14110e 0%, var(--bg) 38%, #0d0b09 100%);
   }
@@ -211,7 +237,8 @@
     grid-template-columns: 1.05fr 0.95fr;
     gap: 3.5rem;
     align-items: center;
-    padding: 6rem 0 5rem;
+    padding-top: var(--hero-pad);
+    padding-bottom: 5rem;
   }
   .kicker {
     font-family: var(--mono);
@@ -230,11 +257,12 @@
   }
   h1 {
     font-family: var(--sans);
-    font-weight: 800;
+    font-weight: var(--h1-wt);
     font-size: clamp(3rem, 8vw, 5.4rem);
-    line-height: 0.96;
-    letter-spacing: -0.03em;
+    line-height: var(--h1-lh);
+    letter-spacing: var(--h1-tracking);
     margin-bottom: 1.75rem;
+    transition: font-weight 0.55s ease, letter-spacing 0.55s ease, line-height 0.45s ease;
   }
   h1 em {
     font-style: italic;
@@ -341,14 +369,15 @@
   }
   h2 {
     font-family: var(--sans);
-    font-weight: 800;
+    font-weight: var(--h2-wt);
     font-size: clamp(1.9rem, 4vw, 2.75rem);
     line-height: 1.05;
     letter-spacing: -0.025em;
     margin-bottom: 1.5rem;
     max-width: 22ch;
+    transition: font-weight 0.55s ease;
   }
-  h2 em { font-style: italic; font-weight: 800; color: var(--ember-2); }
+  h2 em { font-style: italic; font-weight: inherit; color: var(--ember-2); }
   p { margin-bottom: 1.1rem; max-width: 40rem; color: var(--ink-dim); }
   p:last-child { margin-bottom: 0; }
   p strong { color: var(--ink); font-weight: 600; }
@@ -508,7 +537,7 @@
 
   /* ── responsive ───────────────────────────────────────────────── */
   @media (max-width: 880px) {
-    .hero { grid-template-columns: 1fr; gap: 2.75rem; padding: 4rem 0 3.5rem; }
+    .hero { grid-template-columns: 1fr; gap: 2.75rem; padding-top: 4rem; padding-bottom: 3.5rem; }
   }
   @media (max-width: 600px) {
     .wrap { padding: 0 1.4rem; }
@@ -531,33 +560,74 @@
 <script>
 (function () {
   var STATES = [
-    { from: 0,  to: 5,  id: 'late-night', accent: '#7b8ec8', accent2: '#9baedd', r: 123, g: 142, b: 200, soft: '0.13', note: 'late night', dials: 'pace=deliberate, posture=exploratory' },
-    { from: 5,  to: 8,  id: 'dawn',       accent: '#c4916a', accent2: '#dba87c', r: 196, g: 145, b: 106, soft: '0.13', note: 'dawn',       dials: 'pace=slow, tone=warm'              },
-    { from: 8,  to: 12, id: 'morning',    accent: '#3abfb8', accent2: '#5fd5cd', r: 58,  g: 191, b: 184, soft: '0.12', note: 'morning',    dials: 'pace=medium, posture=focused'      },
-    { from: 12, to: 17, id: 'afternoon',  accent: '#f0571f', accent2: '#ff7a45', r: 240, g: 87,  b: 31,  soft: '0.14', note: 'afternoon',  dials: 'pace=fast, proactivity=act-freely' },
-    { from: 17, to: 21, id: 'evening',    accent: '#c4993a', accent2: '#d8b050', r: 196, g: 153, b: 58,  soft: '0.13', note: 'evening',    dials: 'pace=medium, tone=warm'            },
-    { from: 21, to: 24, id: 'night',      accent: '#d06030', accent2: '#e87848', r: 208, g: 96,  b: 48,  soft: '0.13', note: 'night',      dials: 'pace=medium, posture=decisive'     }
+    // Late night: cold dark, glow below the fold (dying stars), open airy type
+    { from: 0,  to: 5,  id: 'late-night', accent: '#7b8ec8', accent2: '#9baedd', r: 123, g: 142, b: 200, soft: '0.10', note: 'late night', dials: 'pace=deliberate, posture=exploratory',
+      weight: 350, h2w: 420, tracking: '+0.005em', lineH: '1.10', heroTop: '9rem',   glowX: '15%', glowY: '90%',  glowW: '700px',  glowH: '420px', glowOp: '0.05' },
+    // Dawn: soft warmth from top-center, medium type, day beginning
+    { from: 5,  to: 8,  id: 'dawn',       accent: '#c4916a', accent2: '#dba87c', r: 196, g: 145, b: 106, soft: '0.13', note: 'dawn',       dials: 'pace=slow, tone=warm',
+      weight: 500, h2w: 540, tracking: '-0.012em', lineH: '1.03', heroTop: '7rem',   glowX: '45%', glowY: '-2%',  glowW: '1000px', glowH: '580px', glowOp: '0.14' },
+    // Morning: crisp teal light from upper-right, confident weight
+    { from: 8,  to: 12, id: 'morning',    accent: '#3abfb8', accent2: '#5fd5cd', r: 58,  g: 191, b: 184, soft: '0.12', note: 'morning',    dials: 'pace=medium, posture=focused',
+      weight: 700, h2w: 700, tracking: '-0.022em', lineH: '0.97', heroTop: '6.5rem', glowX: '72%', glowY: '-10%', glowW: '1150px', glowH: '680px', glowOp: '0.18' },
+    // Afternoon: blazing ember from high-right, maximum weight and compression
+    { from: 12, to: 17, id: 'afternoon',  accent: '#f0571f', accent2: '#ff7a45', r: 240, g: 87,  b: 31,  soft: '0.14', note: 'afternoon',  dials: 'pace=fast, proactivity=act-freely',
+      weight: 800, h2w: 800, tracking: '-0.04em',  lineH: '0.92', heroTop: '5.5rem', glowX: '80%', glowY: '-10%', glowW: '1450px', glowH: '920px', glowOp: '0.26' },
+    // Evening: golden sun dropping to the horizon (glow at 65% Y, lower-left)
+    { from: 17, to: 21, id: 'evening',    accent: '#c4993a', accent2: '#d8b050', r: 196, g: 153, b: 58,  soft: '0.13', note: 'evening',    dials: 'pace=medium, tone=warm',
+      weight: 620, h2w: 630, tracking: '-0.022em', lineH: '0.98', heroTop: '6.5rem', glowX: '32%', glowY: '65%',  glowW: '1300px', glowH: '780px', glowOp: '0.20' },
+    // Night: ember glow from low-left, dark sky at top, deliberate type
+    { from: 21, to: 24, id: 'night',      accent: '#d06030', accent2: '#e87848', r: 208, g: 96,  b: 48,  soft: '0.13', note: 'night',      dials: 'pace=medium, posture=decisive',
+      weight: 720, h2w: 720, tracking: '-0.03em',  lineH: '0.96', heroTop: '6rem',   glowX: '22%', glowY: '78%',  glowW: '950px',  glowH: '600px', glowOp: '0.14' }
   ];
 
-  var h = new Date().getHours();
+  var now  = new Date();
+  var h    = now.getHours();
+  var dow  = now.getDay(); // 0=Sun, 6=Sat
+  var isWeekend = (dow === 0 || dow === 6);
+
   var s = STATES[3]; // default: afternoon
   for (var i = 0; i < STATES.length; i++) {
     if (h >= STATES[i].from && h < STATES[i].to) { s = STATES[i]; break; }
   }
 
   var root = document.documentElement;
-  root.style.setProperty('--ember',    s.accent);
-  root.style.setProperty('--ember-2',  s.accent2);
-  root.style.setProperty('--ember-r',  s.r);
-  root.style.setProperty('--ember-g',  s.g);
-  root.style.setProperty('--ember-b',  s.b);
+  root.classList.add('instant'); // suppress transitions on first paint
+  root.style.setProperty('--ember',      s.accent);
+  root.style.setProperty('--ember-2',    s.accent2);
+  root.style.setProperty('--ember-r',    s.r);
+  root.style.setProperty('--ember-g',    s.g);
+  root.style.setProperty('--ember-b',    s.b);
   root.style.setProperty('--ember-soft', 'rgba(' + s.r + ',' + s.g + ',' + s.b + ',' + s.soft + ')');
+  root.style.setProperty('--glow-x',     s.glowX);
+  root.style.setProperty('--glow-y',     s.glowY);
+  root.style.setProperty('--glow-w',     s.glowW);
+  root.style.setProperty('--glow-h',     s.glowH);
+  root.style.setProperty('--glow-op',    s.glowOp);
+  root.style.setProperty('--h1-wt',      s.weight);
+  root.style.setProperty('--h2-wt',      s.h2w);
+  root.style.setProperty('--h1-tracking', s.tracking);
+  root.style.setProperty('--h1-lh',      s.lineH);
+  root.style.setProperty('--hero-pad',   s.heroTop);
   root.dataset.period = s.id;
+  if (isWeekend) root.dataset.weekend = 'true';
 
-  // exposed for canvas and annotation
-  window.__cadenceRgb  = [s.r, s.g, s.b];
-  window.__cadenceNote = s.note;
-  window.__cadenceDials = s.dials;
+  // lift base slightly on light mode preference
+  if (window.matchMedia && window.matchMedia('(prefers-color-scheme: light)').matches) {
+    root.style.setProperty('--bg',   '#1c1915');
+    root.style.setProperty('--bg-2', '#221f1b');
+  }
+
+  window.__cadenceRgb   = [s.r, s.g, s.b];
+  window.__cadenceNote  = s.note;
+  window.__cadenceDials = s.dials + (isWeekend ? ', posture=exploratory' : '');
+  window.__cadenceStates = STATES;
+
+  // remove instant after two frames so subsequent period switches animate
+  requestAnimationFrame(function () {
+    requestAnimationFrame(function () {
+      document.documentElement.classList.remove('instant');
+    });
+  });
 })();
 </script>
 </head>
@@ -764,13 +834,19 @@
      head script uses, so accent color propagates everywhere. -->
 <script>
 (function () {
-  var STATES = [
-    { from: 0,  to: 5,  id: 'late-night', accent: '#7b8ec8', accent2: '#9baedd', r: 123, g: 142, b: 200, soft: '0.13', note: 'late night', dials: 'pace=deliberate, posture=exploratory' },
-    { from: 5,  to: 8,  id: 'dawn',       accent: '#c4916a', accent2: '#dba87c', r: 196, g: 145, b: 106, soft: '0.13', note: 'dawn',       dials: 'pace=slow, tone=warm'              },
-    { from: 8,  to: 12, id: 'morning',    accent: '#3abfb8', accent2: '#5fd5cd', r: 58,  g: 191, b: 184, soft: '0.12', note: 'morning',    dials: 'pace=medium, posture=focused'      },
-    { from: 12, to: 17, id: 'afternoon',  accent: '#f0571f', accent2: '#ff7a45', r: 240, g: 87,  b: 31,  soft: '0.14', note: 'afternoon',  dials: 'pace=fast, proactivity=act-freely' },
-    { from: 17, to: 21, id: 'evening',    accent: '#c4993a', accent2: '#d8b050', r: 196, g: 153, b: 58,  soft: '0.13', note: 'evening',    dials: 'pace=medium, tone=warm'            },
-    { from: 21, to: 24, id: 'night',      accent: '#d06030', accent2: '#e87848', r: 208, g: 96,  b: 48,  soft: '0.13', note: 'night',      dials: 'pace=medium, posture=decisive'     }
+  var STATES = window.__cadenceStates || [
+    { from: 0,  to: 5,  id: 'late-night', accent: '#7b8ec8', accent2: '#9baedd', r: 123, g: 142, b: 200, soft: '0.10', note: 'late night', dials: 'pace=deliberate, posture=exploratory',
+      weight: 350, h2w: 420, tracking: '+0.005em', lineH: '1.10', heroTop: '9rem',   glowX: '15%', glowY: '90%',  glowW: '700px',  glowH: '420px', glowOp: '0.05' },
+    { from: 5,  to: 8,  id: 'dawn',       accent: '#c4916a', accent2: '#dba87c', r: 196, g: 145, b: 106, soft: '0.13', note: 'dawn',       dials: 'pace=slow, tone=warm',
+      weight: 500, h2w: 540, tracking: '-0.012em', lineH: '1.03', heroTop: '7rem',   glowX: '45%', glowY: '-2%',  glowW: '1000px', glowH: '580px', glowOp: '0.14' },
+    { from: 8,  to: 12, id: 'morning',    accent: '#3abfb8', accent2: '#5fd5cd', r: 58,  g: 191, b: 184, soft: '0.12', note: 'morning',    dials: 'pace=medium, posture=focused',
+      weight: 700, h2w: 700, tracking: '-0.022em', lineH: '0.97', heroTop: '6.5rem', glowX: '72%', glowY: '-10%', glowW: '1150px', glowH: '680px', glowOp: '0.18' },
+    { from: 12, to: 17, id: 'afternoon',  accent: '#f0571f', accent2: '#ff7a45', r: 240, g: 87,  b: 31,  soft: '0.14', note: 'afternoon',  dials: 'pace=fast, proactivity=act-freely',
+      weight: 800, h2w: 800, tracking: '-0.04em',  lineH: '0.92', heroTop: '5.5rem', glowX: '80%', glowY: '-10%', glowW: '1450px', glowH: '920px', glowOp: '0.26' },
+    { from: 17, to: 21, id: 'evening',    accent: '#c4993a', accent2: '#d8b050', r: 196, g: 153, b: 58,  soft: '0.13', note: 'evening',    dials: 'pace=medium, tone=warm',
+      weight: 620, h2w: 630, tracking: '-0.022em', lineH: '0.98', heroTop: '6.5rem', glowX: '32%', glowY: '65%',  glowW: '1300px', glowH: '780px', glowOp: '0.20' },
+    { from: 21, to: 24, id: 'night',      accent: '#d06030', accent2: '#e87848', r: 208, g: 96,  b: 48,  soft: '0.13', note: 'night',      dials: 'pace=medium, posture=decisive',
+      weight: 720, h2w: 720, tracking: '-0.03em',  lineH: '0.96', heroTop: '6rem',   glowX: '22%', glowY: '78%',  glowW: '950px',  glowH: '600px', glowOp: '0.14' }
   ];
 
   var h = new Date().getHours();
@@ -783,12 +859,22 @@
 
   function applyState(s) {
     var root = document.documentElement;
-    root.style.setProperty('--ember',     s.accent);
-    root.style.setProperty('--ember-2',   s.accent2);
-    root.style.setProperty('--ember-r',   s.r);
-    root.style.setProperty('--ember-g',   s.g);
-    root.style.setProperty('--ember-b',   s.b);
-    root.style.setProperty('--ember-soft','rgba(' + s.r + ',' + s.g + ',' + s.b + ',' + s.soft + ')');
+    root.style.setProperty('--ember',      s.accent);
+    root.style.setProperty('--ember-2',    s.accent2);
+    root.style.setProperty('--ember-r',    s.r);
+    root.style.setProperty('--ember-g',    s.g);
+    root.style.setProperty('--ember-b',    s.b);
+    root.style.setProperty('--ember-soft', 'rgba(' + s.r + ',' + s.g + ',' + s.b + ',' + s.soft + ')');
+    root.style.setProperty('--glow-x',     s.glowX);
+    root.style.setProperty('--glow-y',     s.glowY);
+    root.style.setProperty('--glow-w',     s.glowW);
+    root.style.setProperty('--glow-h',     s.glowH);
+    root.style.setProperty('--glow-op',    s.glowOp);
+    root.style.setProperty('--h1-wt',      s.weight);
+    root.style.setProperty('--h2-wt',      s.h2w);
+    root.style.setProperty('--h1-tracking', s.tracking);
+    root.style.setProperty('--h1-lh',      s.lineH);
+    root.style.setProperty('--hero-pad',   s.heroTop);
     root.dataset.period = s.id;
     window.__cadenceRgb = [s.r, s.g, s.b];
     activeId = s.id;
@@ -937,6 +1023,7 @@
 
     var amp = energy, t = 0;
     function frame() {
+      ac = window.__cadenceRgb || ac;
       amp += (energy - amp) * 0.05;
       ctx.clearRect(0, 0, w, h);
       var mid = h / 2;
