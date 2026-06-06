@@ -13,7 +13,7 @@
 <link rel="canonical" href="https://cadence.cullum.co/">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Hanken+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Archivo:ital,wght@0,400;0,500;0,700;0,800;1,400;1,700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
 <style>
   :root {
     --bg:       #100e0c;
@@ -24,12 +24,15 @@
     --ink:      #ece6da;
     --ink-dim:  #b8ae9e;
     --muted:    #8a8071;
+    /* accent — overwritten by inline script before first paint */
     --ember:    #f0571f;
     --ember-2:  #ff7a45;
+    --ember-r:  240;
+    --ember-g:  87;
+    --ember-b:  31;
     --ember-soft: rgba(240, 87, 31, 0.14);
     --live:     #79d98a;
-    --serif:    "Instrument Serif", "Iowan Old Style", "Palatino Linotype", Georgia, serif;
-    --sans:     "Hanken Grotesk", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    --sans:     "Archivo", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
     --mono:     "JetBrains Mono", ui-monospace, "SF Mono", Menlo, Monaco, monospace;
   }
 
@@ -52,15 +55,15 @@
     min-height: 100vh;
   }
 
-  /* ── atmosphere: ember glow + scan grid + grain ───────────────── */
+  /* ── atmosphere: accent glow + scan grid + grain ──────────────── */
   .bg-field {
     position: fixed;
     inset: 0;
     z-index: -2;
     pointer-events: none;
     background:
-      radial-gradient(1200px 700px at 78% -8%, rgba(240, 87, 31, 0.16), transparent 60%),
-      radial-gradient(900px 600px at 8% 4%, rgba(121, 217, 138, 0.05), transparent 55%),
+      radial-gradient(1200px 700px at 78% -8%, rgba(var(--ember-r), var(--ember-g), var(--ember-b), 0.14), transparent 60%),
+      radial-gradient(900px 600px at 8% 4%, rgba(121, 217, 138, 0.04), transparent 55%),
       linear-gradient(180deg, #14110e 0%, var(--bg) 38%, #0d0b09 100%);
   }
   .bg-grid {
@@ -107,9 +110,10 @@
     border-bottom: 1px solid var(--line);
   }
   nav .mark {
-    font-family: var(--serif);
-    font-size: 1.35rem;
-    letter-spacing: 0.01em;
+    font-family: var(--sans);
+    font-weight: 700;
+    font-size: 1.05rem;
+    letter-spacing: -0.01em;
     text-decoration: none;
     color: var(--ink);
     display: flex;
@@ -132,6 +136,74 @@
   nav .right a:hover { color: var(--ink); }
   nav .proj { color: var(--muted); }
   nav .proj a { color: var(--ink-dim); text-decoration: underline; text-decoration-color: var(--line-2); text-underline-offset: 2px; }
+
+  .ambient-wrap {
+    position: relative;
+    padding-right: 1.5rem;
+    border-right: 1px solid var(--line-2);
+  }
+  .ambient-ctx {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.45rem;
+    font-size: 0.67rem;
+    letter-spacing: 0.025em;
+    color: var(--muted);
+    background: none;
+    border: none;
+    padding: 0;
+    cursor: pointer;
+    font-family: var(--mono);
+    transition: color 0.16s ease;
+  }
+  .ambient-ctx:hover { color: var(--ink-dim); }
+  .ambient-ctx .period { color: var(--ember-2); }
+  .ambient-ctx .chevron {
+    font-style: normal;
+    opacity: 0.5;
+    transition: transform 0.18s ease, opacity 0.18s ease;
+    display: inline-block;
+  }
+  .ambient-ctx[aria-expanded="true"] .chevron { transform: rotate(180deg); opacity: 0.8; }
+
+  .period-panel {
+    position: absolute;
+    top: calc(100% + 0.6rem);
+    right: 0;
+    background: var(--bg-2);
+    border: 1px solid var(--line-2);
+    border-radius: 8px;
+    padding: 0.4rem;
+    min-width: 22rem;
+    box-shadow: 0 16px 40px -12px rgba(0,0,0,0.7), 0 0 0 1px rgba(0,0,0,0.3);
+    z-index: 100;
+    display: none;
+  }
+  .period-panel.open { display: block; }
+  .period-opt {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    width: 100%;
+    padding: 0.55rem 0.75rem;
+    background: none;
+    border: none;
+    border-radius: 5px;
+    cursor: pointer;
+    font-family: var(--mono);
+    font-size: 0.67rem;
+    letter-spacing: 0.025em;
+    color: var(--ink-dim);
+    text-align: left;
+    transition: background 0.14s ease, color 0.14s ease;
+  }
+  .period-opt:hover { background: var(--bg-3); color: var(--ink); }
+  .period-opt[aria-current="true"] { color: var(--ink); background: rgba(var(--ember-r), var(--ember-g), var(--ember-b), 0.08); }
+  .period-dot {
+    width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0;
+  }
+  .period-name { color: var(--ink); font-weight: 500; min-width: 5.5rem; }
+  .period-hint { color: var(--muted); }
 
   /* ── hero ─────────────────────────────────────────────────────── */
   .hero {
@@ -157,21 +229,22 @@
     display: inline-block;
   }
   h1 {
-    font-family: var(--serif);
-    font-weight: 400;
-    font-size: clamp(3.1rem, 8vw, 5.6rem);
-    line-height: 0.98;
-    letter-spacing: -0.015em;
+    font-family: var(--sans);
+    font-weight: 800;
+    font-size: clamp(3rem, 8vw, 5.4rem);
+    line-height: 0.96;
+    letter-spacing: -0.03em;
     margin-bottom: 1.75rem;
   }
   h1 em {
     font-style: italic;
+    font-weight: 800;
     color: var(--ember-2);
-    text-shadow: 0 0 40px rgba(240, 87, 31, 0.35);
+    text-shadow: 0 0 40px rgba(var(--ember-r), var(--ember-g), var(--ember-b), 0.35);
   }
   .lede {
-    font-size: 1.22rem;
-    line-height: 1.5;
+    font-size: 1.18rem;
+    line-height: 1.55;
     color: var(--ink-dim);
     max-width: 30rem;
     margin-bottom: 2.5rem;
@@ -191,9 +264,14 @@
     background: var(--ember);
     color: #160f0b;
     font-weight: 500;
-    box-shadow: 0 0 0 1px rgba(240,87,31,0.3), 0 10px 30px -10px rgba(240,87,31,0.6);
+    box-shadow: 0 0 0 1px rgba(var(--ember-r), var(--ember-g), var(--ember-b), 0.3),
+                0 10px 30px -10px rgba(var(--ember-r), var(--ember-g), var(--ember-b), 0.6);
   }
-  .btn-primary:hover { transform: translateY(-2px); box-shadow: 0 0 0 1px rgba(240,87,31,0.5), 0 16px 40px -12px rgba(240,87,31,0.75); }
+  .btn-primary:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 0 0 1px rgba(var(--ember-r), var(--ember-g), var(--ember-b), 0.5),
+                0 16px 40px -12px rgba(var(--ember-r), var(--ember-g), var(--ember-b), 0.75);
+  }
   .btn-ghost { color: var(--ink-dim); border: 1px solid var(--line-2); }
   .btn-ghost:hover { color: var(--ink); border-color: var(--ink-dim); transform: translateY(-2px); }
 
@@ -227,7 +305,7 @@
     position: relative;
     height: 96px;
     background:
-      radial-gradient(120% 140% at 50% 120%, rgba(240,87,31,0.10), transparent 60%),
+      radial-gradient(120% 140% at 50% 120%, rgba(var(--ember-r), var(--ember-g), var(--ember-b), 0.10), transparent 60%),
       #0c0a08;
     border-bottom: 1px solid var(--line);
   }
@@ -262,19 +340,19 @@
     color: var(--ember-2); margin-bottom: 1.1rem;
   }
   h2 {
-    font-family: var(--serif);
-    font-weight: 400;
-    font-size: clamp(2rem, 4vw, 2.9rem);
-    line-height: 1.08;
-    letter-spacing: -0.01em;
+    font-family: var(--sans);
+    font-weight: 800;
+    font-size: clamp(1.9rem, 4vw, 2.75rem);
+    line-height: 1.05;
+    letter-spacing: -0.025em;
     margin-bottom: 1.5rem;
     max-width: 22ch;
   }
-  h2 em { font-style: italic; color: var(--ember-2); }
+  h2 em { font-style: italic; font-weight: 800; color: var(--ember-2); }
   p { margin-bottom: 1.1rem; max-width: 40rem; color: var(--ink-dim); }
   p:last-child { margin-bottom: 0; }
   p strong { color: var(--ink); font-weight: 600; }
-  em { font-family: var(--serif); font-style: italic; font-size: 1.05em; color: var(--ink); }
+  em { font-style: italic; color: var(--ink); }
   code {
     font-family: var(--mono); font-size: 0.84em;
     background: var(--bg-3); color: var(--ember-2);
@@ -284,9 +362,11 @@
 
   /* ── "different room" cards ───────────────────────────────────── */
   .quote-prompt {
-    font-family: var(--serif); font-style: italic;
-    font-size: clamp(1.5rem, 3.5vw, 2.1rem);
+    font-weight: 700;
+    font-style: italic;
+    font-size: clamp(1.45rem, 3.5vw, 2rem);
     color: var(--ink); margin: 0.5rem 0 2.5rem;
+    letter-spacing: -0.02em;
   }
   .cards { display: grid; grid-template-columns: 1fr; gap: 1.25rem; }
   @media (min-width: 760px) { .cards { grid-template-columns: repeat(3, 1fr); } }
@@ -306,9 +386,8 @@
     padding-bottom: 0.4rem; border-bottom: 1px solid var(--ember-soft);
   }
   .card.dim .tab { color: var(--muted); border-bottom-color: var(--line); }
-  .card h3 { font-family: var(--serif); font-weight: 400; font-size: 1.45rem; margin-bottom: 0.6rem; color: var(--ink); }
+  .card h3 { font-family: var(--sans); font-weight: 700; font-size: 1.3rem; margin-bottom: 0.6rem; color: var(--ink); letter-spacing: -0.02em; }
   .card p { font-size: 0.92rem; margin: 0; color: var(--ink-dim); }
-  .card em { font-size: 0.95em; }
 
   /* ── how it works: signals → dials → reframe ──────────────────── */
   .pipeline { display: grid; grid-template-columns: 1fr; gap: 1.25rem; margin-top: 0.5rem; }
@@ -319,7 +398,7 @@
     border-radius: 8px; padding: 1.5rem;
   }
   .stage .num { font-family: var(--mono); font-size: 0.7rem; letter-spacing: 0.1em; color: var(--ember-2); }
-  .stage h3 { font-family: var(--serif); font-weight: 400; font-size: 1.4rem; margin: 0.5rem 0 0.7rem; color: var(--ink); }
+  .stage h3 { font-family: var(--sans); font-weight: 700; font-size: 1.25rem; margin: 0.5rem 0 0.7rem; color: var(--ink); letter-spacing: -0.02em; }
   .stage p { font-size: 0.92rem; margin: 0; }
 
   /* ── the four dials (segmented level meters) ──────────────────── */
@@ -349,7 +428,7 @@
   }
   .dial .meter i.on {
     background: var(--ember); border-color: var(--ember-2);
-    box-shadow: 0 0 10px rgba(240,87,31,0.6);
+    box-shadow: 0 0 10px rgba(var(--ember-r), var(--ember-g), var(--ember-b), 0.6);
     opacity: 1; transform: scaleY(1);
   }
   .dial .val { font-family: var(--mono); font-size: 0.82rem; color: var(--ember-2); text-align: right; }
@@ -390,12 +469,15 @@
 
   /* ── sibling ──────────────────────────────────────────────────── */
   .sibling .pair {
-    font-family: var(--serif); font-style: italic;
-    font-size: clamp(1.6rem, 3.5vw, 2.3rem);
+    font-weight: 700;
+    font-style: italic;
+    font-size: clamp(1.55rem, 3.5vw, 2.2rem);
     line-height: 1.3; color: var(--ink);
     margin-top: 2rem;
+    letter-spacing: -0.02em;
   }
   .sibling .pair .a { color: var(--ember-2); }
+
 
   /* ── footer ───────────────────────────────────────────────────── */
   footer {
@@ -431,6 +513,7 @@
   @media (max-width: 600px) {
     .wrap { padding: 0 1.4rem; }
     nav .proj { display: none; }
+    nav .ambient-ctx { display: none; }
     section { padding: 3.5rem 0; }
     .dial { grid-template-columns: 5.5rem 1fr; }
     .dial .val { grid-column: 2; text-align: left; }
@@ -441,6 +524,42 @@
     .load, .reveal { opacity: 1 !important; transform: none !important; }
   }
 </style>
+
+<!-- Ambient color init — runs before first paint to avoid flash.
+     Reads the current hour and applies one of six time-period accent
+     palettes — the same logic Cadence uses to infer pace and tone. -->
+<script>
+(function () {
+  var STATES = [
+    { from: 0,  to: 5,  id: 'late-night', accent: '#7b8ec8', accent2: '#9baedd', r: 123, g: 142, b: 200, soft: '0.13', note: 'late night', dials: 'pace=deliberate, posture=exploratory' },
+    { from: 5,  to: 8,  id: 'dawn',       accent: '#c4916a', accent2: '#dba87c', r: 196, g: 145, b: 106, soft: '0.13', note: 'dawn',       dials: 'pace=slow, tone=warm'              },
+    { from: 8,  to: 12, id: 'morning',    accent: '#3abfb8', accent2: '#5fd5cd', r: 58,  g: 191, b: 184, soft: '0.12', note: 'morning',    dials: 'pace=medium, posture=focused'      },
+    { from: 12, to: 17, id: 'afternoon',  accent: '#f0571f', accent2: '#ff7a45', r: 240, g: 87,  b: 31,  soft: '0.14', note: 'afternoon',  dials: 'pace=fast, proactivity=act-freely' },
+    { from: 17, to: 21, id: 'evening',    accent: '#c4993a', accent2: '#d8b050', r: 196, g: 153, b: 58,  soft: '0.13', note: 'evening',    dials: 'pace=medium, tone=warm'            },
+    { from: 21, to: 24, id: 'night',      accent: '#d06030', accent2: '#e87848', r: 208, g: 96,  b: 48,  soft: '0.13', note: 'night',      dials: 'pace=medium, posture=decisive'     }
+  ];
+
+  var h = new Date().getHours();
+  var s = STATES[3]; // default: afternoon
+  for (var i = 0; i < STATES.length; i++) {
+    if (h >= STATES[i].from && h < STATES[i].to) { s = STATES[i]; break; }
+  }
+
+  var root = document.documentElement;
+  root.style.setProperty('--ember',    s.accent);
+  root.style.setProperty('--ember-2',  s.accent2);
+  root.style.setProperty('--ember-r',  s.r);
+  root.style.setProperty('--ember-g',  s.g);
+  root.style.setProperty('--ember-b',  s.b);
+  root.style.setProperty('--ember-soft', 'rgba(' + s.r + ',' + s.g + ',' + s.b + ',' + s.soft + ')');
+  root.dataset.period = s.id;
+
+  // exposed for canvas and annotation
+  window.__cadenceRgb  = [s.r, s.g, s.b];
+  window.__cadenceNote = s.note;
+  window.__cadenceDials = s.dials;
+})();
+</script>
 </head>
 <body>
 
@@ -453,6 +572,10 @@
   <nav>
     <a href="/" class="mark"><span class="led"></span>Cadence</a>
     <div class="right">
+      <div class="ambient-wrap" id="ambient-wrap">
+        <button class="ambient-ctx" id="ambient-ctx" aria-expanded="false" aria-haspopup="true" aria-label="Current ambient period — click to explore alternates"></button>
+        <div class="period-panel" id="period-panel" role="listbox" aria-label="Time periods"></div>
+      </div>
       <a href="#install" data-goatcounter-click="install-nav">install</a>
       <a href="https://github.com/cullumco/cadence">github</a>
       <span class="proj">a <a href="https://cullum.co">Cullum&amp;Co</a> project</span>
@@ -635,6 +758,125 @@
 
 </div>
 
+<!-- ── ambient period switcher ────────────────────────────────────
+     Builds the nav annotation + a panel letting visitors explore all
+     six time-period palettes. Applies the same CSS variable swap the
+     head script uses, so accent color propagates everywhere. -->
+<script>
+(function () {
+  var STATES = [
+    { from: 0,  to: 5,  id: 'late-night', accent: '#7b8ec8', accent2: '#9baedd', r: 123, g: 142, b: 200, soft: '0.13', note: 'late night', dials: 'pace=deliberate, posture=exploratory' },
+    { from: 5,  to: 8,  id: 'dawn',       accent: '#c4916a', accent2: '#dba87c', r: 196, g: 145, b: 106, soft: '0.13', note: 'dawn',       dials: 'pace=slow, tone=warm'              },
+    { from: 8,  to: 12, id: 'morning',    accent: '#3abfb8', accent2: '#5fd5cd', r: 58,  g: 191, b: 184, soft: '0.12', note: 'morning',    dials: 'pace=medium, posture=focused'      },
+    { from: 12, to: 17, id: 'afternoon',  accent: '#f0571f', accent2: '#ff7a45', r: 240, g: 87,  b: 31,  soft: '0.14', note: 'afternoon',  dials: 'pace=fast, proactivity=act-freely' },
+    { from: 17, to: 21, id: 'evening',    accent: '#c4993a', accent2: '#d8b050', r: 196, g: 153, b: 58,  soft: '0.13', note: 'evening',    dials: 'pace=medium, tone=warm'            },
+    { from: 21, to: 24, id: 'night',      accent: '#d06030', accent2: '#e87848', r: 208, g: 96,  b: 48,  soft: '0.13', note: 'night',      dials: 'pace=medium, posture=decisive'     }
+  ];
+
+  var h = new Date().getHours();
+  var currentId = (window.__cadenceNote && STATES.find(function(s){ return s.note === window.__cadenceNote; }) || {}).id;
+  var activeId = currentId;
+
+  var btn   = document.getElementById('ambient-ctx');
+  var panel = document.getElementById('period-panel');
+  if (!btn || !panel) return;
+
+  function applyState(s) {
+    var root = document.documentElement;
+    root.style.setProperty('--ember',     s.accent);
+    root.style.setProperty('--ember-2',   s.accent2);
+    root.style.setProperty('--ember-r',   s.r);
+    root.style.setProperty('--ember-g',   s.g);
+    root.style.setProperty('--ember-b',   s.b);
+    root.style.setProperty('--ember-soft','rgba(' + s.r + ',' + s.g + ',' + s.b + ',' + s.soft + ')');
+    root.dataset.period = s.id;
+    window.__cadenceRgb = [s.r, s.g, s.b];
+    activeId = s.id;
+  }
+
+  function renderBtn(s) {
+    while (btn.firstChild) btn.removeChild(btn.firstChild);
+    btn.appendChild(document.createTextNode('context: '));
+    var periodEl = document.createElement('span');
+    periodEl.className = 'period';
+    periodEl.textContent = s.note;
+    btn.appendChild(periodEl);
+    btn.appendChild(document.createTextNode(' · ' + s.dials + ' '));
+    var chevron = document.createElement('i');
+    chevron.className = 'chevron';
+    chevron.setAttribute('aria-hidden', 'true');
+    chevron.textContent = '▾';
+    btn.appendChild(chevron);
+  }
+
+  function renderPanel() {
+    while (panel.firstChild) panel.removeChild(panel.firstChild);
+    STATES.forEach(function(s) {
+      var opt = document.createElement('button');
+      opt.className = 'period-opt';
+      opt.dataset.id = s.id;
+      opt.setAttribute('role', 'option');
+      if (s.id === activeId) opt.setAttribute('aria-current', 'true');
+
+      var dot = document.createElement('span');
+      dot.className = 'period-dot';
+      dot.style.background = s.accent;
+
+      var nameEl = document.createElement('span');
+      nameEl.className = 'period-name';
+      var isNow = h >= s.from && h < s.to;
+      nameEl.textContent = s.note + (isNow ? ' (now)' : '');
+
+      var hint = document.createElement('span');
+      hint.className = 'period-hint';
+      hint.textContent = s.dials;
+
+      opt.appendChild(dot);
+      opt.appendChild(nameEl);
+      opt.appendChild(hint);
+
+      opt.addEventListener('click', function() {
+        applyState(s);
+        renderBtn(s);
+        renderPanel();
+        closePanel();
+      });
+
+      panel.appendChild(opt);
+    });
+  }
+
+  function openPanel() {
+    btn.setAttribute('aria-expanded', 'true');
+    panel.classList.add('open');
+    renderPanel();
+  }
+
+  function closePanel() {
+    btn.setAttribute('aria-expanded', 'false');
+    panel.classList.remove('open');
+  }
+
+  // initial render
+  var initState = STATES.find(function(s){ return s.note === window.__cadenceNote; }) || STATES[3];
+  renderBtn(initState);
+
+  btn.addEventListener('click', function(e) {
+    e.stopPropagation();
+    if (panel.classList.contains('open')) closePanel();
+    else openPanel();
+  });
+
+  document.addEventListener('click', function(e) {
+    if (!panel.contains(e.target) && e.target !== btn) closePanel();
+  });
+
+  document.addEventListener('keydown', function(e) {
+    if (e.key === 'Escape') closePanel();
+  });
+})();
+</script>
+
 <!-- ── live readout: rotating examples + scope waveform ──────────
      Every entry is what Cadence's real pipeline emits for that artist
      (vibe words from the genre→affect table; pace from energy; warm
@@ -657,7 +899,12 @@
   var el = document.getElementById("example-state");
   var i = 0, energy = EXAMPLES[0].energy;
   function render(e) {
-    el.innerHTML = '<span class="accent">' + e.artist + '</span>' + e.rest;
+    while (el.firstChild) el.removeChild(el.firstChild);
+    var accentEl = document.createElement('span');
+    accentEl.className = 'accent';
+    accentEl.textContent = e.artist;
+    el.appendChild(accentEl);
+    el.appendChild(document.createTextNode(e.rest));
   }
   if (el && !reduce) {
     setInterval(function () {
@@ -672,11 +919,13 @@
     }, 4500);
   }
 
-  /* ── scope waveform ── */
+  /* ── scope waveform — accent color from ambient head script ── */
   var canvas = document.getElementById("scope");
   if (canvas && canvas.getContext) {
     var ctx = canvas.getContext("2d");
     var w = 0, h = 0, dpr = Math.min(window.devicePixelRatio || 1, 2);
+    var ac = window.__cadenceRgb || [240, 87, 31];
+
     function resize() {
       var r = canvas.getBoundingClientRect();
       w = r.width; h = r.height;
@@ -688,23 +937,23 @@
 
     var amp = energy, t = 0;
     function frame() {
-      amp += (energy - amp) * 0.05;             // ease toward current energy
+      amp += (energy - amp) * 0.05;
       ctx.clearRect(0, 0, w, h);
       var mid = h / 2;
       var grad = ctx.createLinearGradient(0, 0, w, 0);
-      grad.addColorStop(0, "rgba(240,87,31,0.15)");
-      grad.addColorStop(0.5, "rgba(255,122,69,1)");
-      grad.addColorStop(1, "rgba(240,87,31,0.15)");
+      grad.addColorStop(0, "rgba(" + ac[0] + "," + ac[1] + "," + ac[2] + ",0.15)");
+      grad.addColorStop(0.5, "rgba(" + ac[0] + "," + ac[1] + "," + ac[2] + ",1)");
+      grad.addColorStop(1, "rgba(" + ac[0] + "," + ac[1] + "," + ac[2] + ",0.15)");
       ctx.lineWidth = 2;
       ctx.strokeStyle = grad;
-      ctx.shadowColor = "rgba(240,87,31,0.7)";
+      ctx.shadowColor = "rgba(" + ac[0] + "," + ac[1] + "," + ac[2] + ",0.7)";
       ctx.shadowBlur = 8;
       ctx.beginPath();
       for (var x = 0; x <= w; x += 2) {
         var p = x / w;
         var base = Math.sin(p * (6 + amp * 16) + t) * (mid * 0.18 + amp * mid * 0.7);
         var jit = (amp > 0.55) ? (Math.sin(p * 60 + t * 3) * amp * mid * 0.28) : 0;
-        var envelope = Math.sin(p * Math.PI);     // taper at edges
+        var envelope = Math.sin(p * Math.PI);
         var y = mid + (base + jit) * envelope;
         if (x === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
       }
@@ -714,7 +963,6 @@
     }
     var raf;
     if (reduce) {
-      // single static trace
       energy = 0.5; amp = 0.5; frame(); cancelAnimationFrame(raf);
     } else {
       frame();
@@ -729,7 +977,6 @@
   var reduce = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
   var SEG = 12;
 
-  // build segments
   document.querySelectorAll(".dial").forEach(function (dial) {
     var meter = dial.querySelector("[data-fill]");
     for (var s = 0; s < SEG; s++) {
@@ -748,7 +995,6 @@
     });
   }
 
-  // reveal-on-scroll, and trigger dial fill when the dials block appears
   if (!("IntersectionObserver" in window) || reduce) {
     document.querySelectorAll(".reveal").forEach(function (n) { n.classList.add("in"); });
     document.querySelectorAll(".dial").forEach(fill);
