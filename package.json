@@ -6,7 +6,7 @@
   "bin": {
     "cadence": "bin/cadence"
   },
-  "homepage": "https://cullumco.github.io/cadence/",
+  "homepage": "https://cadence.cullum.co/",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/cullumco/cadence.git"

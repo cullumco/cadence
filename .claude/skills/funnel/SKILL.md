@@ -1,6 +1,6 @@
 ---
 name: funnel
-description: Check Cadence's marketing/install funnel — page traffic, install-CTA clicks, npm downloads, GitHub traffic — and verify the GitHub Pages deploy is current. Use when asked how installs/marketing are going or after pushing site changes.
+description: Check Cadence's marketing/install funnel — page traffic, install-CTA clicks, npm downloads, GitHub traffic — and verify the Vercel deploy is current. Use when asked how installs/marketing are going or after pushing site changes.
 ---
 
 # Check the funnel
@@ -18,20 +18,22 @@ gh api repos/cullumco/cadence/traffic/clones --jq '{clones: .count, uniques: .un
 gh repo view cullumco/cadence --json stargazerCount -q .stargazerCount
 ```
 
-GoatCounter (page views, referrers, and the `install-nav` / `install-impact`
-click events): dashboard at https://cullumco.goatcounter.com — open it in
-the browser (chrome-devtools MCP if connected, else `open`). The event
-split is the conversion read: `install-impact` dominating means the
-"Same prompt, different room" story converts; `install-nav` dominating
-means visitors arrive pre-sold.
+GoatCounter (page views, referrers, and the `install-nav` / `install-hero` /
+`install-impact` click events): dashboard at https://cullumco.goatcounter.com
+— open it in the browser (chrome-devtools MCP if connected, else `open`). The
+event split is the conversion read: `install-impact` dominating means the
+"Same prompt, different room" story converts; `install-hero` dominating means
+the hero pitch lands on its own; `install-nav` dominating means visitors
+arrive pre-sold.
 
 ## Deploy check (after site changes)
 
-Pages serves `docs/index.html` from main (~60s after push):
+Vercel serves `docs/index.html` (project Root Directory = `docs`) on push to
+the production branch (~30–60s after push). See `DEPLOY.md` for project setup.
 
 ```bash
-curl -s -o /dev/null -w "%{http_code}" https://cullumco.github.io/cadence/
-curl -s https://cullumco.github.io/cadence/ | grep -c goatcounter   # expect 4
+curl -s -o /dev/null -w "%{http_code}" https://cadence.cullum.co/
+curl -s https://cadence.cullum.co/ | grep -c goatcounter   # expect 5
 ```
 
 ## Caveats that already bit us

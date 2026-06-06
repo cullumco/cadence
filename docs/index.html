@@ -4,372 +4,590 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Cadence — agents that read the room</title>
-<meta name="description" content="An ambient context layer for Claude Code. Cadence gives agents the room around the prompt.">
+<meta name="description" content="An ambient context layer for Claude Code. Cadence gives agents the room around the prompt — signals, four dials, and a lens for reading what you meant.">
+<meta name="theme-color" content="#100e0c">
 <meta property="og:title" content="Cadence — agents that read the room">
 <meta property="og:description" content="An ambient context layer for Claude Code. Cadence gives agents the room around the prompt.">
 <meta property="og:type" content="website">
+<meta property="og:url" content="https://cadence.cullum.co/">
+<link rel="canonical" href="https://cadence.cullum.co/">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Hanken+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
 <style>
   :root {
-    --paper: #faf8f3;
-    --paper-2: #f3f0e8;
-    --ink: #1a1a1a;
-    --muted: #6b6b66;
-    --rule: rgba(26, 26, 26, 0.1);
-    --accent: #c1442e;
+    --bg:       #100e0c;
+    --bg-2:     #181512;
+    --bg-3:     #211c17;
+    --line:     rgba(236, 230, 218, 0.09);
+    --line-2:   rgba(236, 230, 218, 0.16);
+    --ink:      #ece6da;
+    --ink-dim:  #b8ae9e;
+    --muted:    #8a8071;
+    --ember:    #f0571f;
+    --ember-2:  #ff7a45;
+    --ember-soft: rgba(240, 87, 31, 0.14);
+    --live:     #79d98a;
+    --serif:    "Instrument Serif", "Iowan Old Style", "Palatino Linotype", Georgia, serif;
+    --sans:     "Hanken Grotesk", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    --mono:     "JetBrains Mono", ui-monospace, "SF Mono", Menlo, Monaco, monospace;
   }
 
   * { margin: 0; padding: 0; box-sizing: border-box; }
 
   html {
-    background: var(--paper);
+    background: var(--bg);
     color: var(--ink);
-    font-family: -apple-system, BlinkMacSystemFont, "Inter", system-ui, sans-serif;
+    font-family: var(--sans);
     font-size: 17px;
     line-height: 1.6;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
+    scroll-behavior: smooth;
   }
 
   body {
-    max-width: 720px;
+    position: relative;
+    overflow-x: hidden;
+    min-height: 100vh;
+  }
+
+  /* ── atmosphere: ember glow + scan grid + grain ───────────────── */
+  .bg-field {
+    position: fixed;
+    inset: 0;
+    z-index: -2;
+    pointer-events: none;
+    background:
+      radial-gradient(1200px 700px at 78% -8%, rgba(240, 87, 31, 0.16), transparent 60%),
+      radial-gradient(900px 600px at 8% 4%, rgba(121, 217, 138, 0.05), transparent 55%),
+      linear-gradient(180deg, #14110e 0%, var(--bg) 38%, #0d0b09 100%);
+  }
+  .bg-grid {
+    position: fixed;
+    inset: 0;
+    z-index: -2;
+    pointer-events: none;
+    background-image:
+      linear-gradient(var(--line) 1px, transparent 1px),
+      linear-gradient(90deg, var(--line) 1px, transparent 1px);
+    background-size: 64px 64px;
+    -webkit-mask-image: radial-gradient(120% 90% at 50% 0%, #000 35%, transparent 78%);
+            mask-image: radial-gradient(120% 90% at 50% 0%, #000 35%, transparent 78%);
+    opacity: 0.5;
+  }
+  .bg-grain {
+    position: fixed;
+    inset: 0;
+    z-index: -1;
+    pointer-events: none;
+    opacity: 0.045;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+  }
+
+  ::selection { background: var(--ember); color: #140f0c; }
+
+  .wrap {
+    max-width: 1080px;
     margin: 0 auto;
-    padding: 5rem 2rem 5rem;
+    padding: 0 2rem;
   }
 
-  ::selection {
-    background: var(--accent);
-    color: var(--paper);
-  }
+  a { color: inherit; }
 
-  /* navigation */
+  /* ── nav ──────────────────────────────────────────────────────── */
   nav {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    margin-bottom: 6rem;
-    font-size: 0.875rem;
-    letter-spacing: 0.01em;
+    padding: 1.75rem 0;
+    font-family: var(--mono);
+    font-size: 0.8125rem;
+    letter-spacing: 0.02em;
+    border-bottom: 1px solid var(--line);
   }
-
   nav .mark {
-    font-weight: 500;
-    letter-spacing: -0.01em;
-    color: var(--ink);
+    font-family: var(--serif);
+    font-size: 1.35rem;
+    letter-spacing: 0.01em;
     text-decoration: none;
-  }
-
-  nav .right {
-    color: var(--muted);
-    display: flex;
-    gap: 1.5rem;
-    align-items: baseline;
-  }
-
-  nav a {
-    color: var(--muted);
-    text-decoration: none;
-    transition: color 0.15s ease;
-  }
-
-  nav a:hover { color: var(--ink); }
-
-  /* hero */
-  h1 {
-    font-family: "Iowan Old Style", "Palatino Linotype", Palatino, "Times New Roman", Georgia, serif;
-    font-size: clamp(2.625rem, 7vw, 4.25rem);
-    line-height: 1.04;
-    letter-spacing: -0.02em;
-    font-weight: 400;
-    margin-bottom: 2rem;
-  }
-
-  .lede {
-    font-size: 1.1875rem;
-    line-height: 1.5;
     color: var(--ink);
-    max-width: 30rem;
-    margin-bottom: 3.5rem;
-  }
-
-  /* live state strip — gestures at what the product produces */
-  .now-playing {
     display: flex;
     align-items: center;
-    gap: 0.75rem;
-    font-family: ui-monospace, "SF Mono", "JetBrains Mono", Menlo, Monaco, monospace;
-    font-size: 0.8125rem;
-    color: var(--muted);
-    margin-bottom: 6rem;
-    padding-bottom: 2rem;
-    border-bottom: 1px solid var(--rule);
-    flex-wrap: wrap;
+    gap: 0.6rem;
   }
-
-  .now-playing .label {
-    color: var(--ink);
-    font-weight: 500;
+  nav .led {
+    width: 8px; height: 8px; border-radius: 50%;
+    background: var(--live);
+    box-shadow: 0 0 0 0 rgba(121, 217, 138, 0.6);
+    animation: pulse 2.6s ease-out infinite;
   }
-
-  .dot {
-    width: 6px;
-    height: 6px;
-    border-radius: 50%;
-    background: var(--accent);
-    flex-shrink: 0;
+  @keyframes pulse {
+    0%   { box-shadow: 0 0 0 0 rgba(121, 217, 138, 0.5); }
+    70%  { box-shadow: 0 0 0 7px rgba(121, 217, 138, 0); }
+    100% { box-shadow: 0 0 0 0 rgba(121, 217, 138, 0); }
   }
+  nav .right { display: flex; gap: 1.75rem; align-items: center; color: var(--muted); }
+  nav .right a { text-decoration: none; transition: color 0.18s ease; }
+  nav .right a:hover { color: var(--ink); }
+  nav .proj { color: var(--muted); }
+  nav .proj a { color: var(--ink-dim); text-decoration: underline; text-decoration-color: var(--line-2); text-underline-offset: 2px; }
 
-  /* sections */
-  section { margin-bottom: 5rem; }
-
-  h2 {
-    font-family: "Iowan Old Style", "Palatino Linotype", Palatino, Georgia, serif;
-    font-size: 1.625rem;
-    line-height: 1.2;
-    letter-spacing: -0.01em;
-    font-weight: 400;
-    margin-bottom: 1.5rem;
-  }
-
-  p {
-    margin-bottom: 1.125rem;
-    max-width: 36rem;
-  }
-
-  p:last-child { margin-bottom: 0; }
-
-  em {
-    font-family: "Iowan Old Style", "Palatino Linotype", Palatino, Georgia, serif;
-    font-style: italic;
-    font-size: 1.02em;
-  }
-
-  /* three-up components grid */
-  .components {
+  /* ── hero ─────────────────────────────────────────────────────── */
+  .hero {
     display: grid;
-    grid-template-columns: 1fr;
-    gap: 2.5rem;
-    margin-top: 2rem;
+    grid-template-columns: 1.05fr 0.95fr;
+    gap: 3.5rem;
+    align-items: center;
+    padding: 6rem 0 5rem;
   }
-
-  @media (min-width: 640px) {
-    .components { grid-template-columns: repeat(3, 1fr); gap: 2rem; }
-  }
-
-  .component .step {
-    font-family: ui-monospace, "SF Mono", Menlo, monospace;
-    font-size: 0.6875rem;
-    letter-spacing: 0.08em;
+  .kicker {
+    font-family: var(--mono);
+    font-size: 0.72rem;
+    letter-spacing: 0.22em;
     text-transform: uppercase;
-    color: var(--accent);
-    margin-bottom: 0.625rem;
+    color: var(--ember-2);
+    margin-bottom: 1.5rem;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.6rem;
   }
-
-  .component h3 {
-    font-family: "Iowan Old Style", "Palatino Linotype", Palatino, Georgia, serif;
-    font-size: 1.125rem;
+  .kicker::before {
+    content: ""; width: 26px; height: 1px; background: var(--ember);
+    display: inline-block;
+  }
+  h1 {
+    font-family: var(--serif);
     font-weight: 400;
-    margin-bottom: 0.625rem;
-    letter-spacing: -0.005em;
+    font-size: clamp(3.1rem, 8vw, 5.6rem);
+    line-height: 0.98;
+    letter-spacing: -0.015em;
+    margin-bottom: 1.75rem;
   }
-
-  .component p {
-    font-size: 0.9375rem;
-    color: var(--ink);
-    margin: 0;
-    line-height: 1.55;
-  }
-
-  .component code {
-    font-family: ui-monospace, "SF Mono", Menlo, monospace;
-    font-size: 0.85em;
-    background: var(--paper-2);
-    padding: 0.0625rem 0.375rem;
-    border-radius: 2px;
-  }
-
-  /* code block */
-  pre {
-    font-family: ui-monospace, "SF Mono", "JetBrains Mono", Menlo, Monaco, monospace;
-    font-size: 0.8125rem;
-    line-height: 1.65;
-    background: var(--paper-2);
-    border: 1px solid var(--rule);
-    padding: 1.5rem;
-    overflow-x: auto;
-    margin: 1.75rem 0 0;
-    border-radius: 3px;
-    color: var(--ink);
-  }
-
-  pre .tag { color: var(--accent); }
-  pre .key { color: var(--muted); }
-
-  /* sibling project block */
-  .sibling {
-    border-top: 1px solid var(--rule);
-    padding-top: 4rem;
-    margin-top: 5rem;
-  }
-
-  .sibling .pair {
-    font-family: "Iowan Old Style", "Palatino Linotype", Palatino, Georgia, serif;
+  h1 em {
     font-style: italic;
-    font-size: 1.375rem;
-    line-height: 1.4;
-    margin: 2rem 0 0;
-    color: var(--ink);
-    letter-spacing: -0.005em;
+    color: var(--ember-2);
+    text-shadow: 0 0 40px rgba(240, 87, 31, 0.35);
   }
-
-  /* install */
-  .install-cmd {
-    font-family: ui-monospace, "SF Mono", "JetBrains Mono", Menlo, Monaco, monospace;
-    font-size: 0.875rem;
-    line-height: 1.7;
-    background: var(--ink);
-    color: var(--paper);
-    padding: 1rem 1.25rem;
-    border-radius: 3px;
-    margin: 1.5rem 0 0;
-    max-width: 100%;
-    overflow-x: auto;
+  .lede {
+    font-size: 1.22rem;
+    line-height: 1.5;
+    color: var(--ink-dim);
+    max-width: 30rem;
+    margin-bottom: 2.5rem;
   }
+  .cta-row { display: flex; gap: 1rem; flex-wrap: wrap; align-items: center; }
+  .btn {
+    font-family: var(--mono);
+    font-size: 0.82rem;
+    letter-spacing: 0.02em;
+    text-decoration: none;
+    padding: 0.85rem 1.4rem;
+    border-radius: 4px;
+    transition: transform 0.16s ease, box-shadow 0.2s ease, background 0.2s ease;
+    display: inline-flex; align-items: center; gap: 0.55rem;
+  }
+  .btn-primary {
+    background: var(--ember);
+    color: #160f0b;
+    font-weight: 500;
+    box-shadow: 0 0 0 1px rgba(240,87,31,0.3), 0 10px 30px -10px rgba(240,87,31,0.6);
+  }
+  .btn-primary:hover { transform: translateY(-2px); box-shadow: 0 0 0 1px rgba(240,87,31,0.5), 0 16px 40px -12px rgba(240,87,31,0.75); }
+  .btn-ghost { color: var(--ink-dim); border: 1px solid var(--line-2); }
+  .btn-ghost:hover { color: var(--ink); border-color: var(--ink-dim); transform: translateY(-2px); }
 
-  .small {
-    font-size: 0.875rem;
+  /* ── instrument readout panel ─────────────────────────────────── */
+  .panel {
+    background: linear-gradient(180deg, var(--bg-2), #14100d);
+    border: 1px solid var(--line-2);
+    border-radius: 10px;
+    box-shadow: 0 40px 80px -30px rgba(0,0,0,0.7), inset 0 1px 0 rgba(236,230,218,0.04);
+    overflow: hidden;
+  }
+  .panel-bar {
+    display: flex; align-items: center; gap: 0.5rem;
+    padding: 0.75rem 1rem;
+    border-bottom: 1px solid var(--line);
+    font-family: var(--mono);
+    font-size: 0.68rem;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
     color: var(--muted);
-    margin-top: 1.5rem;
+    background: rgba(0,0,0,0.2);
+  }
+  .panel-bar .dots { display: flex; gap: 6px; }
+  .panel-bar .dots i { width: 9px; height: 9px; border-radius: 50%; display: inline-block; }
+  .panel-bar .dots i:nth-child(1) { background: #e0533a; }
+  .panel-bar .dots i:nth-child(2) { background: #d3a02e; }
+  .panel-bar .dots i:nth-child(3) { background: #6fbf5d; }
+  .panel-bar .title { margin-left: auto; }
+
+  .scope {
+    position: relative;
+    height: 96px;
+    background:
+      radial-gradient(120% 140% at 50% 120%, rgba(240,87,31,0.10), transparent 60%),
+      #0c0a08;
+    border-bottom: 1px solid var(--line);
+  }
+  .scope canvas { display: block; width: 100%; height: 100%; }
+
+  .readout { padding: 1.25rem 1.25rem 1.4rem; font-family: var(--mono); }
+  .readout .live-tag {
+    display: inline-flex; align-items: center; gap: 0.5rem;
+    font-size: 0.66rem; letter-spacing: 0.18em; text-transform: uppercase;
+    color: var(--live); margin-bottom: 0.9rem;
+  }
+  .readout .live-tag .led { width: 6px; height: 6px; border-radius: 50%; background: var(--live); animation: pulse 2.6s ease-out infinite; }
+  .readout .state {
+    font-size: 0.98rem;
+    line-height: 1.55;
+    color: var(--ink);
+    min-height: 3.1em;
+    transition: opacity 0.4s ease;
+  }
+  .readout .state .accent { color: var(--ember-2); }
+  .readout .foot {
+    margin-top: 1rem; padding-top: 0.85rem; border-top: 1px solid var(--line);
+    display: flex; justify-content: space-between;
+    font-size: 0.7rem; color: var(--muted); letter-spacing: 0.08em;
   }
 
-  /* links */
+  /* ── section scaffolding ──────────────────────────────────────── */
+  section { padding: 4.5rem 0; border-top: 1px solid var(--line); }
+  .eyebrow {
+    font-family: var(--mono);
+    font-size: 0.72rem; letter-spacing: 0.2em; text-transform: uppercase;
+    color: var(--ember-2); margin-bottom: 1.1rem;
+  }
+  h2 {
+    font-family: var(--serif);
+    font-weight: 400;
+    font-size: clamp(2rem, 4vw, 2.9rem);
+    line-height: 1.08;
+    letter-spacing: -0.01em;
+    margin-bottom: 1.5rem;
+    max-width: 22ch;
+  }
+  h2 em { font-style: italic; color: var(--ember-2); }
+  p { margin-bottom: 1.1rem; max-width: 40rem; color: var(--ink-dim); }
+  p:last-child { margin-bottom: 0; }
+  p strong { color: var(--ink); font-weight: 600; }
+  em { font-family: var(--serif); font-style: italic; font-size: 1.05em; color: var(--ink); }
+  code {
+    font-family: var(--mono); font-size: 0.84em;
+    background: var(--bg-3); color: var(--ember-2);
+    padding: 0.1rem 0.4rem; border-radius: 3px;
+    border: 1px solid var(--line);
+  }
+
+  /* ── "different room" cards ───────────────────────────────────── */
+  .quote-prompt {
+    font-family: var(--serif); font-style: italic;
+    font-size: clamp(1.5rem, 3.5vw, 2.1rem);
+    color: var(--ink); margin: 0.5rem 0 2.5rem;
+  }
+  .cards { display: grid; grid-template-columns: 1fr; gap: 1.25rem; }
+  @media (min-width: 760px) { .cards { grid-template-columns: repeat(3, 1fr); } }
+  .card {
+    background: linear-gradient(180deg, var(--bg-2), #14100d);
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    padding: 1.5rem;
+    position: relative;
+    transition: transform 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease;
+  }
+  .card:hover { transform: translateY(-4px); border-color: var(--line-2); box-shadow: 0 24px 50px -28px rgba(0,0,0,0.8); }
+  .card .tab {
+    display: inline-block;
+    font-family: var(--mono); font-size: 0.66rem; letter-spacing: 0.12em; text-transform: uppercase;
+    color: var(--ember-2); margin-bottom: 1rem;
+    padding-bottom: 0.4rem; border-bottom: 1px solid var(--ember-soft);
+  }
+  .card.dim .tab { color: var(--muted); border-bottom-color: var(--line); }
+  .card h3 { font-family: var(--serif); font-weight: 400; font-size: 1.45rem; margin-bottom: 0.6rem; color: var(--ink); }
+  .card p { font-size: 0.92rem; margin: 0; color: var(--ink-dim); }
+  .card em { font-size: 0.95em; }
+
+  /* ── how it works: signals → dials → reframe ──────────────────── */
+  .pipeline { display: grid; grid-template-columns: 1fr; gap: 1.25rem; margin-top: 0.5rem; }
+  @media (min-width: 760px) { .pipeline { grid-template-columns: repeat(3, 1fr); } }
+  .stage {
+    background: linear-gradient(180deg, var(--bg-2), #14100d);
+    border: 1px solid var(--line);
+    border-radius: 8px; padding: 1.5rem;
+  }
+  .stage .num { font-family: var(--mono); font-size: 0.7rem; letter-spacing: 0.1em; color: var(--ember-2); }
+  .stage h3 { font-family: var(--serif); font-weight: 400; font-size: 1.4rem; margin: 0.5rem 0 0.7rem; color: var(--ink); }
+  .stage p { font-size: 0.92rem; margin: 0; }
+
+  /* ── the four dials (segmented level meters) ──────────────────── */
+  .dials {
+    margin-top: 2.25rem;
+    background: linear-gradient(180deg, var(--bg-2), #110d0a);
+    border: 1px solid var(--line-2);
+    border-radius: 10px;
+    padding: 1.75rem;
+    box-shadow: 0 30px 70px -36px rgba(0,0,0,0.8), inset 0 1px 0 rgba(236,230,218,0.04);
+  }
+  .dials .dials-head {
+    display: flex; justify-content: space-between; align-items: baseline;
+    font-family: var(--mono); font-size: 0.68rem; letter-spacing: 0.14em; text-transform: uppercase;
+    color: var(--muted); margin-bottom: 1.5rem;
+    padding-bottom: 0.9rem; border-bottom: 1px solid var(--line);
+  }
+  .dial { display: grid; grid-template-columns: 7.5rem 1fr 5.5rem; align-items: center; gap: 1rem; padding: 0.7rem 0; }
+  .dial + .dial { border-top: 1px solid var(--line); }
+  .dial .name { font-family: var(--mono); font-size: 0.78rem; letter-spacing: 0.06em; text-transform: uppercase; color: var(--ink); }
+  .dial .meter { display: flex; gap: 4px; }
+  .dial .meter i {
+    flex: 1; height: 16px; border-radius: 2px;
+    background: var(--bg-3); border: 1px solid var(--line);
+    opacity: 0.55; transform: scaleY(0.7);
+    transition: background 0.3s ease, box-shadow 0.3s ease, opacity 0.3s ease, transform 0.3s ease;
+  }
+  .dial .meter i.on {
+    background: var(--ember); border-color: var(--ember-2);
+    box-shadow: 0 0 10px rgba(240,87,31,0.6);
+    opacity: 1; transform: scaleY(1);
+  }
+  .dial .val { font-family: var(--mono); font-size: 0.82rem; color: var(--ember-2); text-align: right; }
+  .dials .note { font-family: var(--mono); font-size: 0.7rem; color: var(--muted); margin-top: 1.25rem; padding-top: 1rem; border-top: 1px solid var(--line); }
+
+  /* ── code / user_state block ──────────────────────────────────── */
+  .terminal { margin-top: 1.75rem; }
+  pre {
+    font-family: var(--mono);
+    font-size: 0.8rem; line-height: 1.7;
+    background: #0c0a08; color: var(--ink-dim);
+    padding: 1.5rem; overflow-x: auto;
+    border: none; border-top: 1px solid var(--line);
+    border-radius: 0 0 10px 10px;
+    margin: 0;
+  }
+  pre .tag { color: var(--ember-2); }
+  pre .key { color: var(--live); }
+  pre .com { color: var(--muted); }
+  pre .str { color: var(--ink); }
+
+  /* ── install ──────────────────────────────────────────────────── */
+  .install-panel { margin-top: 1.75rem; }
+  .install-panel pre {
+    border-radius: 0 0 10px 10px;
+    color: var(--ink);
+  }
+  .install-panel pre .prompt { color: var(--ember-2); -webkit-user-select: none; user-select: none; }
+  .small { font-family: var(--sans); font-size: 0.9rem; color: var(--muted); margin-top: 1.5rem; max-width: 42rem; }
+
   a.inline {
     color: var(--ink);
-    text-decoration: underline;
-    text-decoration-thickness: 1px;
-    text-underline-offset: 3px;
-    text-decoration-color: rgba(26, 26, 26, 0.3);
-    transition: text-decoration-color 0.15s ease;
+    text-decoration: underline; text-decoration-thickness: 1px;
+    text-underline-offset: 3px; text-decoration-color: var(--ember);
+    transition: text-decoration-color 0.16s ease, color 0.16s ease;
   }
+  a.inline:hover { color: var(--ember-2); text-decoration-color: var(--ember-2); }
 
-  a.inline:hover { text-decoration-color: var(--ink); }
+  /* ── sibling ──────────────────────────────────────────────────── */
+  .sibling .pair {
+    font-family: var(--serif); font-style: italic;
+    font-size: clamp(1.6rem, 3.5vw, 2.3rem);
+    line-height: 1.3; color: var(--ink);
+    margin-top: 2rem;
+  }
+  .sibling .pair .a { color: var(--ember-2); }
 
-  /* footer */
+  /* ── footer ───────────────────────────────────────────────────── */
   footer {
-    margin-top: 7rem;
-    padding-top: 2rem;
-    border-top: 1px solid var(--rule);
-    display: flex;
-    justify-content: space-between;
-    align-items: baseline;
-    font-size: 0.8125rem;
-    color: var(--muted);
-    font-family: ui-monospace, "SF Mono", Menlo, monospace;
-    letter-spacing: 0.01em;
-    flex-wrap: wrap;
-    gap: 1rem;
+    padding: 3rem 0;
+    border-top: 1px solid var(--line);
+    display: flex; justify-content: space-between; align-items: baseline;
+    font-family: var(--mono); font-size: 0.76rem; color: var(--muted);
+    letter-spacing: 0.02em; flex-wrap: wrap; gap: 1rem;
   }
-
-  footer a {
-    color: var(--muted);
-    text-decoration: none;
-  }
-
+  footer a { text-decoration: none; transition: color 0.16s ease; }
   footer a:hover { color: var(--ink); }
   footer .right { display: flex; gap: 1.5rem; }
 
-  @media (max-width: 480px) {
-    body { padding: 3rem 1.5rem 4rem; }
-    nav { margin-bottom: 4rem; }
-    nav .right span { display: none; }
-    section { margin-bottom: 4rem; }
+  /* ── reveal-on-scroll ─────────────────────────────────────────── */
+  .reveal { opacity: 0; transform: translateY(22px); transition: opacity 0.7s cubic-bezier(.2,.7,.2,1), transform 0.7s cubic-bezier(.2,.7,.2,1); }
+  .reveal.in { opacity: 1; transform: none; }
+
+  /* hero load stagger */
+  .load { opacity: 0; transform: translateY(16px); animation: rise 0.85s cubic-bezier(.2,.7,.2,1) forwards; }
+  .load.d1 { animation-delay: 0.05s; }
+  .load.d2 { animation-delay: 0.16s; }
+  .load.d3 { animation-delay: 0.27s; }
+  .load.d4 { animation-delay: 0.38s; }
+  .load.d5 { animation-delay: 0.5s; }
+  @keyframes rise { to { opacity: 1; transform: none; } }
+
+  :focus-visible { outline: 2px solid var(--ember-2); outline-offset: 3px; border-radius: 2px; }
+
+  /* ── responsive ───────────────────────────────────────────────── */
+  @media (max-width: 880px) {
+    .hero { grid-template-columns: 1fr; gap: 2.75rem; padding: 4rem 0 3.5rem; }
+  }
+  @media (max-width: 600px) {
+    .wrap { padding: 0 1.4rem; }
+    nav .proj { display: none; }
+    section { padding: 3.5rem 0; }
+    .dial { grid-template-columns: 5.5rem 1fr; }
+    .dial .val { grid-column: 2; text-align: left; }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after { animation-duration: 0.001ms !important; animation-iteration-count: 1 !important; transition-duration: 0.001ms !important; scroll-behavior: auto; }
+    .load, .reveal { opacity: 1 !important; transform: none !important; }
   }
 </style>
 </head>
 <body>
 
-<nav>
-  <a href="/" class="mark">Cadence</a>
-  <div class="right">
-    <a href="#install" data-goatcounter-click="install-nav">install</a>
-    <a href="https://github.com/cullumco/cadence">github</a>
-    <span>a <a href="https://cullum.co" style="text-decoration: underline; text-decoration-color: rgba(107,107,102,0.4); text-underline-offset: 2px;">Cullum&amp;Co</a> project</span>
-  </div>
-</nav>
+<div class="bg-field"></div>
+<div class="bg-grid"></div>
+<div class="bg-grain"></div>
 
-<h1>Agents that read the room.</h1>
+<div class="wrap">
 
-<p class="lede">The missing input is not another instruction. It is the room around the prompt.</p>
-
-<div class="now-playing">
-  <span class="dot"></span>
-  <span class="label">example state</span>
-  <span id="example-state" style="transition: opacity .4s ease;">Converge · vibe: aggressive, energetic · pace fast</span>
-  <span style="margin-left:auto;">macOS · alpha</span>
-</div>
-
-<section>
-  <h2>Your prompt is not the whole ask.</h2>
-  <p>It doesn't say you are tired but still shipping. It doesn't say you just came back from a long break, or that the repo is clean, or that you want the agent to stop asking permission and make the call.</p>
-  <p>Cadence gives Claude Code that missing layer: ambient signals, a self-reported state, four simple dials, and a lens for reading what you meant.</p>
-  <p>Claude Code is the alpha surface. The product is the context layer underneath it.</p>
-</section>
-
-<section>
-  <h2>Same prompt, different room.</h2>
-  <p class="pair" style="font-size:1.125rem; margin:0 0 2rem;">"how should I structure the retry logic?"</p>
-  <div class="components">
-    <div class="component">
-      <div class="step">Without Cadence</div>
-      <h3>The survey.</h3>
-      <p>Every prompt reads the same. Four options, a trade-off table, and a closing <em>"Would you like me to implement one of these?"</em></p>
+  <nav>
+    <a href="/" class="mark"><span class="led"></span>Cadence</a>
+    <div class="right">
+      <a href="#install" data-goatcounter-click="install-nav">install</a>
+      <a href="https://github.com/cullumco/cadence">github</a>
+      <span class="proj">a <a href="https://cullum.co">Cullum&amp;Co</a> project</span>
     </div>
-    <div class="component">
-      <div class="step">Shipping cadence</div>
-      <h3>The call, made.</h3>
-      <p>Hardcore at 3 commits/hr, state: <code>"ship mode"</code>. Exponential backoff with jitter, three attempts, here's the diff, tests pass.</p>
-    </div>
-    <div class="component">
-      <div class="step">Thinking cadence</div>
-      <h3>Room to explore.</h3>
-      <p>Ambient music, state: <code>"thinking through tradeoffs"</code>. Options laid out patiently, trade-offs actually explored, no pressure to pick yet.</p>
-    </div>
-  </div>
-  <p class="small">Same words. The room around them changed, and the agent finally saw it. <a href="#install" class="inline" data-goatcounter-click="install-impact">Install it</a> and feel the difference in two minutes.</p>
-</section>
+  </nav>
 
-<section>
-  <h2>How it works.</h2>
-  <div class="components">
-    <div class="component">
-      <div class="step">01 — Signals</div>
-      <h3>Read the room.</h3>
-      <p>Time, weather, battery, Focus mode, git state, prompt rhythm, music, and self-report become visible context. The <code>/cadence:state</code> skill lets you say what you already know: <em>"two beers, shipping."</em></p>
+  <!-- ── hero ────────────────────────────────────────────────── -->
+  <header class="hero">
+    <div>
+      <span class="kicker load d1">Ambient context layer · Claude Code</span>
+      <h1 class="load d2">Agents that<br><em>read the room.</em></h1>
+      <p class="lede load d3">The missing input is not another instruction. It is the room around the prompt.</p>
+      <div class="cta-row load d4">
+        <a href="#install" class="btn btn-primary" data-goatcounter-click="install-hero">Install the plugin →</a>
+        <a href="https://github.com/cullumco/cadence" class="btn btn-ghost">View source</a>
+      </div>
     </div>
-    <div class="component">
-      <div class="step">02 — Dials</div>
-      <h3>Four knobs, not one mode.</h3>
-      <p>Pace, tone, posture, proactivity — each inferred independently, or pinned by hand. High-energy-but-mellow reads as <em>fast pace, warm tone</em>. No single label could.</p>
-    </div>
-    <div class="component">
-      <div class="step">03 — Reframe</div>
-      <h3>A lens, not a leash.</h3>
-      <p>A sentence tells the agent how to <em>read</em> your prompt given the cadence. A conservative Stop hook catches soft endings when you asked it to ship.</p>
-    </div>
-  </div>
-</section>
 
-<section>
-  <h2>What the agent actually sees.</h2>
-  <p>Every prompt carries a state block. Inspectable. Diffable. You always see exactly what your agent saw.</p>
-  <pre><span class="tag">&lt;user_state&gt;</span>
+    <div class="panel load d5">
+      <div class="panel-bar">
+        <span class="dots"><i></i><i></i><i></i></span>
+        <span class="title">user_state · live</span>
+      </div>
+      <div class="scope"><canvas id="scope"></canvas></div>
+      <div class="readout">
+        <span class="live-tag"><span class="led"></span>now reading</span>
+        <div class="state" id="example-state">
+          <span class="accent">Converge</span> · vibe: aggressive, energetic · pace fast
+        </div>
+        <div class="foot"><span>macOS</span><span>alpha</span></div>
+      </div>
+    </div>
+  </header>
+
+  <!-- ── the ask ─────────────────────────────────────────────── -->
+  <section class="reveal">
+    <div class="eyebrow">The premise</div>
+    <h2>Your prompt is not the whole ask.</h2>
+    <p>It doesn't say you are tired but still shipping. It doesn't say you just came back from a long break, or that the repo is clean, or that you want the agent to stop asking permission and make the call.</p>
+    <p>Cadence gives Claude Code that missing layer: ambient signals, a self-reported state, four simple dials, and a lens for reading what you meant.</p>
+    <p><strong>Claude Code is the alpha surface. The product is the context layer underneath it.</strong></p>
+  </section>
+
+  <!-- ── same prompt, different room ──────────────────────────── -->
+  <section class="reveal">
+    <div class="eyebrow">The difference</div>
+    <h2>Same prompt, <em>different room.</em></h2>
+    <p class="quote-prompt">"how should I structure the retry logic?"</p>
+    <div class="cards">
+      <div class="card dim">
+        <span class="tab">Without Cadence</span>
+        <h3>The survey.</h3>
+        <p>Every prompt reads the same. Four options, a trade-off table, and a closing <em>"Would you like me to implement one of these?"</em></p>
+      </div>
+      <div class="card">
+        <span class="tab">Shipping cadence</span>
+        <h3>The call, made.</h3>
+        <p>Hardcore at 3 commits/hr, state: <code>"ship mode"</code>. Exponential backoff with jitter, three attempts, here's the diff, tests pass.</p>
+      </div>
+      <div class="card">
+        <span class="tab">Thinking cadence</span>
+        <h3>Room to explore.</h3>
+        <p>Ambient music, state: <code>"thinking through tradeoffs"</code>. Options laid out patiently, trade-offs actually explored, no pressure to pick yet.</p>
+      </div>
+    </div>
+    <p class="small">Same words. The room around them changed, and the agent finally saw it. <a href="#install" class="inline" data-goatcounter-click="install-impact">Install it</a> and feel the difference in two minutes.</p>
+  </section>
+
+  <!-- ── how it works ────────────────────────────────────────── -->
+  <section class="reveal">
+    <div class="eyebrow">How it works</div>
+    <h2>Signals in. A reading out.</h2>
+    <div class="pipeline">
+      <div class="stage">
+        <span class="num">01 — Signals</span>
+        <h3>Read the room.</h3>
+        <p>Time, weather, battery, Focus mode, git state, prompt rhythm, music, and self-report become visible context. The <code>/cadence:state</code> skill lets you say what you already know: <em>"two beers, shipping."</em></p>
+      </div>
+      <div class="stage">
+        <span class="num">02 — Dials</span>
+        <h3>Four knobs, not one mode.</h3>
+        <p>Pace, tone, posture, proactivity — each inferred independently, or pinned by hand. High-energy-but-mellow reads as <em>fast pace, warm tone</em>. No single label could.</p>
+      </div>
+      <div class="stage">
+        <span class="num">03 — Reframe</span>
+        <h3>A lens, not a leash.</h3>
+        <p>A sentence tells the agent how to <em>read</em> your prompt given the cadence. A conservative Stop hook catches soft endings when you asked it to ship.</p>
+      </div>
+    </div>
+
+    <div class="dials" id="dials">
+      <div class="dials-head"><span>Cadence dials</span><span>inferred · advisory</span></div>
+      <div class="dial" data-level="9">
+        <span class="name">Pace</span>
+        <span class="meter" data-fill></span>
+        <span class="val">fast</span>
+      </div>
+      <div class="dial" data-level="7">
+        <span class="name">Tone</span>
+        <span class="meter" data-fill></span>
+        <span class="val">warm</span>
+      </div>
+      <div class="dial" data-level="6">
+        <span class="name">Posture</span>
+        <span class="meter" data-fill></span>
+        <span class="val">steady</span>
+      </div>
+      <div class="dial" data-level="9">
+        <span class="name">Proactivity</span>
+        <span class="meter" data-fill></span>
+        <span class="val">act freely</span>
+      </div>
+      <p class="note">Four independent dials — a signal usually moves one, not all four. The mix is the point.</p>
+    </div>
+  </section>
+
+  <!-- ── what the agent sees ─────────────────────────────────── -->
+  <section class="reveal">
+    <div class="eyebrow">Transparency</div>
+    <h2>What the agent <em>actually</em> sees.</h2>
+    <p>Every prompt carries a state block. Inspectable. Diffable. You always see exactly what your agent saw.</p>
+    <div class="panel terminal">
+      <div class="panel-bar">
+        <span class="dots"><i></i><i></i><i></i></span>
+        <span class="title">injected · UserPromptSubmit</span>
+      </div>
+<pre><span class="tag">&lt;user_state&gt;</span>
   <span class="key">signals:</span>
-    music: "You Fail Me" — "Converge" (Spotify)
+    music: <span class="str">"You Fail Me" — "Converge" (Spotify)</span>
     vibe: aggressive, energetic
-    self_report: "two beers, shipping"
+    self_report: <span class="str">"two beers, shipping"</span>
     context: saturday afternoon, rainy, focus on
     git: clean tree
     activity: { prompt_len=47 }
-  <span class="key">cadence:</span>  <span class="key"># inferred from signals, advisory</span>
+  <span class="key">cadence:</span>  <span class="com"># inferred from signals, advisory</span>
     { pace=fast tone=warm posture=decisive proactivity=act-freely }
   <span class="key">reframe:</span> read my prompt as someone in this cadence meant it: keep
     it fast and tight — answer first, trim the preamble; make the call rather
@@ -377,57 +595,182 @@
     the tone warm and casual. If my words clearly mean otherwise, follow my
     words.
 <span class="tag">&lt;/user_state&gt;</span></pre>
-</section>
+    </div>
+  </section>
 
-<section id="install">
-  <h2>Try it.</h2>
-  <p>Cadence ships as a Claude Code plugin. Four commands to install, then one skill to see what Cadence sees.</p>
-  <pre class="install-cmd">/plugin marketplace add cullumco/cadence
-/plugin install cadence@cadence
-/reload-plugins
-/cadence:try</pre>
-  <p class="small">macOS only for the alpha — the signals read the Mac around you. Then set a self-report: <code>/cadence:state shipping, locked in</code>. No Spotify login, no API key — music is read at the OS level when available.</p>
-</section>
+  <!-- ── install ─────────────────────────────────────────────── -->
+  <section class="reveal" id="install">
+    <div class="eyebrow">Get started</div>
+    <h2>Try it.</h2>
+    <p>Cadence ships as a Claude Code plugin. Four commands to install, then one skill to see what Cadence sees.</p>
+    <div class="panel install-panel">
+      <div class="panel-bar">
+        <span class="dots"><i></i><i></i><i></i></span>
+        <span class="title">claude code</span>
+      </div>
+<pre><span class="prompt">&gt;</span> /plugin marketplace add cullumco/cadence
+<span class="prompt">&gt;</span> /plugin install cadence@cadence
+<span class="prompt">&gt;</span> /reload-plugins
+<span class="prompt">&gt;</span> /cadence:try</pre>
+    </div>
+    <p class="small">macOS only for the alpha — the signals read the Mac around you. Then set a self-report: <code>/cadence:state shipping, locked in</code>. No Spotify login, no API key — music is read at the OS level when available.</p>
+  </section>
 
-<section class="sibling">
-  <h2>One channel of many.</h2>
-  <p>Cadence is part of a larger bet: <strong>context surface area is the bottleneck for agentic engineering, not model capability.</strong> The prompt is a sliver of what the agent should see.</p>
-  <p><a href="https://kettel.vercel.app" class="inline">Kettel</a> argues the same claim from a different angle — structured, multi-author context, ratified by teams before agents execute.</p>
-  <p class="pair">Kettel makes the room. Cadence reads it.</p>
-</section>
+  <!-- ── sibling ─────────────────────────────────────────────── -->
+  <section class="reveal sibling">
+    <div class="eyebrow">The larger bet</div>
+    <h2>One channel of many.</h2>
+    <p>Cadence is part of a larger bet: <strong>context surface area is the bottleneck for agentic engineering, not model capability.</strong> The prompt is a sliver of what the agent should see.</p>
+    <p><a href="https://kettel.vercel.app" class="inline">Kettel</a> argues the same claim from a different angle — structured, multi-author context, ratified by teams before agents execute.</p>
+    <p class="pair"><span class="a">Kettel</span> makes the room. <span class="a">Cadence</span> reads it.</p>
+  </section>
 
-<footer>
-  <span>© Cullum&amp;Co · 2026</span>
-  <span class="right">
-    <a href="https://github.com/cullumco/cadence">github</a>
-    <a href="mailto:scott@cullum.co">contact</a>
-  </span>
-</footer>
+  <footer>
+    <span>© Cullum&amp;Co · 2026</span>
+    <span class="right">
+      <a href="https://github.com/cullumco/cadence">github</a>
+      <a href="mailto:scott@cullum.co">contact</a>
+    </span>
+  </footer>
 
-<!-- Rotating example states. Every entry is what Cadence's real pipeline
-     emits for that artist (vibe words from the genre→affect table; pace from
-     energy; warm tone only for mellow vibes) — no invented combinations. -->
+</div>
+
+<!-- ── live readout: rotating examples + scope waveform ──────────
+     Every entry is what Cadence's real pipeline emits for that artist
+     (vibe words from the genre→affect table; pace from energy; warm
+     tone only for mellow vibes) — no invented combinations. The scope
+     amplitude/frequency is driven by each entry's energy. -->
 <script>
 (function () {
+  var reduce = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
   var EXAMPLES = [
-    "Converge · vibe: aggressive, energetic · pace fast",
-    "Run the Jewels · vibe: energetic, aggressive · pace fast",
-    "Brian Eno · vibe: ethereal, calm · pace deliberate · tone warm",
-    "Elder · vibe: dark, energetic · pace fast",
-    "Miles Davis · vibe: chilled, sexy · pace steady · tone warm",
-    "Broken Social Scene · vibe: chilled, happy, uplifting · pace steady · tone warm"
+    { artist: "Converge",            rest: " · vibe: aggressive, energetic · pace fast",              energy: 0.95 },
+    { artist: "Run the Jewels",      rest: " · vibe: energetic, aggressive · pace fast",              energy: 0.92 },
+    { artist: "Brian Eno",           rest: " · vibe: ethereal, calm · pace deliberate · tone warm",   energy: 0.20 },
+    { artist: "Elder",               rest: " · vibe: dark, energetic · pace fast",                    energy: 0.80 },
+    { artist: "Miles Davis",         rest: " · vibe: chilled, sexy · pace steady · tone warm",        energy: 0.38 },
+    { artist: "Broken Social Scene", rest: " · vibe: chilled, happy, uplifting · pace steady · tone warm", energy: 0.50 }
   ];
+
+  /* ── rotating state text ── */
   var el = document.getElementById("example-state");
-  if (!el) return;
-  var i = 0;
-  setInterval(function () {
-    i = (i + 1) % EXAMPLES.length;
-    el.style.opacity = 0;
-    setTimeout(function () {
-      el.textContent = EXAMPLES[i];
-      el.style.opacity = 1;
-    }, 400);
-  }, 4500);
+  var i = 0, energy = EXAMPLES[0].energy;
+  function render(e) {
+    el.innerHTML = '<span class="accent">' + e.artist + '</span>' + e.rest;
+  }
+  if (el && !reduce) {
+    setInterval(function () {
+      i = (i + 1) % EXAMPLES.length;
+      el.style.opacity = 0;
+      setTimeout(function () {
+        var e = EXAMPLES[i];
+        render(e);
+        energy = e.energy;
+        el.style.opacity = 1;
+      }, 400);
+    }, 4500);
+  }
+
+  /* ── scope waveform ── */
+  var canvas = document.getElementById("scope");
+  if (canvas && canvas.getContext) {
+    var ctx = canvas.getContext("2d");
+    var w = 0, h = 0, dpr = Math.min(window.devicePixelRatio || 1, 2);
+    function resize() {
+      var r = canvas.getBoundingClientRect();
+      w = r.width; h = r.height;
+      canvas.width = w * dpr; canvas.height = h * dpr;
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    }
+    resize();
+    window.addEventListener("resize", resize);
+
+    var amp = energy, t = 0;
+    function frame() {
+      amp += (energy - amp) * 0.05;             // ease toward current energy
+      ctx.clearRect(0, 0, w, h);
+      var mid = h / 2;
+      var grad = ctx.createLinearGradient(0, 0, w, 0);
+      grad.addColorStop(0, "rgba(240,87,31,0.15)");
+      grad.addColorStop(0.5, "rgba(255,122,69,1)");
+      grad.addColorStop(1, "rgba(240,87,31,0.15)");
+      ctx.lineWidth = 2;
+      ctx.strokeStyle = grad;
+      ctx.shadowColor = "rgba(240,87,31,0.7)";
+      ctx.shadowBlur = 8;
+      ctx.beginPath();
+      for (var x = 0; x <= w; x += 2) {
+        var p = x / w;
+        var base = Math.sin(p * (6 + amp * 16) + t) * (mid * 0.18 + amp * mid * 0.7);
+        var jit = (amp > 0.55) ? (Math.sin(p * 60 + t * 3) * amp * mid * 0.28) : 0;
+        var envelope = Math.sin(p * Math.PI);     // taper at edges
+        var y = mid + (base + jit) * envelope;
+        if (x === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+      }
+      ctx.stroke();
+      t += 0.04 + amp * 0.06;
+      raf = requestAnimationFrame(frame);
+    }
+    var raf;
+    if (reduce) {
+      // single static trace
+      energy = 0.5; amp = 0.5; frame(); cancelAnimationFrame(raf);
+    } else {
+      frame();
+    }
+  }
+})();
+</script>
+
+<!-- ── build the segmented dial meters + reveal on scroll ── -->
+<script>
+(function () {
+  var reduce = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  var SEG = 12;
+
+  // build segments
+  document.querySelectorAll(".dial").forEach(function (dial) {
+    var meter = dial.querySelector("[data-fill]");
+    for (var s = 0; s < SEG; s++) {
+      meter.appendChild(document.createElement("i"));
+    }
+  });
+
+  function fill(dial) {
+    var level = parseInt(dial.getAttribute("data-level"), 10) || 0;
+    var lit = Math.round((level / 10) * SEG);
+    var segs = dial.querySelectorAll(".meter i");
+    segs.forEach(function (seg, idx) {
+      var on = idx < lit;
+      if (reduce) { seg.classList.toggle("on", on); return; }
+      setTimeout(function () { seg.classList.toggle("on", on); }, idx * 55);
+    });
+  }
+
+  // reveal-on-scroll, and trigger dial fill when the dials block appears
+  if (!("IntersectionObserver" in window) || reduce) {
+    document.querySelectorAll(".reveal").forEach(function (n) { n.classList.add("in"); });
+    document.querySelectorAll(".dial").forEach(fill);
+    return;
+  }
+
+  var io = new IntersectionObserver(function (entries) {
+    entries.forEach(function (e) {
+      if (!e.isIntersecting) return;
+      e.target.classList.add("in");
+      if (e.target.id === "dials" || e.target.querySelector) {
+        var dialsBlock = e.target.id === "dials" ? e.target : e.target.querySelector("#dials");
+        if (dialsBlock && !dialsBlock.dataset.filled) {
+          dialsBlock.dataset.filled = "1";
+          dialsBlock.querySelectorAll(".dial").forEach(fill);
+        }
+      }
+      io.unobserve(e.target);
+    });
+  }, { threshold: 0.18 });
+
+  document.querySelectorAll(".reveal").forEach(function (n) { io.observe(n); });
 })();
 </script>
 
