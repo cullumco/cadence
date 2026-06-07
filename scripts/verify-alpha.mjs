@@ -41,6 +41,7 @@ run("npm", ["run", "build"]);
 // --strict — no equivalent false-positive there.
 run("claude", ["plugin", "validate", ".claude-plugin/plugin.json"]);
 run("claude", ["plugin", "validate", "--strict", ".claude-plugin/marketplace.json"]);
+run("node", ["scripts/validate-codex-plugin.mjs"]);
 run("npm", ["test"]);
 
 // The single source of truth for the release version; the installed
@@ -54,7 +55,9 @@ const files = new Set(pack.files.map((file) => file.path));
 const required = [
   ".claude-plugin/plugin.json",
   ".claude-plugin/marketplace.json",
+  ".codex-plugin/plugin.json",
   "hooks/hooks.json",
+  "skills/cadence/SKILL.md",
   "skills/try/SKILL.md",
   "skills/state/SKILL.md",
   "bin/cadence",
@@ -125,6 +128,8 @@ if (installSmoke) {
     await mustExist(join(installedRoot, "dist", "session-start.js"));
     await mustExist(join(installedRoot, "skills", "try", "SKILL.md"));
     await mustExist(join(installedRoot, "skills", "state", "SKILL.md"));
+    await mustExist(join(installedRoot, ".codex-plugin", "plugin.json"));
+    await mustExist(join(installedRoot, "skills", "cadence", "SKILL.md"));
 
     run(
       "node",

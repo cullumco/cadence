@@ -117,6 +117,19 @@ In Claude Code:
 /cadence:try
 ```
 
+In Codex, the alpha surface is skill-driven rather than automatic prompt hooks:
+
+```text
+Install the Cadence Codex plugin, then ask:
+Use Cadence to read the room.
+```
+
+The Codex plugin exposes the same `cadence` CLI-backed readout and state skills,
+but Codex does not yet receive Cadence through Claude-style prompt lifecycle
+hooks. That means Cadence is advisory in Codex today: ask Codex to use Cadence,
+or invoke the Cadence skill, and it will run `cadence test` and shape the reply
+from the current dials.
+
 Then set a self-report so you can feel the difference:
 
 ```text
@@ -194,9 +207,10 @@ signals -> cadence dials -> context envelope -> adapter-specific delivery
 ```
 
 Today the adapter-specific delivery is Claude Code's `UserPromptSubmit` and
-`Stop` hooks. The core signal types, cadence derivation, reframe lens, and
-rendering are kept separate so future adapters can deliver the same cadence
-state through other agent surfaces.
+`Stop` hooks. Codex now has a skill-based adapter that reads the same state on
+demand. The core signal types, cadence derivation, reframe lens, and rendering
+are kept separate so future adapters can deliver the same cadence state through
+other agent surfaces.
 
 ## Alpha release checklist
 
