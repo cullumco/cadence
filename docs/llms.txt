@@ -1,0 +1,26 @@
+# Cadence
+
+> Cadence is an ambient context layer for Claude Code. It reads the room — music, time of day, self-reported state, git activity — and injects that state into every prompt so the agent can respond like someone who actually knows what you're in the middle of.
+
+Cadence is built by Cullum & Co (https://cullum.co). It is a Claude Code plugin, currently a macOS-only alpha, distributed via npm as `@cullumco/cadence`.
+
+## What it does
+
+- Gathers ambient signals: currently playing music, time of day, system uptime, prompt timing, and optional self-reported state (`/cadence:state`).
+- Infers four cadence dials — pace, tone, posture, proactivity — and injects them into every prompt as advisory context.
+- Gives the agent a reframe lens: read the prompt the way someone in that state meant it, without overriding the user's literal words.
+
+## Who it's for
+
+Developer-practitioners who use Claude Code seriously — engineers, writers, and makers who are in their tools all day and notice when something is thoughtful versus generic.
+
+## Install
+
+- `/plugin marketplace add cullumco/cadence`
+- `/plugin install cadence@cadence`
+
+## Links
+
+- [Website](https://cadence.cullum.co/)
+- [GitHub](https://github.com/cullumco/cadence)
+- [npm](https://www.npmjs.com/package/@cullumco/cadence)
