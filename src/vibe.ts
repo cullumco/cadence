@@ -131,7 +131,7 @@ const GENRE_AFFECT: Record<string, Affect> = {
   choral: { energy: 0.3, valence: 0.5, acoustic: 0.95, moods: ["ethereal", "epic"] },
 
   // ── low energy, low valence → pace low; dark moods are render-only ───
-  //    (valence currently moves NO dial — see BACKLOG "energyToMode boundary")
+  //    (valence currently moves NO dial — see BACKLOG "Valence boundary")
   blues: { energy: 0.45, valence: 0.35, acoustic: 0.5, moods: ["sad", "dark"] },
   goth: { energy: 0.55, valence: 0.3, acoustic: 0.2, moods: ["dark"] },
   gothic: { energy: 0.55, valence: 0.3, acoustic: 0.2, moods: ["dark"] },

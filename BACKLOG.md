@@ -2,8 +2,8 @@
 
 Future versions and capabilities, captured during the Spotify→embodied-state pivot.
 Claude Code is the alpha surface; the product is the ambient context layer
-underneath it. V1 scope is deliberately small: **before-only** injection (a
-`UserPromptSubmit` reframe lens). Everything below is intentionally deferred.
+underneath it. The alpha has grown past the original before-only scope: sections
+marked SHIPPED are done; everything else is intentionally deferred.
 
 ---
 
@@ -27,7 +27,7 @@ grow Cadence from a prompt-prefix into a loop around the whole turn:
 
 ```
 UserPromptSubmit  → set the reading lens   (predictive, ambient)   ← V1, done
-PostToolUse       → refine / course-correct (observed work)         ← V2
+PostToolUse       → refine / course-correct (observed work)         ← V2, first cuts done
 Stop              → conservative finish-line guard                   ← V1.1, done
 ```
 
@@ -47,9 +47,12 @@ Answers to the open questions, as built:
 - **Tool output parsing:** sidestepped — we don't parse `tool_response` at
   all; we re-observe the repo with the existing git provider instead.
 
+**Second cut SHIPPED (v0.1.5):** destructive-git thrash — a streak of
+`reset --hard` / true force-pushes (not `--force-with-lease`) read off the
+command string, same once-per-transition discipline, threshold 2 in the window.
+
 **Next material events to consider** (same transition discipline):
 - failing-test transitions (needs a cheap, tool-agnostic "tests failed" read)
-- `git reset --hard` streaks / force-pushes → thrash signal
 - dirty-file count exploding mid-task
 
 ## V3 — Finish-line enforcement (Stop)
@@ -117,11 +120,11 @@ the roadmap above.
 
 ## Known nuance: intra-tier nudge collisions
 
-When two *ambient* nudges touch the same dial, the later one silently wins (e.g.
-late-night says low-pace, unplugged says high-pace → unplugged wins by source
-order). Across tiers this is intentional (self-report > ambient), but *within*
-ambient the ordering is arbitrary. Fine for now; if it bites, move to a
-weighted/voting model per dial instead of last-write-wins.
+When two *environment* nudges touch the same dial, the later one silently wins
+(e.g. late-night says low-pace, unplugged says high-pace → unplugged wins by
+source order). Across tiers this is intentional (self-report > environment), but
+*within* the environment tier the ordering is arbitrary. Fine for now; if it
+bites, move to a weighted/voting model per dial instead of last-write-wins.
 
 ## Git nudges — SHIPPED (2026-06-05)
 
@@ -150,8 +153,9 @@ privacy-adjacent stays off until `cadence enable <signal>`. `OPT_IN_PROVIDERS`
 is the single source of truth (CLI + signals view + providers). First opt-in
 signal on it: **typing tempo** — a rolling prompt-rhythm window in
 `activity.ts` (`computeTempo`), where rapid-fire short prompts → pace high and
-one long considered prompt → pace low. Next opt-in signals to slot in here:
-focused app, calendar density, esoteric (horoscope/moon).
+one long considered prompt → pace low. Focused app and esoteric (horoscope/
+moon) have since slotted in; calendar density was cut (see the esoteric
+section). Remaining candidate: ambient-light sensor.
 
 ## Other deferred provider/feature ideas
 
@@ -168,11 +172,11 @@ focused app, calendar density, esoteric (horoscope/moon).
   to absent without it. Remaining gap: geofenced/iPhone-synced Focus writes
   neither file — undetectable from this Mac. Render-only flavor;
   `focus on → proactivity high` is a dormant candidate nudge.
-- **More ambient nudges** — calendar density (next-meeting proximity), ambient
-  light, active-app focus. All cheap, all backlogged.
-- **`energyToMode` boundary** — the sad-slowcore think-vs-debug call in `vibe.ts`
-  is still a placeholder; decide whether music should ever lean `debug` at all,
-  or leave `debug` entirely to the git provider.
+- **More environment nudges** — ambient-light sensor is the one cheap candidate
+  left (calendar density cut, focused app shipped opt-in).
+- **Valence boundary** — music energy/acoustic now move pace/posture/tone, but
+  valence (happy ↔ sad) moves NO dial (see the note in `vibe.ts` tagsToVibe);
+  decide whether it ever should, or stays mood-words-only forever.
 - **`reframe` tone reconciliation** — the reframe lenses now defer to the user's
   words; make sure no other rendered line contradicts that humility.
 - **Tests** — baseline smoke coverage exists for `tagsToVibe`, `deriveCadence`,
