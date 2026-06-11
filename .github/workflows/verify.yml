@@ -1,8 +1,9 @@
-# Currently disabled server-side via `gh workflow disable Alpha` — the file
-# stays so the gate is one command away (`gh workflow enable Alpha`). Run the
-# same checks locally with `npm run verify:alpha` in the meantime.
+# The release gate, run on every push/PR to main. (Renamed from alpha.yml:
+# the old path had been disabled server-side, and GitHub keys disablement by
+# file path — a new path registers a fresh, enabled workflow.)
+# The same checks run locally via `npm run verify:alpha`.
 
-name: Alpha
+name: Verify
 
 on:
   push:

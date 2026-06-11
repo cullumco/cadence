@@ -29,6 +29,27 @@ do not re-ask.
    Bump version to X.Y.Z
    ```
 5. **Confirm**: `npm view @cullumco/cadence version` returns the new version.
+6. **Tag the bump commit — ANNOTATED, with real notes.** The tag message
+   becomes the GitHub Release body verbatim, so write it as a short
+   changelog (what shipped, user-visible first):
+   ```bash
+   git tag -a vX.Y.Z <bump-commit> -m "vX.Y.Z
+
+   - headline change
+   - next change"
+   git push origin vX.Y.Z
+   ```
+7. **Mirror the tag into a GitHub Release.** The `Release` workflow
+   (`.github/workflows/release.yml`) does this; a tag push only triggers it
+   when the tagged commit contains that file, so the reliable path is to
+   dispatch it explicitly (it's idempotent — an existing Release is a no-op):
+   ```bash
+   gh workflow run Release -f tag=vX.Y.Z
+   ```
+   (No `gh` in remote sessions — use the GitHub MCP `actions_run_trigger`
+   tool instead.)
+8. **Confirm the Release exists**: `gh release view vX.Y.Z` (or the MCP
+   `get_release_by_tag`).
 
 ## Gotchas learned in real releases
 
@@ -42,3 +63,7 @@ do not re-ask.
 - Plugin installers get the new version through npm (`source: npm`), so
   publishing is what actually ships hook changes to users — pushing main
   alone does not.
+- Tag AFTER the publish succeeds, not before — a public tag/Release pointing
+  at a version npm doesn't serve is the pitch running ahead of reality.
+- Lightweight tags break the Release workflow (`--notes-from-tag` needs an
+  annotation). Always `git tag -a`.

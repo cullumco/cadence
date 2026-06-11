@@ -237,22 +237,18 @@ state through other agent surfaces.
 
 ## Alpha release checklist
 
-Before publishing:
+`@cullumco/cadence` is live on npm; each release is the same gated flow:
 
 ```bash
-npm run verify:alpha
-npm publish --dry-run
-npm run release:alpha
+npm run verify:alpha    # build + plugin validate + tests + dry-pack + install smoke test
+npm run release:alpha   # the full gate, then npm publish
+git tag -a vX.Y.Z       # annotated tag on the bump commit — the message IS the release notes
+git push origin vX.Y.Z  # the Release workflow turns the tag into a GitHub Release
 ```
 
-The package is scoped and configured for public npm publish via
-`publishConfig.access = "public"`. The repo already ships
-`.claude-plugin/marketplace.json`, so once `@cullumco/cadence` lands on npm,
-the canonical install at the top of this README starts working end-to-end.
-
-A GitHub Actions workflow exists at `.github/workflows/alpha.yml` but is
-currently disabled — re-enable with `gh workflow enable Alpha` when you want
-the gate to run on every push to `main`.
+CI runs the same gate on every push/PR to `main`
+(`.github/workflows/verify.yml`), and `.github/workflows/release.yml` mirrors
+each annotated tag into a GitHub Release.
 
 ## What's next
 
