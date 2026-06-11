@@ -29,6 +29,7 @@ export type ProviderConfig = Record<string, unknown>;
 export const OPT_IN_PROVIDERS: Record<string, string> = {
   typingTempo: "prompt rhythm — rapid-fire vs. one long considered prompt → pace",
   focusedApp: "frontmost non-terminal app (macOS) → flavor in the context line",
+  wifi: "wifi network name (macOS) → place context, home vs. office vs. café",
   moon: "current moon phase (offline) → esoteric flavor",
   horoscope: "daily horoscope for your sign, e.g. `cadence enable horoscope leo`",
 };

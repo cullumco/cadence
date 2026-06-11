@@ -42,7 +42,10 @@ async function collectSignals(
   const [music, report, environment, git, activity, intent, esoteric] = await Promise.allSettled([
     getMusicSignal(providers),
     getSelfReportSignal(),
-    getEnvironmentSignal(new Date(), { focusedAppEnabled: providerEnabled(providers, "focusedApp") }),
+    getEnvironmentSignal(new Date(), {
+      focusedAppEnabled: providerEnabled(providers, "focusedApp"),
+      wifiEnabled: providerEnabled(providers, "wifi"),
+    }),
     getGitSignal(cwd),
     getActivitySignal(prompt, Date.now(), { tempoEnabled }),
     getIntentSignal(prompt),

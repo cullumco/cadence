@@ -72,6 +72,7 @@ async function buildPreview(): Promise<string | null> {
     getSelfReportSignal().catch(() => null),
     getEnvironmentSignal(new Date(), {
       focusedAppEnabled: providerEnabled(providers, "focusedApp"),
+      wifiEnabled: providerEnabled(providers, "wifi"),
     }).catch(() => null),
     getGitSignal(process.cwd()).catch(() => null),
     getEsotericSignal(providers).catch(() => null),
@@ -103,12 +104,15 @@ async function cmdTest() {
 // The legibility view: every signal Cadence can read — live value, or the
 // reason it's absent. Unlike `test`, this never goes silent.
 async function cmdSignals() {
-  const [music, report, environment, git, providers] = await Promise.all([
+  const providers = await loadProviders();
+  const [music, report, environment, git] = await Promise.all([
     getMusicSignal().catch(() => null),
     getSelfReportSignal().catch(() => null),
-    getEnvironmentSignal(new Date()).catch(() => null),
+    getEnvironmentSignal(new Date(), {
+      focusedAppEnabled: providerEnabled(providers, "focusedApp"),
+      wifiEnabled: providerEnabled(providers, "wifi"),
+    }).catch(() => null),
     getGitSignal(process.cwd()).catch(() => null),
-    loadProviders(),
   ]);
   console.log(
     "\n" +

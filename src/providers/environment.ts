@@ -162,7 +162,7 @@ export async function getFocusedApp(now: boolean): Promise<string | undefined> {
 }
 
 // ── mac context: best-effort shell-outs, all flavor (no dial nudges) ─────────
-async function getMacContext(focusedAppEnabled: boolean): Promise<{
+async function getMacContext(focusedAppEnabled: boolean, wifiEnabled: boolean): Promise<{
   focus?: boolean;
   displays?: number;
   network?: string;
@@ -172,7 +172,11 @@ async function getMacContext(focusedAppEnabled: boolean): Promise<{
   if (process.platform !== "darwin") return {};
   const [dark, ssid, displays, focus, focusedApp] = await Promise.all([
     sh("defaults read -g AppleInterfaceStyle"), // "Dark", or error (=light)
-    sh("ipconfig getsummary en0 | awk -F ' SSID : ' '/ SSID : / {print $2}'", 700),
+    // SSID names your location — opt-in (2026-06-11), like everything
+    // privacy-adjacent. Off → don't even spawn the probe.
+    wifiEnabled
+      ? sh("ipconfig getsummary en0 | awk -F ' SSID : ' '/ SSID : / {print $2}'", 700)
+      : Promise.resolve(null),
     // fast display count via AppleScript (~100ms) — NOT system_profiler (1-3s)
     sh(`osascript -e 'tell application "System Events" to count of desktops'`, 700),
     getFocus(),
@@ -284,7 +288,7 @@ async function getWeather(): Promise<string | undefined> {
 
 export async function getEnvironmentSignal(
   now: Date,
-  opts: { focusedAppEnabled?: boolean } = {}
+  opts: { focusedAppEnabled?: boolean; wifiEnabled?: boolean } = {}
 ): Promise<EnvironmentSignal> {
   const hour = now.getHours();
   const vitals = getVitals(); // sync, free
@@ -292,7 +296,7 @@ export async function getEnvironmentSignal(
   const [weather, battery, mac] = await Promise.all([
     getWeather(),
     getBattery(),
-    getMacContext(opts.focusedAppEnabled ?? false),
+    getMacContext(opts.focusedAppEnabled ?? false, opts.wifiEnabled ?? false),
   ]);
 
   return {

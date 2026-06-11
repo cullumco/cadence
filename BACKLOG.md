@@ -167,9 +167,11 @@ section). Remaining candidate: ambient-light sensor.
 - **`activity.ts` provider** — first cut shipped: prompt length plus minutes
   since the last prompt from the `UserPromptSubmit` payload. Future refinement:
   use prompt length itself as a nudge once real output shows the boundary.
-- **wifi SSID fragility** — `ipconfig getsummary` needs Location Services
-  permission on recent macOS, so SSID is often empty for downloaders. Degrades to
-  absent (not a bug). If we want it reliable, prompt for the permission or drop it.
+- **wifi SSID — moved behind opt-in (2026-06-11)**: it names your location, so
+  it now sits in `OPT_IN_PROVIDERS` (`cadence enable wifi`) like everything
+  privacy-adjacent; the probe doesn't even spawn when off. Fragility note still
+  applies when enabled: `ipconfig getsummary` needs Location Services on recent
+  macOS, so SSID can read absent — degrades cleanly, the signals view says why.
 - **macOS Focus / DND** — manual AND scheduled detection ship: `getFocus()`
   reads `Assertions.json` (manual toggles) and falls back to
   `ModeConfigurations.json` schedule math (`scheduleActive()`, fixture-tested,

@@ -173,7 +173,9 @@ flag. Any new hook must add the same first-line check.
   in `~/.cadence/weather-cache.json` so prompt+stop don't double-fetch), the opt-in
   Spotify `currently-playing` endpoint, and the opt-in daily horoscope. All are
   keyless or user-credentialed, opt-in, and bounded by short `AbortController`
-  timeouts.
+  timeouts. MusicBrainz is the ONE deliberate exception to opt-in (decided
+  2026-06-11): the zero-config music demo is the product's hook, and the call
+  sends only an artist name — keyless, cached forever. Don't "fix" this.
 - **OAuth lives in the interactive CLI, never the hook.** The hook has no
   browser and a 1.5s budget. `cadence spotify connect` (`src/spotify-auth.ts`)
   runs a PKCE flow with a one-shot loopback server and stores a refresh token;
@@ -181,9 +183,9 @@ flag. Any new hook must add the same first-line check.
   the cached token, fail-silent. Any future "connect a service" follows this
   shape — auth in the CLI, token-read in the hook.
 - **Opt-in provider registry** (`src/config.ts`, `OPT_IN_PROVIDERS`): anything
-  privacy-adjacent (typing tempo, focused app, esoteric, Spotify) stays off
-  until `cadence enable <signal>` / `cadence spotify connect`. New signals of
-  that kind register here and gate on `providerEnabled()`.
+  privacy-adjacent (typing tempo, focused app, wifi SSID, esoteric, Spotify)
+  stays off until `cadence enable <signal>` / `cadence spotify connect`. New
+  signals of that kind register here and gate on `providerEnabled()`.
 - **Vibe table is a blocklist, not an allowlist** (`src/providers/music.ts`
   `isVibeTag`). Novel genres should pass through; we only reject known classes
   of junk (places, listener-meta tags, artist name fragments).

@@ -46,7 +46,11 @@ function ttlLeft(setAt: number, now: number): string {
   return h > 0 ? `${h}h${String(m).padStart(2, "0")}m left` : `${m}m left`;
 }
 
-function environmentRows(a: EnvironmentSignal | null, platform: NodeJS.Platform): string[] {
+function environmentRows(
+  a: EnvironmentSignal | null,
+  platform: NodeJS.Platform,
+  providers: ProviderConfig
+): string[] {
   if (!a) return [top("environment", "— unavailable")];
   const mac = platform === "darwin";
   const macNote = "— macOS only";
@@ -90,9 +94,11 @@ function environmentRows(a: EnvironmentSignal | null, platform: NodeJS.Platform)
   lines.push(
     !mac
       ? row("wifi", macNote)
-      : a.network
-        ? row("wifi", JSON.stringify(a.network))
-        : row("wifi", "— unavailable")
+      : !providerEnabled(providers, "wifi")
+        ? row("wifi", "— off (run: cadence enable wifi)")
+        : a.network
+          ? row("wifi", JSON.stringify(a.network))
+          : row("wifi", "— unavailable (macOS may require Location Services)")
   );
   lines.push(
     a.uptimeHours == null
@@ -192,7 +198,7 @@ function optInFlavorRows(providers: ProviderConfig, environment: EnvironmentSign
 export function renderSignalsTable(raw: RawSignals): string {
   const providers = raw.providers ?? {};
   return [
-    ...environmentRows(raw.environment, raw.platform),
+    ...environmentRows(raw.environment, raw.platform, raw.providers ?? {}),
     ...musicRows(raw.music, providers),
     reportRow(raw.report, raw.now),
     intentRow(),

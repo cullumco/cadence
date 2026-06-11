@@ -67,8 +67,8 @@ deliberate self-report just outranks it.
 **Signals → dials → a reframe lens.**
 
 1. **Signals** — what Cadence can sense right now:
-   - **ambient** — time of day, day of week, weather (opt-in), battery, machine
-     uptime/load, dark mode, displays, wifi, Focus/DND. Mostly zero-setup;
+   - **environment** — time of day, day of week, weather (opt-in), battery, machine
+     uptime/load, dark mode, displays, wifi (opt-in), Focus/DND. Mostly zero-setup;
      time/day work everywhere, the Mac-context probes are macOS. The one signal
      that's always there: `context: friday afternoon, rainy, focus on`.
      (Focus detection reads the DND database directly, so it needs your
@@ -112,7 +112,7 @@ without checking in stays your call, not the soundtrack's.
 ## Requirements
 
 - **Built for the Mac.** The richest ambient probes — music via AppleScript
-  now-playing, battery, dark mode, displays, wifi, Focus/DND, focused app —
+  now-playing, battery, dark mode, displays, wifi (opt-in), Focus/DND, focused app —
   read the Mac around you. On other platforms Cadence still runs and still
   moves the dials: prompt intent, self-report, git, time/day, and typing tempo
   work anywhere, Spotify can be linked for music, and the Mac-only probes
@@ -285,7 +285,7 @@ See [`BACKLOG.md`](BACKLOG.md). Highlights:
 ## Caveats
 
 - **Built for the Mac.** The richest ambient probes (music-via-OS, battery,
-  dark mode, displays, wifi, Focus, focused app) are macOS. Other platforms
+  dark mode, displays, wifi (opt-in), Focus, focused app) are macOS. Other platforms
   keep the dial-movers — intent, self-report, git, time/day, typing tempo,
   linked Spotify — and the rest degrades silently.
 - **Spotify's audio-features API is not used** — Spotify deprecated it for new

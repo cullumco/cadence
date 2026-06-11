@@ -768,3 +768,20 @@ test("weatherCacheFresh: same location within TTL only", async () => {
   assert.equal(weatherCacheFresh(null, 40.7, -74.0, 1_000_000), false);
   assert.equal(weatherCacheFresh("junk", 40.7, -74.0, 1_000_000), false);
 });
+
+// ── wifi opt-in (SSID names your location — off by default) ────────────────
+test("renderSignalsTable: wifi row is opt-in tri-state on darwin", () => {
+  const env = { source: "environment", partOfDay: "afternoon", dayOfWeek: "friday",
+    isWeekend: false, hour: 15 };
+  const off = renderSignalsTable({ music: null, report: null, environment: env, git: null, now: 0, platform: "darwin" });
+  assert.match(off, /wifi\s+— off \(run: cadence enable wifi\)/);
+  const onAbsent = renderSignalsTable({ music: null, report: null, environment: env, git: null,
+    providers: { wifi: true }, now: 0, platform: "darwin" });
+  assert.match(onAbsent, /wifi\s+— unavailable \(macOS may require Location Services\)/);
+  const onValue = renderSignalsTable({ music: null, report: null,
+    environment: { ...env, network: "Home-5G" }, git: null,
+    providers: { wifi: true }, now: 0, platform: "darwin" });
+  assert.match(onValue, /wifi\s+"Home-5G"/);
+  const linux = renderSignalsTable({ music: null, report: null, environment: env, git: null, now: 0, platform: "linux" });
+  assert.match(linux, /wifi\s+— macOS only/);
+});
