@@ -96,15 +96,18 @@ and renderers should remain portable. Candidate future surfaces:
 User idea: let people opt into playful, non-work signal sources that feed the
 dials (or just color the vibe) — **only if the user indicates them as an input.**
 
-- **Horoscope provider** — user sets their sign; fetch a daily horoscope, let its
-  tone nudge dials (or just surface as vibe). Opt-in, off by default.
-- **Moon phase provider** — current lunar phase as environmental context.
-  Computable offline, no API.
-- Slot in as ordinary `Signal` providers behind an opt-in flag in
-  `~/.cadence/config.json` (e.g. `"providers": { "horoscope": "leo" }`). No
-  rework needed — the provider/signal architecture already supports it.
-- Open Q: do esoteric signals move dials, or only render as `vibe` so they
-  never override real work signals? (Lean: vibe-only unless the user maps them.)
+**Moon phase — SHIPPED (2026-06-11).** `src/providers/moon.ts`: pure offline
+synodic math (anchor: the 2000-01-06 new moon; mean-cycle drift ≤ ~14h, fine at
+phase-name precision). Opt-in via `"providers": { "moon": true }` in
+`~/.cadence/config.json`; off by default, render-only. This settled the open
+question and the pattern for the rest of the family: **esoteric signals are
+vibe, not authority** — they never move dials unless the user explicitly maps
+them. The `providers` config key now exists as the opt-in surface for the rest.
+
+- **Horoscope provider** — user sets their sign (`"providers": { "horoscope":
+  "leo" }`); fetch a daily horoscope, surface as vibe (render-only, per the
+  moon precedent). Opt-in, off by default. Needs a keyless source + short
+  AbortController timeout to fit the no-new-network-deps bar.
 
 ## Known nuance: intra-tier nudge collisions
 

@@ -4,6 +4,7 @@ import { getSelfReportSignal } from "./providers/selfreport.js";
 import { getEnvironmentSignal } from "./providers/environment.js";
 import { getGitSignal } from "./providers/git.js";
 import { getActivitySignal } from "./providers/activity.js";
+import { getMoonSignal } from "./providers/moon.js";
 import { deriveCadence, buildReframe, loadOverrides, applyOverrides } from "./cadence.js";
 import { render } from "./inject.js";
 import { debug } from "./debug.js";
@@ -30,12 +31,13 @@ async function readStdin(): Promise<{ cwd?: string; prompt?: string }> {
 }
 
 async function collectSignals(cwd: string, prompt?: string): Promise<Signal[]> {
-  const [music, report, environment, git, activity] = await Promise.allSettled([
+  const [music, report, environment, git, activity, moon] = await Promise.allSettled([
     getMusicSignal(),
     getSelfReportSignal(),
     getEnvironmentSignal(new Date()),
     getGitSignal(cwd),
     getActivitySignal(prompt),
+    getMoonSignal(new Date()),
   ]);
   const signals: Signal[] = [];
   if (music.status === "fulfilled" && music.value) signals.push(music.value);
@@ -43,6 +45,7 @@ async function collectSignals(cwd: string, prompt?: string): Promise<Signal[]> {
   if (environment.status === "fulfilled" && environment.value) signals.push(environment.value);
   if (git.status === "fulfilled" && git.value) signals.push(git.value);
   if (activity.status === "fulfilled" && activity.value) signals.push(activity.value);
+  if (moon.status === "fulfilled" && moon.value) signals.push(moon.value);
   return signals;
 }
 

@@ -6,8 +6,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 Cadence is an ambient context layer for agents. It ships as a Claude Code plugin
 that injects a `<user_state>` block (signals + four cadence dials + a reframe
-lens) ahead of every prompt via `UserPromptSubmit`, plus a conservative `Stop`
-hook that blocks soft handoffs when the user is in a shipping cadence.
+lens) ahead of every prompt via `UserPromptSubmit`, a `PostToolUse` refinement
+hook that speaks only on merge-conflict-state transitions, plus a conservative
+`Stop` hook that blocks soft handoffs when the user is in a shipping cadence.
 
 The product seam is intentional: the portable core (`signals → dials → reframe`)
 is kept separate from the Claude-specific adapter so future surfaces can reuse it.
@@ -59,11 +60,14 @@ signals → cadence dials → context envelope → adapter-specific delivery
 - **Render** (`src/inject.ts`) — `render()` formats the final `<user_state>`
   YAML-ish block. Pinned dials are marked with `*` so the model knows they were
   user-set, not inferred.
-- **Adapter** (`src/hook.ts`, `src/stop.ts`) — Claude Code's
-  `UserPromptSubmit` and `Stop` hooks. These read stdin (Claude's JSON payload
-  with `cwd`, `prompt`, etc.), run the core, and write the
-  `hookSpecificOutput.additionalContext` (prompt hook) or `decision: "block"`
-  (stop hook) JSON back on stdout.
+- **Adapter** (`src/hook.ts`, `src/posttool.ts`, `src/stop.ts`) — Claude Code's
+  `UserPromptSubmit`, `PostToolUse`, and `Stop` hooks. These read stdin
+  (Claude's JSON payload with `cwd`, `prompt`, etc.), run the core, and write
+  the `hookSpecificOutput.additionalContext` (prompt/posttool hooks) or
+  `decision: "block"` (stop hook) JSON back on stdout. The posttool hook is
+  edge-triggered: it re-observes the repo after git-ish Bash calls and speaks
+  only when the merge-conflict state *changes*, tracked per session in
+  `~/.cadence/workstate.json`.
 
 ### Where the personality lives
 
@@ -149,5 +153,8 @@ re-explain the product.
   `isVibeTag`). Novel genres should pass through; we only reject known classes
   of junk (places, listener-meta tags, artist name fragments).
 - **State lives in `~/.cadence/`**: `state.txt` (self-report, 4h TTL),
-  `config.json` (pinned dials + weather location), `activity.json` (last
-  prompt timestamp), `vibe-cache.json` (MusicBrainz tag cache).
+  `config.json` (pinned dials + weather location + esoteric-provider opt-ins
+  like `"providers": { "moon": true }`), `activity.json` (last
+  prompt timestamp), `vibe-cache.json` (MusicBrainz tag cache),
+  `workstate.json` (per-session conflict state for the PostToolUse hook,
+  pruned to 20 sessions).

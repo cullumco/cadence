@@ -77,6 +77,10 @@ Same words. The room around them changed, and the agent finally saw it.
      a clean *vibe* (mood words) via [MusicBrainz](https://musicbrainz.org). No
      Spotify login, no API key, no Premium.
    - **self-report** — what you tell it: `cadence report "two beers, shipping"`.
+   - **moon** — lunar phase, computed offline (no API), strictly opt-in:
+     add `"providers": { "moon": true }` to `~/.cadence/config.json`. The first
+     of the esoteric providers: pure flavor (`moon: waxing gibbous (78% lit)`),
+     never moves a dial.
 
    Time/day, self-report, and git move the dials (git reads *what you're
    doing*: 3+ commits/hr → fast pace, mid-conflict → verify-first); the rest

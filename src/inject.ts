@@ -6,6 +6,7 @@ import type {
   GitSignal,
   PlaceSignal,
   EnvironmentSignal,
+  MoonSignal,
 } from "./types.js";
 import { DIAL_WORDS } from "./cadence.js";
 
@@ -77,6 +78,14 @@ function renderEnvironment(a: EnvironmentSignal): string {
   return `    context: ${parts.join(", ")}`;
 }
 
+function renderMoon(m: MoonSignal): string {
+  // Opt-in flavor, e.g. "moon: waxing gibbous (78% lit)". Skip the redundant
+  // percentage at the extremes — "new (2% lit)" reads like a malfunction.
+  const pct =
+    m.phase === "new" || m.phase === "full" ? "" : ` (${m.illumination}% lit)`;
+  return `    moon: ${m.phase}${pct}`;
+}
+
 function renderCadence(
   c: StateWithCadence["cadence"],
   pinned: StateWithCadence["pinned"]
@@ -99,6 +108,7 @@ export function render(state: StateWithCadence): string {
     else if (sig.source === "activity") lines.push(renderActivity(sig));
     else if (sig.source === "place") lines.push(renderPlace(sig));
     else if (sig.source === "environment") lines.push(renderEnvironment(sig));
+    else if (sig.source === "moon") lines.push(renderMoon(sig));
   }
   // Render even with zero signals if the user pinned dials — a hand-set board
   // is itself a signal worth injecting.

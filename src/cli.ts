@@ -6,6 +6,7 @@ import { getMusicSignal } from "./providers/music.js";
 import { getSelfReportSignal } from "./providers/selfreport.js";
 import { getEnvironmentSignal } from "./providers/environment.js";
 import { getGitSignal } from "./providers/git.js";
+import { getMoonSignal } from "./providers/moon.js";
 import {
   deriveCadence,
   buildReframe,
@@ -49,17 +50,19 @@ async function cmdClear() {
 // or null when there's nothing to say. Shared by `test` and the bare command.
 async function buildPreview(): Promise<string | null> {
   const signals: Signal[] = [];
-  const [music, report, environment, git, overrides] = await Promise.all([
+  const [music, report, environment, git, moon, overrides] = await Promise.all([
     getMusicSignal().catch(() => null),
     getSelfReportSignal().catch(() => null),
     getEnvironmentSignal(new Date()).catch(() => null),
     getGitSignal(process.cwd()).catch(() => null),
+    getMoonSignal(new Date()).catch(() => null),
     loadOverrides(),
   ]);
   if (music) signals.push(music);
   if (report) signals.push(report);
   if (environment) signals.push(environment);
   if (git) signals.push(git);
+  if (moon) signals.push(moon);
 
   if (signals.length === 0 && Object.keys(overrides).length === 0) return null;
 
@@ -81,15 +84,16 @@ async function cmdTest() {
 // The legibility view: every signal Cadence can read — live value, or the
 // reason it's absent. Unlike `test`, this never goes silent.
 async function cmdSignals() {
-  const [music, report, environment, git] = await Promise.all([
+  const [music, report, environment, git, moon] = await Promise.all([
     getMusicSignal().catch(() => null),
     getSelfReportSignal().catch(() => null),
     getEnvironmentSignal(new Date()).catch(() => null),
     getGitSignal(process.cwd()).catch(() => null),
+    getMoonSignal(new Date()).catch(() => null),
   ]);
   console.log(
     "\n" +
-      renderSignalsTable({ music, report, environment, git, now: Date.now(), platform: process.platform }) +
+      renderSignalsTable({ music, report, environment, git, moon, now: Date.now(), platform: process.platform }) +
       "\n"
   );
 }
@@ -296,7 +300,7 @@ const HELP = `
 
   daily:
     cadence                     live status + where to input
-    cadence start               guided setup (state, dials, weather — all skippable)
+    cadence start               guided setup (self-report, dials, weather — all skippable)
     cadence report "..."        set your self-report (e.g. "two beers, ship mode")
     cadence report              print current self-report
                                 ("cadence state" still works as an alias)
@@ -313,6 +317,9 @@ const HELP = `
 
   environment (time & day are automatic; weather is opt-in):
     cadence set-location <lat> <lon> [name]   turn on weather for your area
+
+  esoteric (off by default, pure flavor — never moves dials):
+    moon phase: add "providers": { "moon": true } to ~/.cadence/config.json
 `;
 
 async function main() {

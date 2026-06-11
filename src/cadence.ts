@@ -126,6 +126,8 @@ export function deriveCadence(state: UserState): Cadence {
 
   // Still-dormant candidate nudges (see BACKLOG):
   //   environment focus on → proactivity high (heads-down = fewer check-ins)
+  //   moon (opt-in, render-only by design) → never moves dials unless the
+  //   user explicitly maps it; esoteric signals are vibe, not authority
 
   // ── activity → pace (returning from a break = slow back down) ─────────────
   if (activity?.minSinceLastPrompt != null && activity.minSinceLastPrompt > 30) {

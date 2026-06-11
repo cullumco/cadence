@@ -469,3 +469,55 @@ test("posttool refineContext: injected text defers to the user's words", async (
   const { refineContext } = await import("../dist/posttool.js");
   assert.match(refineContext(false, true) ?? "", /follow their words/);
 });
+
+// ── Moon phase (esoteric, opt-in, render-only) ──────────────────────────────
+test("moonPhase: known astronomy dates land in the right phase", async () => {
+  const { moonPhase } = await import("../dist/providers/moon.js");
+  // the anchor new moon itself
+  const epoch = moonPhase(new Date(Date.UTC(2000, 0, 6, 18, 14)));
+  assert.equal(epoch.phase, "new");
+  assert.ok(epoch.illumination <= 1, `new moon should be dark, got ${epoch.illumination}%`);
+  // total lunar eclipse of 2000-01-21 — the moon was exactly full
+  const eclipse = moonPhase(new Date(Date.UTC(2000, 0, 21, 4, 40)));
+  assert.equal(eclipse.phase, "full");
+  assert.ok(eclipse.illumination >= 99, `eclipse moon should be full, got ${eclipse.illumination}%`);
+  // first quarter of 2000-01-14 13:34 UTC — half lit, waxing
+  const quarter = moonPhase(new Date(Date.UTC(2000, 0, 14, 13, 34)));
+  assert.equal(quarter.phase, "first quarter");
+  assert.ok(Math.abs(quarter.illumination - 50) <= 10, `quarter ≈ half lit, got ${quarter.illumination}%`);
+});
+
+test("moonPhase: dates before the epoch still resolve (negative modulo)", async () => {
+  const { moonPhase } = await import("../dist/providers/moon.js");
+  const m = moonPhase(new Date(Date.UTC(1999, 5, 15)));
+  assert.ok(m.phase.length > 0);
+  assert.ok(m.illumination >= 0 && m.illumination <= 100);
+});
+
+test("moon: renders as flavor and does NOT move dials", () => {
+  const moon = { source: "moon", phase: "full", illumination: 100 };
+  const c = deriveCadence({ signals: [moon], capturedAt: 0 });
+  assert.deepEqual(c, { pace: "medium", tone: "medium", posture: "medium", proactivity: "medium" });
+  const block = render({
+    signals: [{ source: "moon", phase: "waxing gibbous", illumination: 78 }],
+    capturedAt: 0,
+    cadence: c,
+    pinned: [],
+    reframe: "x",
+  });
+  assert.match(block, /moon: waxing gibbous \(78% lit\)/);
+  // extremes drop the redundant percentage
+  const full = render({ signals: [moon], capturedAt: 0, cadence: c, pinned: [], reframe: "x" });
+  assert.match(full, /moon: full(?! \()/);
+});
+
+test("renderSignalsTable: moon row is off-with-instructions or the live phase", () => {
+  const off = renderSignalsTable({ music: null, report: null, environment: null, git: null, moon: null, now: 0, platform: "darwin" });
+  assert.match(off, /moon\s+— off \(opt-in: add "providers"/);
+  const on = renderSignalsTable({
+    music: null, report: null, environment: null, git: null,
+    moon: { source: "moon", phase: "last quarter", illumination: 47 },
+    now: 0, platform: "darwin",
+  });
+  assert.match(on, /moon\s+last quarter, 47% lit/);
+});

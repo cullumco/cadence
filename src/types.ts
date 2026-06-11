@@ -73,13 +73,32 @@ export interface EnvironmentSignal {
   darkMode?: boolean; // UI dark mode → night session
 }
 
+/* Esoteric, opt-in signals (off by default; see BACKLOG). Render-only:
+ * they color the vibe, they never move dials unless the user maps them. */
+export type MoonPhase =
+  | "new"
+  | "waxing crescent"
+  | "first quarter"
+  | "waxing gibbous"
+  | "full"
+  | "waning gibbous"
+  | "last quarter"
+  | "waning crescent";
+
+export interface MoonSignal {
+  source: "moon";
+  phase: MoonPhase;
+  illumination: number; // 0–100, % of the disc lit
+}
+
 export type Signal =
   | MusicSignal
   | SelfReportSignal
   | ActivitySignal
   | GitSignal
   | PlaceSignal
-  | EnvironmentSignal;
+  | EnvironmentSignal
+  | MoonSignal;
 
 export interface UserState {
   signals: Signal[];

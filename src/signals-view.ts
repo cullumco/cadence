@@ -3,6 +3,7 @@ import type {
   SelfReportSignal,
   GitSignal,
   EnvironmentSignal,
+  MoonSignal,
 } from "./types.js";
 import { STALE_AFTER_MS } from "./providers/selfreport.js";
 
@@ -21,6 +22,7 @@ export interface RawSignals {
   report: SelfReportSignal | null;
   environment: EnvironmentSignal | null;
   git: GitSignal | null;
+  moon: MoonSignal | null;
   now: number; // injected so the view stays pure/testable
   platform: NodeJS.Platform; // ditto — decides "unavailable" vs "macOS only"
 }
@@ -148,12 +150,20 @@ function gitRow(g: GitSignal | null): string {
   return top("git", parts.join(", "));
 }
 
+function moonRow(m: MoonSignal | null): string {
+  if (!m) {
+    return top("moon", '— off (opt-in: add "providers": { "moon": true } to ~/.cadence/config.json)');
+  }
+  return top("moon", `${m.phase}, ${m.illumination}% lit`);
+}
+
 export function renderSignalsTable(raw: RawSignals): string {
   return [
     ...environmentRows(raw.environment, raw.platform),
     ...musicRows(raw.music),
     reportRow(raw.report, raw.now),
     gitRow(raw.git),
+    moonRow(raw.moon),
     top("activity", "— session-only (the hook injects it per-prompt)"),
   ].join("\n");
 }
