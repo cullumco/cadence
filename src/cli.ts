@@ -4,7 +4,7 @@ import { homedir } from "node:os";
 import { join } from "node:path";
 import { getMusicSignal } from "./providers/music.js";
 import { getSelfReportSignal } from "./providers/selfreport.js";
-import { getAmbientSignal } from "./providers/ambient.js";
+import { getEnvironmentSignal } from "./providers/environment.js";
 import { getGitSignal } from "./providers/git.js";
 import {
   deriveCadence,
@@ -23,42 +23,42 @@ const CADENCE_DIR = join(homedir(), ".cadence");
 const STATE_FILE = join(CADENCE_DIR, "state.txt");
 const CONFIG_FILE = join(CADENCE_DIR, "config.json");
 
-async function cmdState(args: string[]) {
+async function cmdReport(args: string[]) {
   if (args.length === 0) {
     try {
       const text = (await readFile(STATE_FILE, "utf-8")).trim();
-      console.log(text || "(no state set)");
+      console.log(text || "(no self-report set)");
     } catch {
-      console.log("(no state set)");
+      console.log("(no self-report set)");
     }
     return;
   }
   const text = args.join(" ");
   await mkdir(CADENCE_DIR, { recursive: true });
   await writeFile(STATE_FILE, text, "utf-8");
-  console.log(`  state set: "${text}"`);
+  console.log(`  self-report set: "${text}"`);
 }
 
 async function cmdClear() {
   await mkdir(CADENCE_DIR, { recursive: true });
   await writeFile(STATE_FILE, "", "utf-8");
-  console.log("  state cleared");
+  console.log("  self-report cleared");
 }
 
 // Collects live signals and renders the exact block the hook would inject,
 // or null when there's nothing to say. Shared by `test` and the bare command.
 async function buildPreview(): Promise<string | null> {
   const signals: Signal[] = [];
-  const [music, report, ambient, git, overrides] = await Promise.all([
+  const [music, report, environment, git, overrides] = await Promise.all([
     getMusicSignal().catch(() => null),
     getSelfReportSignal().catch(() => null),
-    getAmbientSignal(new Date()).catch(() => null),
+    getEnvironmentSignal(new Date()).catch(() => null),
     getGitSignal(process.cwd()).catch(() => null),
     loadOverrides(),
   ]);
   if (music) signals.push(music);
   if (report) signals.push(report);
-  if (ambient) signals.push(ambient);
+  if (environment) signals.push(environment);
   if (git) signals.push(git);
 
   if (signals.length === 0 && Object.keys(overrides).length === 0) return null;
@@ -72,7 +72,7 @@ async function buildPreview(): Promise<string | null> {
 async function cmdTest() {
   const block = await buildPreview();
   if (!block) {
-    console.log('  (no signals — play something, set: cadence state "...", or pin a dial: cadence set pace fast)');
+    console.log('  (no signals — play something, set: cadence report "...", or pin a dial: cadence set pace fast)');
     return;
   }
   console.log("\n" + block + "\n");
@@ -81,15 +81,15 @@ async function cmdTest() {
 // The legibility view: every signal Cadence can read — live value, or the
 // reason it's absent. Unlike `test`, this never goes silent.
 async function cmdSignals() {
-  const [music, report, ambient, git] = await Promise.all([
+  const [music, report, environment, git] = await Promise.all([
     getMusicSignal().catch(() => null),
     getSelfReportSignal().catch(() => null),
-    getAmbientSignal(new Date()).catch(() => null),
+    getEnvironmentSignal(new Date()).catch(() => null),
     getGitSignal(process.cwd()).catch(() => null),
   ]);
   console.log(
     "\n" +
-      renderSignalsTable({ music, report, ambient, git, now: Date.now(), platform: process.platform }) +
+      renderSignalsTable({ music, report, environment, git, now: Date.now(), platform: process.platform }) +
       "\n"
   );
 }
@@ -205,7 +205,7 @@ async function hasUserInput(): Promise<boolean> {
 }
 
 const INPUTS_FOOTER = `  where you can input:
-    cadence state "..."              how you are right now (4h TTL)
+    cadence report "..."             how you are right now (4h TTL)
     cadence set <dial> <level>       pin a dial: ${DIALS.join(", ")}
     cadence set-location <lat> <lon> opt into weather
     cadence start                    interactive setup
@@ -217,7 +217,7 @@ async function cmdRoot() {
     console.log("\n  cadence — agents that read the room");
     console.log("  It hasn't heard from you yet. Fastest start:\n");
     console.log('    cadence start              guided setup (~30s)');
-    console.log('    cadence state "ship mode"  or just say how you are\n');
+    console.log('    cadence report "ship mode" or just say how you are\n');
     return;
   }
   const block = await buildPreview();
@@ -232,7 +232,7 @@ async function cmdRoot() {
 // Guided first run: three prompts, every one skippable, nothing destructive.
 async function cmdStart() {
   if (!process.stdin.isTTY) {
-    console.log('  cadence start is interactive — run it in a terminal, or use: cadence state "..."');
+    console.log('  cadence start is interactive — run it in a terminal, or use: cadence report "..."');
     return;
   }
   const { createInterface } = await import("node:readline/promises");
@@ -246,9 +246,9 @@ async function cmdStart() {
     if (state) {
       await mkdir(CADENCE_DIR, { recursive: true });
       await writeFile(STATE_FILE, state, "utf-8");
-      console.log('       ✓ set — expires after 4h; update anytime: cadence state "..."\n');
+      console.log('       ✓ set — expires after 4h; update anytime: cadence report "..."\n');
     } else {
-      console.log('       skipped — later: cadence state "..."\n');
+      console.log('       skipped — later: cadence report "..."\n');
     }
 
     // 2 ── dial pins: overrides, so only offered, never pushed
@@ -297,9 +297,10 @@ const HELP = `
   daily:
     cadence                     live status + where to input
     cadence start               guided setup (state, dials, weather — all skippable)
-    cadence state "..."         set self-reported state (e.g. "two beers, ship mode")
-    cadence state               print current self-reported state
-    cadence clear               clear self-reported state
+    cadence report "..."        set your self-report (e.g. "two beers, ship mode")
+    cadence report              print current self-report
+                                ("cadence state" still works as an alias)
+    cadence clear               clear self-report
     cadence test                preview what the hook would inject right now
     cadence signals             every signal — live value, or why it's absent
 
@@ -310,7 +311,7 @@ const HELP = `
                                 dials: pace, tone, posture, proactivity
                                 (env also works: CADENCE_PACE=fast)
 
-  ambient (time & day are automatic; weather is opt-in):
+  environment (time & day are automatic; weather is opt-in):
     cadence set-location <lat> <lon> [name]   turn on weather for your area
 `;
 
@@ -319,8 +320,11 @@ async function main() {
   switch (cmd) {
     case "start":
       return cmdStart();
-    case "state":
-      return cmdState(rest);
+    case "report":
+      return cmdReport(rest);
+    case "state": // deprecated alias for `report` — kept for alpha installs
+      console.error('  note: "cadence state" is now "cadence report" (alias kept for now)');
+      return cmdReport(rest);
     case "clear":
       return cmdClear();
     case "test":

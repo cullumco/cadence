@@ -97,26 +97,26 @@ User idea: let people opt into playful, non-work signal sources that feed the
 dials (or just color the vibe) — **only if the user indicates them as an input.**
 
 - **Horoscope provider** — user sets their sign; fetch a daily horoscope, let its
-  tone nudge dials (or just surface as flavor). Opt-in, off by default.
-- **Moon phase provider** — current lunar phase as ambient context. Computable
-  offline, no API.
+  tone nudge dials (or just surface as vibe). Opt-in, off by default.
+- **Moon phase provider** — current lunar phase as environmental context.
+  Computable offline, no API.
 - Slot in as ordinary `Signal` providers behind an opt-in flag in
   `~/.cadence/config.json` (e.g. `"providers": { "horoscope": "leo" }`). No
   rework needed — the provider/signal architecture already supports it.
-- Open Q: do esoteric signals move dials, or only render as `vibe`/flavor so they
-  never override real work signals? (Lean: flavor-only unless the user maps them.)
+- Open Q: do esoteric signals move dials, or only render as `vibe` so they
+  never override real work signals? (Lean: vibe-only unless the user maps them.)
 
 ## Known nuance: intra-tier nudge collisions
 
-When two *ambient* nudges touch the same dial, the later one silently wins (e.g.
-late-night says low-pace, unplugged says high-pace → unplugged wins by source
-order). Across tiers this is intentional (self-report > ambient), but *within*
-ambient the ordering is arbitrary. Fine for now; if it bites, move to a
-weighted/voting model per dial instead of last-write-wins.
+When two *environment* nudges touch the same dial, the later one silently wins
+(e.g. late-night says low-pace, unplugged says high-pace → unplugged wins by
+source order). Across tiers this is intentional (self-report > environment), but
+*within* the environment tier the ordering is arbitrary. Fine for now; if it
+bites, move to a weighted/voting model per dial instead of last-write-wins.
 
 ## Git nudges — SHIPPED (2026-06-05)
 
-Enabled after the flavor proved trustworthy in real use:
+Enabled after the render-only git signal proved trustworthy in real use:
 - `conflicted` → proactivity low (verify, don't barrel — you're in the weeds)
 - `commitsLastHour >= 3` → pace high (flow state)
 Applied below self-report in the hierarchy, so "I'm shipping" beats a
@@ -136,11 +136,11 @@ reading as flow state) before adding more git nudges.
   `ModeConfigurations.json` schedule math (`scheduleActive()`, fixture-tested,
   handles midnight-wrapping windows). Needs terminal Full Disk Access; degrades
   to absent without it. Remaining gap: geofenced/iPhone-synced Focus writes
-  neither file — undetectable from this Mac. Render-only flavor;
+  neither file — undetectable from this Mac. Render-only;
   `focus on → proactivity high` is a dormant candidate nudge.
-- **More ambient nudges** — calendar density (next-meeting proximity), ambient
-  light, active-app focus. All cheap, all backlogged.
-- **`energyToMode` boundary** — the sad-slowcore think-vs-debug call in `vibe.ts`
+- **More environment nudges** — calendar density (next-meeting proximity),
+  ambient-light sensor, active-app focus. All cheap, all backlogged.
+- **`energyToMode` boundary** — the sad-slowcore pace-vs-proactivity call in `vibe.ts`
   is still a placeholder; decide whether music should ever lean `debug` at all,
   or leave `debug` entirely to the git provider.
 - **`reframe` tone reconciliation** — the reframe lenses now defer to the user's

@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 import { getMusicSignal } from "./providers/music.js";
 import { getSelfReportSignal } from "./providers/selfreport.js";
-import { getAmbientSignal } from "./providers/ambient.js";
+import { getEnvironmentSignal } from "./providers/environment.js";
 import { getGitSignal } from "./providers/git.js";
 import { getActivitySignal } from "./providers/activity.js";
 import { deriveCadence, buildReframe, loadOverrides, applyOverrides } from "./cadence.js";
@@ -30,17 +30,17 @@ async function readStdin(): Promise<{ cwd?: string; prompt?: string }> {
 }
 
 async function collectSignals(cwd: string, prompt?: string): Promise<Signal[]> {
-  const [music, report, ambient, git, activity] = await Promise.allSettled([
+  const [music, report, environment, git, activity] = await Promise.allSettled([
     getMusicSignal(),
     getSelfReportSignal(),
-    getAmbientSignal(new Date()),
+    getEnvironmentSignal(new Date()),
     getGitSignal(cwd),
     getActivitySignal(prompt),
   ]);
   const signals: Signal[] = [];
   if (music.status === "fulfilled" && music.value) signals.push(music.value);
   if (report.status === "fulfilled" && report.value) signals.push(report.value);
-  if (ambient.status === "fulfilled" && ambient.value) signals.push(ambient.value);
+  if (environment.status === "fulfilled" && environment.value) signals.push(environment.value);
   if (git.status === "fulfilled" && git.value) signals.push(git.value);
   if (activity.status === "fulfilled" && activity.value) signals.push(activity.value);
   return signals;
@@ -53,11 +53,13 @@ async function main() {
   const [signals, overrides] = await Promise.all([
     Promise.race<Signal[]>([
       collectSignals(projectDir, prompt),
+      // unref: the losing timer must not hold the process open after the
+      // race settles — Claude Code waits on our EXIT, not our output.
       new Promise<Signal[]>((resolve) =>
         setTimeout(() => {
           debug("hook", `signal collection exceeded ${TOTAL_BUDGET_MS}ms budget — injecting without signals`);
           resolve([]);
-        }, TOTAL_BUDGET_MS)
+        }, TOTAL_BUDGET_MS).unref()
       ),
     ]),
     loadOverrides(),
@@ -74,13 +76,16 @@ async function main() {
   const stateWithCadence: StateWithCadence = { ...state, cadence, pinned, reframe };
   const block = render(stateWithCadence);
 
+  // Exit in the write callback (stdout to a pipe can flush async): a straggling
+  // provider subprocess must never keep the user's prompt waiting on our exit.
   process.stdout.write(
     JSON.stringify({
       hookSpecificOutput: {
         hookEventName: "UserPromptSubmit",
         additionalContext: block,
       },
-    })
+    }),
+    () => process.exit(0)
   );
 }
 

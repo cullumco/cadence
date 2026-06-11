@@ -2,9 +2,9 @@
 import { pathToFileURL } from "node:url";
 import { getMusicSignal } from "./providers/music.js";
 import { getSelfReportSignal } from "./providers/selfreport.js";
-import { getAmbientSignal } from "./providers/ambient.js";
+import { getEnvironmentSignal } from "./providers/environment.js";
 import { getGitSignal } from "./providers/git.js";
-import { deriveCadence, loadOverrides, applyOverrides } from "./cadence.js";
+import { deriveCadence, loadOverrides, applyOverrides, SHIP_PATTERN } from "./cadence.js";
 import type { Cadence, Signal, UserState } from "./types.js";
 
 const TOTAL_BUDGET_MS = 1500;
@@ -37,16 +37,16 @@ async function readStdin(): Promise<StopInput> {
 }
 
 async function collectSignals(cwd: string): Promise<Signal[]> {
-  const [music, report, ambient, git] = await Promise.allSettled([
+  const [music, report, environment, git] = await Promise.allSettled([
     getMusicSignal(),
     getSelfReportSignal(),
-    getAmbientSignal(new Date()),
+    getEnvironmentSignal(new Date()),
     getGitSignal(cwd),
   ]);
   const signals: Signal[] = [];
   if (music.status === "fulfilled" && music.value) signals.push(music.value);
   if (report.status === "fulfilled" && report.value) signals.push(report.value);
-  if (ambient.status === "fulfilled" && ambient.value) signals.push(ambient.value);
+  if (environment.status === "fulfilled" && environment.value) signals.push(environment.value);
   if (git.status === "fulfilled" && git.value) signals.push(git.value);
   return signals;
 }
@@ -54,7 +54,7 @@ async function collectSignals(cwd: string): Promise<Signal[]> {
 function selfReportIsShipping(signals: Signal[]): boolean {
   const report = signals.find((s) => s.source === "self_report");
   if (!report) return false;
-  return /\b(ship|shipping|jamming|locked.?in|sending|grind|just|send it)\b/i.test(report.text);
+  return SHIP_PATTERN.test(report.text);
 }
 
 function pinnedActFreely(cadence: Cadence, pinned: (keyof Cadence)[]): boolean {
@@ -106,7 +106,7 @@ export function decideStop(
   return {
     decision: "block",
     reason:
-      "Cadence stop check: the user is in a shipping / act-freely cadence, but your last response ended as a soft handoff. Continue instead: make the call and complete the most likely next step, or if no tool work remains, replace the handoff with a decisive final answer. Do not ask permission unless there is a genuine blocker.",
+      "Cadence stop check: the user has granted shipping authority (explicit self-report or pinned dials), but your last response ended as a soft handoff. Continue instead: make the call and complete the most likely next step, or if no tool work remains, replace the handoff with a decisive final answer. Do not ask permission unless there is a genuine blocker.",
   };
 }
 
@@ -116,7 +116,10 @@ async function main() {
   const [signals, overrides] = await Promise.all([
     Promise.race<Signal[]>([
       collectSignals(projectDir),
-      new Promise<Signal[]>((resolve) => setTimeout(() => resolve([]), TOTAL_BUDGET_MS)),
+      // unref: the losing timer must not hold the process open (see hook.ts).
+      new Promise<Signal[]>((resolve) =>
+        setTimeout(() => resolve([]), TOTAL_BUDGET_MS).unref()
+      ),
     ]),
     loadOverrides(),
   ]);
@@ -124,7 +127,10 @@ async function main() {
   const state: UserState = { signals, capturedAt: Date.now() };
   const { cadence, pinned } = applyOverrides(deriveCadence(state), overrides);
   const decision = decideStop(input, signals, cadence, pinned);
-  if (decision) process.stdout.write(JSON.stringify(decision));
+  // Exit explicitly either way — a straggling provider subprocess must never
+  // delay the Stop event (write callback so the pipe flushes first).
+  if (decision) process.stdout.write(JSON.stringify(decision), () => process.exit(0));
+  else process.exit(0);
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {

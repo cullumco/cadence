@@ -62,7 +62,7 @@ Same words. The room around them changed, and the agent finally saw it.
 **Signals → dials → a reframe lens.**
 
 1. **Signals** — what Cadence can sense right now:
-   - **ambient** — time of day, day of week, weather (opt-in), battery, machine
+   - **environment** — time of day, day of week, weather (opt-in), battery, machine
      uptime/load, dark mode, displays, wifi, Focus/DND. Mostly zero-setup;
      time/day work everywhere, the Mac-context probes are macOS. The one signal
      that's always there: `context: friday afternoon, rainy, focus on`.
@@ -76,7 +76,7 @@ Same words. The room around them changed, and the agent finally saw it.
    - **music** — what's playing (via macOS now-playing, any player), turned into
      a clean *vibe* (mood words) via [MusicBrainz](https://musicbrainz.org). No
      Spotify login, no API key, no Premium.
-   - **self-report** — what you tell it: `cadence state "two beers, shipping"`.
+   - **self-report** — what you tell it: `cadence report "two beers, shipping"`.
 
    Time/day, self-report, and git move the dials (git reads *what you're
    doing*: 3+ commits/hr → fast pace, mid-conflict → verify-first); the rest
@@ -141,9 +141,10 @@ absent.
 ## Daily use
 
 ```bash
-cadence state "two beers, shipping"   # set self-reported state (expires in 4h)
-cadence state                         # print current self-report
+cadence report "two beers, shipping"  # set self-reported state (expires in 4h)
+cadence report                        # print current self-report
 cadence clear                         # clear it
+                                      # ("cadence state" still works as an alias)
 cadence test                          # preview exactly what the hook would inject
 cadence signals                       # every signal — live value, or why it's absent
 ```

@@ -89,6 +89,12 @@ if (installSmoke) {
     await mkdir(consumerDir);
     run("npm", ["init", "-y"], { cwd: consumerDir, capture: true });
     run("npm", ["install", tarball], { cwd: consumerDir, capture: true });
+    // Exercise the canonical command AND the deprecated alias — the skill
+    // shells out to `report`, older muscle memory still types `state`.
+    run(join(consumerDir, "node_modules", ".bin", "cadence"), ["report"], {
+      cwd: consumerDir,
+      capture: true,
+    });
     run(join(consumerDir, "node_modules", ".bin", "cadence"), ["state"], {
       cwd: consumerDir,
       capture: true,

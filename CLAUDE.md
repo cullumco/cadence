@@ -87,10 +87,11 @@ locks this in. Avoid edits that collapse the dials back into a single mode.
 ### Signal hierarchy and `deriveCadence` order
 
 Inside `deriveCadence()`, signals are applied weakest-first so stronger signals
-override. Current order: ambient (soft nudges) → music energy → self-report →
-activity. Git is collected and rendered as flavor but is *intentionally dormant*
-in dial mapping — its nudges are written but commented out until they're proven
-trustworthy on real output (see `BACKLOG.md`).
+override. Current order: environment (soft nudges) → music energy → git →
+self-report → activity. Git nudges (conflict → proactivity low, commit streak →
+pace high) were enabled 2026-06-05 once the rendered signal proved trustworthy;
+they sit below self-report on purpose so "I'm shipping" beats a mid-conflict
+read (see `BACKLOG.md`).
 
 ### Hook budget and "silent when empty"
 

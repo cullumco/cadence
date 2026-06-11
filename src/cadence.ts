@@ -9,11 +9,17 @@ import type {
   SelfReportSignal,
   GitSignal,
   ActivitySignal,
-  AmbientSignal,
+  EnvironmentSignal,
 } from "./types.js";
 
 export const DIALS = ["pace", "tone", "posture", "proactivity"] as const;
 const LEVELS: DialLevel[] = ["low", "medium", "high"];
+
+/* Shipping authority (see CONTEXT.md): the ship-pattern words a self-report
+ * must contain to count as explicit permission to act decisively. Shared with
+ * the Stop hook — keep it ONE pattern so dial nudging and stop blocking can't
+ * drift apart. Deliberately unambiguous tokens only; no bare "just". */
+export const SHIP_PATTERN = /\b(ship|shipping|jamming|locked.?in|sending|grind|send it)\b/i;
 
 /* ─────────────────────────────────────────────────────────────────────────
  * SCOTT — this is now THE file (it replaced mode.ts).
@@ -54,8 +60,8 @@ export function deriveCadence(state: UserState): Cadence {
   const activity = state.signals.find(
     (s): s is ActivitySignal => s.source === "activity"
   );
-  const ambient = state.signals.find(
-    (s): s is AmbientSignal => s.source === "ambient"
+  const environment = state.signals.find(
+    (s): s is EnvironmentSignal => s.source === "environment"
   );
 
   // Start neutral; each signal nudges individual dials.
@@ -66,17 +72,17 @@ export function deriveCadence(state: UserState): Cadence {
     proactivity: "medium",
   };
 
-  // ── ambient → soft nudges FIRST (weakest), so stronger signals below win ──
+  // ── environment → soft nudges FIRST (weakest), so stronger signals below win ──
   // Atmosphere, not orders: it colors the default, then music/self-report/git
   // can override. "It's late" shouldn't beat "I'm shipping."
-  if (ambient) {
-    if (ambient.hour >= 22 || ambient.hour < 6) c.pace = "low"; // late → gentler
-    if (ambient.partOfDay === "early morning") c.pace = "low"; // easing in
-    if (ambient.isWeekend) c.tone = "low"; // looser on weekends
-    if (ambient.weather && /rain|snow|fog|storm|cloud/.test(ambient.weather)) {
+  if (environment) {
+    if (environment.hour >= 22 || environment.hour < 6) c.pace = "low"; // late → gentler
+    if (environment.partOfDay === "early morning") c.pace = "low"; // easing in
+    if (environment.isWeekend) c.tone = "low"; // looser on weekends
+    if (environment.weather && /rain|snow|fog|storm|cloud/.test(environment.weather)) {
       c.tone = "low"; // gloomy out → warmer in
     }
-    if (ambient.onBattery) c.pace = "high"; // mobile/untethered → quick hits
+    if (environment.onBattery) c.pace = "high"; // mobile/untethered → quick hits
   }
 
   // ── music energy → pace (only pace; leave tone/posture to other signals) ──
@@ -90,7 +96,7 @@ export function deriveCadence(state: UserState): Cadence {
   }
 
   // ── git → pace / proactivity (what you're DOING, not what you said) ───────
-  // Enabled 2026-06-05 after the flavor proved trustworthy in real use.
+  // Enabled 2026-06-05 after the render-only git signal proved trustworthy.
   // Applied below self-report on purpose: "I'm shipping" beats a mid-conflict
   // read — the user's explicit word stays the higher authority.
   if (git) {
@@ -101,7 +107,7 @@ export function deriveCadence(state: UserState): Cadence {
   // ── self-report → posture / proactivity / tone (you know your state) ──────
   if (report) {
     const t = report.text.toLowerCase();
-    if (/\b(ship|shipping|jamming|locked.?in|sending|grind|just|send it)\b/.test(t)) {
+    if (SHIP_PATTERN.test(t)) {
       c.posture = "high";
       c.proactivity = "high";
       c.pace = "high";
@@ -119,7 +125,7 @@ export function deriveCadence(state: UserState): Cadence {
   }
 
   // Still-dormant candidate nudges (see BACKLOG):
-  //   ambient focus on → proactivity high (heads-down = fewer check-ins)
+  //   environment focus on → proactivity high (heads-down = fewer check-ins)
 
   // ── activity → pace (returning from a break = slow back down) ─────────────
   if (activity?.minSinceLastPrompt != null && activity.minSinceLastPrompt > 30) {

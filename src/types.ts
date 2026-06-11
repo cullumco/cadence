@@ -49,12 +49,13 @@ export interface PlaceSignal {
   displays?: number; // external monitors → "at the desk, dug in"
 }
 
-/* Ambient context — cheap, mostly-local atmosphere. time/day are universal and
- * dependency-free (the one signal that works on every OS, never absent);
- * weather is opt-in (needs a config-set location + network); battery is macOS.
- * Renders as flavor AND applies soft dial nudges (see deriveCadence). */
-export interface AmbientSignal {
-  source: "ambient";
+/* Environment signal — cheap, mostly-local atmosphere (the ambient layer the
+ * product is named for). time/day are universal and dependency-free (the one
+ * signal that works on every OS, never absent); weather is opt-in (needs a
+ * config-set location + network); battery is macOS. Renders as vibe AND
+ * applies soft dial nudges (see deriveCadence). */
+export interface EnvironmentSignal {
+  source: "environment";
   partOfDay: "early morning" | "morning" | "midday" | "afternoon" | "evening" | "late night";
   dayOfWeek: string; // "monday" … "sunday"
   isWeekend: boolean;
@@ -65,7 +66,7 @@ export interface AmbientSignal {
   // machine vitals (cross-platform, pure Node)
   uptimeHours?: number; // os.uptime() — long uptime → fatigue
   loadHigh?: boolean; // os.loadavg vs cpu count — busy machine
-  // mac context (best-effort shell-outs; flavor only)
+  // mac context (best-effort shell-outs; render-only, no dial nudges)
   focus?: boolean; // Do Not Disturb / Focus on → heads-down
   displays?: number; // external monitors → "at the desk"
   network?: string; // wifi SSID → home / office / café
@@ -78,7 +79,7 @@ export type Signal =
   | ActivitySignal
   | GitSignal
   | PlaceSignal
-  | AmbientSignal;
+  | EnvironmentSignal;
 
 export interface UserState {
   signals: Signal[];

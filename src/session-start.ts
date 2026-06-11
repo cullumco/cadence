@@ -29,16 +29,16 @@ export interface SessionInfo {
 // are signals, point at the inputs when there's nothing yet.
 export function composeHint(info: SessionInfo): string | null {
   if (info.firstRun) {
-    return 'cadence: on, but it hasn\'t heard from you — try `cadence start` (or just `cadence state "deep work"`)';
+    return 'cadence: on, but it hasn\'t heard from you — try `cadence start` (or just `cadence report "deep work"`)';
   }
   const seen: string[] = [];
-  if (info.selfReport) seen.push(`state "${info.selfReport}"`);
+  if (info.selfReport) seen.push(`report "${info.selfReport}"`);
   if (info.nowPlaying) seen.push(`${info.nowPlaying.player}: ${info.nowPlaying.artist}`);
   if (info.pinned.length) seen.push(`pinned ${info.pinned.join(", ")}`);
   if (seen.length === 0) {
-    return 'cadence: live, no signals right now — `cadence state "..."` to give it one';
+    return 'cadence: live, no signals right now — `cadence report "..."` to give it one';
   }
-  return `cadence: live — ${seen.join(" · ")}  (inputs: cadence state | dials)`;
+  return `cadence: live — ${seen.join(" · ")}  (inputs: cadence report | dials)`;
 }
 
 async function collectInfo(): Promise<SessionInfo> {
@@ -49,7 +49,8 @@ async function collectInfo(): Promise<SessionInfo> {
     loadOverrides(),
     Promise.race([
       getMusicSignal().catch(() => null),
-      new Promise<null>((resolve) => setTimeout(() => resolve(null), BUDGET_MS)),
+      // unref: the losing timer must not hold the process open (see hook.ts).
+      new Promise<null>((resolve) => setTimeout(() => resolve(null), BUDGET_MS).unref()),
     ]),
   ]);
   const pinned = Object.keys(overrides);
@@ -64,7 +65,8 @@ async function collectInfo(): Promise<SessionInfo> {
 async function main() {
   const hint = composeHint(await collectInfo());
   if (!hint) process.exit(0); // same contract as the prompt hook: silent when empty
-  process.stdout.write(JSON.stringify({ systemMessage: hint }));
+  // Write callback so the pipe flushes before we exit (see hook.ts).
+  process.stdout.write(JSON.stringify({ systemMessage: hint }), () => process.exit(0));
 }
 
 main().catch((err: unknown) => {

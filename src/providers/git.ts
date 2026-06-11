@@ -7,9 +7,10 @@ import type { GitSignal } from "../types.js";
  * Cross-platform (git is git everywhere). Reads the repo at `cwd` — which,
  * when run from the hook, is the project Claude Code is working in.
  *
- * Rendered as flavor for now: commits this hour, dirty files, and whether
- * you're mid-merge/rebase (the real debug tell). No dial nudges yet — we
- * watch the output first, then decide what should steer.
+ * Reports commits this hour, dirty files, and whether you're mid-merge/rebase
+ * (the real "in the weeds" tell). Two nudges are live as of 2026-06-05
+ * (conflict → proactivity low, ≥3 commits/hr → pace high); the rest renders
+ * without steering. New nudges get watched in the output before being enabled.
  * ───────────────────────────────────────────────────────────────────────── */
 
 const GIT_TIMEOUT_MS = 700;
