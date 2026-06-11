@@ -1,15 +1,18 @@
-# Turns an ANNOTATED tag (vX.Y.Z) into a GitHub Release whose body is the
-# tag's annotation message — the notes live in git, the Release mirrors them.
+# Mirrors a release into GitHub: creates the vX.Y.Z tag (if needed) and a
+# GitHub Release whose body comes from the committed notes file
+# `.github/releases/vX.Y.Z.md` — so release notes live in git and the
+# Release just reflects them.
 #
 # Two triggers:
-#   - tag push: works for tags whose commit contains this file (GitHub runs
-#     the workflow version AT the tagged commit, so tags on older commits
-#     won't fire it)
-#   - workflow_dispatch with a `tag` input: the reliable path, used by the
-#     release skill and for backfilling tags that predate this file
+#   - workflow_dispatch (tag + optional target): the canonical path, used by
+#     the release skill. Works from remote sessions, where the git proxy
+#     rejects tag pushes — GitHub creates the tag at `target` server-side.
+#   - tag push: convenience for locally-pushed annotated tags. Only fires for
+#     tags whose commit contains this file (GitHub runs the workflow version
+#     AT the tagged commit).
 #
-# Idempotent: if the Release already exists, the job exits cleanly — so
-# double-triggering (tag push + dispatch) is harmless.
+# Notes resolution order: committed notes file → annotated tag message →
+# GitHub auto-generated notes. Idempotent: an existing Release is a no-op.
 
 name: Release
 
@@ -19,8 +22,13 @@ on:
   workflow_dispatch:
     inputs:
       tag:
-        description: "Existing annotated tag to publish a GitHub Release for (e.g. v0.1.5)"
+        description: "Release tag (e.g. v0.1.5)"
         required: true
+        type: string
+      target:
+        description: "Commit SHA (or branch) to tag if the tag doesn't exist yet"
+        required: false
+        default: "main"
         type: string
 
 permissions:
@@ -28,7 +36,7 @@ permissions:
 
 jobs:
   github-release:
-    name: Create GitHub Release from tag
+    name: Create GitHub Release
     runs-on: ubuntu-latest
     steps:
       - name: Check out repository (with tags)
@@ -36,17 +44,32 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Create release from annotated tag
+      - name: Create tag (if needed) and Release
         env:
           GH_TOKEN: ${{ github.token }}
           TAG: ${{ inputs.tag || github.ref_name }}
+          TARGET: ${{ inputs.target || 'main' }}
         run: |
           if gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
             echo "release $TAG already exists — nothing to do"
             exit 0
           fi
-          gh release create "$TAG" \
-            --repo "$GITHUB_REPOSITORY" \
-            --title "$TAG" \
-            --verify-tag \
-            --notes-from-tag
+
+          args=(--repo "$GITHUB_REPOSITORY" --title "$TAG")
+
+          notes_file=".github/releases/${TAG}.md"
+          if [ -f "$notes_file" ]; then
+            args+=(--notes-file "$notes_file")
+          elif git rev-parse -q --verify "refs/tags/$TAG" >/dev/null; then
+            args+=(--notes-from-tag)
+          else
+            args+=(--generate-notes)
+          fi
+
+          if git rev-parse -q --verify "refs/tags/$TAG" >/dev/null; then
+            args+=(--verify-tag)
+          else
+            args+=(--target "$TARGET")  # GitHub creates the tag here
+          fi
+
+          gh release create "$TAG" "${args[@]}"

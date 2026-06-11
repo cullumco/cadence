@@ -242,13 +242,14 @@ state through other agent surfaces.
 ```bash
 npm run verify:alpha    # build + plugin validate + tests + dry-pack + install smoke test
 npm run release:alpha   # the full gate, then npm publish
-git tag -a vX.Y.Z       # annotated tag on the bump commit — the message IS the release notes
-git push origin vX.Y.Z  # the Release workflow turns the tag into a GitHub Release
+# then: write .github/releases/vX.Y.Z.md and dispatch the Release workflow —
+# it creates the tag + GitHub Release from that file
+gh workflow run Release -f tag=vX.Y.Z -f target=<bump-commit>
 ```
 
 CI runs the same gate on every push/PR to `main`
-(`.github/workflows/verify.yml`), and `.github/workflows/release.yml` mirrors
-each annotated tag into a GitHub Release.
+(`.github/workflows/verify.yml`); `.github/workflows/release.yml` turns each
+release into a tag + GitHub Release whose body is the committed notes file.
 
 ## What's next
 

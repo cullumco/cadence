@@ -29,22 +29,16 @@ do not re-ask.
    Bump version to X.Y.Z
    ```
 5. **Confirm**: `npm view @cullumco/cadence version` returns the new version.
-6. **Tag the bump commit — ANNOTATED, with real notes.** The tag message
-   becomes the GitHub Release body verbatim, so write it as a short
-   changelog (what shipped, user-visible first):
+6. **Write the release notes file** — `.github/releases/vX.Y.Z.md`. This is
+   the GitHub Release body verbatim: a short changelog, user-visible changes
+   first. Commit + push it on main.
+7. **Dispatch the `Release` workflow** (`.github/workflows/release.yml`) with
+   the tag and the bump commit. GitHub creates the tag at `target`
+   server-side AND the Release from the notes file — no tag push needed
+   (the remote-session git proxy 403s tag pushes anyway). Idempotent: an
+   existing Release is a no-op.
    ```bash
-   git tag -a vX.Y.Z <bump-commit> -m "vX.Y.Z
-
-   - headline change
-   - next change"
-   git push origin vX.Y.Z
-   ```
-7. **Mirror the tag into a GitHub Release.** The `Release` workflow
-   (`.github/workflows/release.yml`) does this; a tag push only triggers it
-   when the tagged commit contains that file, so the reliable path is to
-   dispatch it explicitly (it's idempotent — an existing Release is a no-op):
-   ```bash
-   gh workflow run Release -f tag=vX.Y.Z
+   gh workflow run Release -f tag=vX.Y.Z -f target=<bump-commit-sha>
    ```
    (No `gh` in remote sessions — use the GitHub MCP `actions_run_trigger`
    tool instead.)
@@ -63,7 +57,9 @@ do not re-ask.
 - Plugin installers get the new version through npm (`source: npm`), so
   publishing is what actually ships hook changes to users — pushing main
   alone does not.
-- Tag AFTER the publish succeeds, not before — a public tag/Release pointing
-  at a version npm doesn't serve is the pitch running ahead of reality.
-- Lightweight tags break the Release workflow (`--notes-from-tag` needs an
-  annotation). Always `git tag -a`.
+- Tag/Release AFTER the publish succeeds, not before — a public tag/Release
+  pointing at a version npm doesn't serve is the pitch running ahead of
+  reality.
+- Remote sessions cannot push tags (the git proxy 403s `refs/tags/*` while
+  branch pushes succeed, and reports a misleading "Everything up-to-date").
+  That's why the workflow creates the tag server-side via `--target`.
