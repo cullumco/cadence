@@ -628,7 +628,7 @@ test("scheduleActive: disabled trigger and junk shapes read as not active", asyn
 test("posttool shouldCheck: only git-ish Bash commands warrant a look", async () => {
   const { shouldCheck } = await import("../dist/posttool.js");
   assert.equal(shouldCheck({ tool_name: "Bash", tool_input: { command: "git merge main" } }), true);
-  assert.equal(shouldCheck({ tool_name: "Bash", tool_input: { command: "npm test" } }), false);
+  assert.equal(shouldCheck({ tool_name: "Bash", tool_input: { command: "npm test" } }), true); // test runs are observed now (failing-test transitions)
   assert.equal(shouldCheck({ tool_name: "Edit", tool_input: { command: "git merge" } }), false);
   assert.equal(shouldCheck({ tool_name: "Bash", tool_input: {} }), false);
   assert.equal(shouldCheck({}), false);
@@ -711,4 +711,60 @@ test("composeHint: nudges to refresh when the self-report is about to expire", (
   });
   assert.match(stale, /expiring/);
   assert.match(stale, /to refresh/);
+});
+
+// ── PostToolUse: failing-test transitions (V2 third cut) ───────────────────
+test("posttool isTestCommand: runners yes, incidental 'test' no", async () => {
+  const { isTestCommand } = await import("../dist/posttool.js");
+  assert.equal(isTestCommand("npm test"), true);
+  assert.equal(isTestCommand("npm run test -- --watch"), true);
+  assert.equal(isTestCommand("node --test test/cadence.test.js"), true);
+  assert.equal(isTestCommand("pytest -x tests/"), true);
+  assert.equal(isTestCommand("go test ./..."), true);
+  assert.equal(isTestCommand("cargo test"), true);
+  assert.equal(isTestCommand("git stash list | grep test"), false);
+  assert.equal(isTestCommand("ls test/"), false);
+});
+
+test("posttool testsFailedFrom: counts beat markers, unreadable is undefined", async () => {
+  const { testsFailedFrom } = await import("../dist/posttool.js");
+  // node runner
+  assert.equal(testsFailedFrom("ℹ tests 71\nℹ pass 71\nℹ fail 0"), false);
+  assert.equal(testsFailedFrom("✖ failing tests:\nℹ fail 4"), true);
+  // jest / pytest style
+  assert.equal(testsFailedFrom("Tests: 1 failed, 5 passed, 6 total"), true);
+  assert.equal(testsFailedFrom("==== 4 passed in 0.32s ===="), false);
+  // go test
+  assert.equal(testsFailedFrom("--- FAIL: TestThing (0.00s)\nFAIL"), true);
+  assert.equal(testsFailedFrom("ok  \texample.com/pkg\t0.5s"), false);
+  // TAP
+  assert.equal(testsFailedFrom("not ok 2 - thing"), true);
+  // markers inside an explicit zero count stay a pass
+  assert.equal(testsFailedFrom("✖ 0 failing"), false);
+  // can't tell → undefined, never a guess
+  assert.equal(testsFailedFrom(""), undefined);
+  assert.equal(testsFailedFrom(null), undefined);
+  assert.equal(testsFailedFrom("Compiling... done."), undefined);
+});
+
+test("posttool refineTests: speaks only on the failing edge, both directions", async () => {
+  const { refineTests } = await import("../dist/posttool.js");
+  assert.match(refineTests(false, true) ?? "", /test suite just started failing/);
+  assert.match(refineTests(undefined, true) ?? "", /started failing/);
+  assert.match(refineTests(true, false) ?? "", /passing again/);
+  assert.match(refineTests(false, true) ?? "", /follow their words/);
+  assert.equal(refineTests(true, true), null);
+  assert.equal(refineTests(false, false), null);
+  assert.equal(refineTests(undefined, false), null); // first clean observation
+});
+
+// ── weather cache ───────────────────────────────────────────────────────────
+test("weatherCacheFresh: same location within TTL only", async () => {
+  const { weatherCacheFresh } = await import("../dist/providers/environment.js");
+  const c = { word: "rainy", at: 1_000_000, lat: 40.7, lon: -74.0 };
+  assert.equal(weatherCacheFresh(c, 40.7, -74.0, 1_000_000 + 29 * 60_000), true);
+  assert.equal(weatherCacheFresh(c, 40.7, -74.0, 1_000_000 + 31 * 60_000), false); // expired
+  assert.equal(weatherCacheFresh(c, 51.5, -0.1, 1_000_000 + 60_000), false); // moved
+  assert.equal(weatherCacheFresh(null, 40.7, -74.0, 1_000_000), false);
+  assert.equal(weatherCacheFresh("junk", 40.7, -74.0, 1_000_000), false);
 });

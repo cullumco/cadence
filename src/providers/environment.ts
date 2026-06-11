@@ -1,5 +1,5 @@
 import { exec } from "node:child_process";
-import { readFile } from "node:fs/promises";
+import { readFile, writeFile, mkdir } from "node:fs/promises";
 import { homedir, uptime, loadavg, cpus } from "node:os";
 import { join } from "node:path";
 import type { EnvironmentSignal } from "../types.js";
@@ -207,6 +207,36 @@ function weatherWord(code: number): string {
   return "stormy";
 }
 
+const WEATHER_CACHE_FILE = join(homedir(), ".cadence", "weather-cache.json");
+// Weather barely moves in half an hour, and the hook + stop hook both ask —
+// without a cache that's two Open-Meteo round-trips per turn for one word.
+const WEATHER_CACHE_MS = 30 * 60_000;
+
+interface WeatherCache {
+  word: string;
+  at: number;
+  lat: number;
+  lon: number;
+}
+
+// Pure freshness check, exported for tests: same location, younger than TTL.
+export function weatherCacheFresh(
+  c: unknown,
+  lat: number,
+  lon: number,
+  now: number
+): c is WeatherCache {
+  if (!c || typeof c !== "object") return false;
+  const w = c as Partial<WeatherCache>;
+  return (
+    typeof w.word === "string" &&
+    typeof w.at === "number" &&
+    w.lat === lat &&
+    w.lon === lon &&
+    now - w.at <= WEATHER_CACHE_MS
+  );
+}
+
 async function getWeather(): Promise<string | undefined> {
   let cfg: CadenceConfig;
   try {
@@ -216,6 +246,13 @@ async function getWeather(): Promise<string | undefined> {
   }
   const loc = cfg.location;
   if (!loc || typeof loc.lat !== "number" || typeof loc.lon !== "number") return undefined;
+
+  try {
+    const cached: unknown = JSON.parse(await readFile(WEATHER_CACHE_FILE, "utf-8"));
+    if (weatherCacheFresh(cached, loc.lat, loc.lon, Date.now())) return cached.word;
+  } catch {
+    // no cache yet → fetch below
+  }
 
   const ctrl = new AbortController();
   const timer = setTimeout(() => ctrl.abort(), WEATHER_TIMEOUT_MS);
@@ -227,7 +264,17 @@ async function getWeather(): Promise<string | undefined> {
     if (!res.ok) return undefined;
     const data = (await res.json()) as { current?: { weather_code?: number } };
     const code = data.current?.weather_code;
-    return typeof code === "number" ? weatherWord(code) : undefined;
+    if (typeof code !== "number") return undefined;
+    const word = weatherWord(code);
+    try {
+      // best-effort cache write; a miss just means we fetch again next prompt
+      await mkdir(join(homedir(), ".cadence"), { recursive: true });
+      const cache: WeatherCache = { word, at: Date.now(), lat: loc.lat, lon: loc.lon };
+      await writeFile(WEATHER_CACHE_FILE, JSON.stringify(cache), "utf-8");
+    } catch {
+      // ignore
+    }
+    return word;
   } catch {
     return undefined;
   } finally {

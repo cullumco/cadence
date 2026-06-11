@@ -169,7 +169,8 @@ flag. Any new hook must add the same first-line check.
   that category must degrade silently on Linux/Windows.
 - **No new network deps without a strong case.** Current network calls are
   MusicBrainz (one-time per artist, cached forever in `~/.cadence/vibe-cache.json`),
-  Open-Meteo (opt-in, requires explicit `cadence set-location`), the opt-in
+  Open-Meteo (opt-in, requires explicit `cadence set-location`; cached 30 min
+  in `~/.cadence/weather-cache.json` so prompt+stop don't double-fetch), the opt-in
   Spotify `currently-playing` endpoint, and the opt-in daily horoscope. All are
   keyless or user-credentialed, opt-in, and bounded by short `AbortController`
   timeouts.
@@ -189,5 +190,6 @@ flag. Any new hook must add the same first-line check.
 - **State lives in `~/.cadence/`**: `state.txt` (self-report, 2h TTL),
   `config.json` (pinned dials + weather location + `providers` opt-in registry),
   `activity.json` (last prompt timestamp + tempo window), `vibe-cache.json`
-  (MusicBrainz tag cache), `spotify-token.json` (cached access token),
-  `workstate.json` (PostToolUse conflict/thrash state).
+  (MusicBrainz tag cache), `weather-cache.json` (30-min weather word),
+  `spotify-token.json` (cached access token), `workstate.json` (PostToolUse
+  conflict/thrash/tests state).

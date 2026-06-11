@@ -3,7 +3,7 @@ import { writeFile, mkdir, readFile } from "node:fs/promises";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { getMusicSignal } from "./providers/music.js";
-import { getSelfReportSignal } from "./providers/selfreport.js";
+import { getSelfReportSignal, STALE_AFTER_MS } from "./providers/selfreport.js";
 import { getEnvironmentSignal } from "./providers/environment.js";
 import { getGitSignal } from "./providers/git.js";
 import { getEsotericSignal } from "./providers/esoteric.js";
@@ -28,24 +28,38 @@ const CONFIG_FILE = join(CADENCE_DIR, "config.json");
 
 async function cmdReport(args: string[]) {
   if (args.length === 0) {
+    // Same TTL the hook applies — printing an expired report as if it were
+    // live would contradict what actually gets injected.
+    const report = await getSelfReportSignal();
+    if (report) {
+      const rem = Math.max(0, STALE_AFTER_MS - (Date.now() - report.setAt));
+      const h = Math.floor(rem / 3_600_000);
+      const m = Math.floor((rem % 3_600_000) / 60_000);
+      console.log(`${report.text}  (${h > 0 ? `${h}h${String(m).padStart(2, "0")}m` : `${m}m`} left)`);
+      return;
+    }
     try {
-      const text = (await readFile(STATE_FILE, "utf-8")).trim();
-      console.log(text || "(no state set)");
+      const stale = (await readFile(STATE_FILE, "utf-8")).trim();
+      console.log(
+        stale
+          ? `(last self-report expired — refresh: cadence report "...")`
+          : "(no self-report set)"
+      );
     } catch {
-      console.log("(no state set)");
+      console.log("(no self-report set)");
     }
     return;
   }
   const text = args.join(" ");
   await mkdir(CADENCE_DIR, { recursive: true });
   await writeFile(STATE_FILE, text, "utf-8");
-  console.log(`  state set: "${text}"`);
+  console.log(`  self-report set: "${text}"`);
 }
 
 async function cmdClear() {
   await mkdir(CADENCE_DIR, { recursive: true });
   await writeFile(STATE_FILE, "", "utf-8");
-  console.log("  state cleared");
+  console.log("  self-report cleared");
 }
 
 // Collects live signals and renders the exact block the hook would inject,

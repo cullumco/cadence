@@ -51,8 +51,13 @@ Answers to the open questions, as built:
 `reset --hard` / true force-pushes (not `--force-with-lease`) read off the
 command string, same once-per-transition discipline, threshold 2 in the window.
 
+**Third cut SHIPPED:** failing-test transitions — test-runner commands
+(`isTestCommand`) get their output read for failure counts/markers
+(`testsFailedFrom`, tri-state honest: an unreadable run keeps the previous
+observation, never clears it), edge-triggered both directions like conflicts.
+Priority when several fire at once: conflict > tests > thrash.
+
 **Next material events to consider** (same transition discipline):
-- failing-test transitions (needs a cheap, tool-agnostic "tests failed" read)
 - dirty-file count exploding mid-task
 
 ## V3 — Finish-line enforcement (Stop)

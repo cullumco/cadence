@@ -15,15 +15,17 @@ import { isPaused } from "./config.js";
  * event: the repo entering or leaving a merge/rebase conflict — the
  * strongest debug tell we have, far stronger than music ever was.
  *
- * Two material events now, same discipline:
+ * Three material events now, same discipline:
  *   1. the repo entering/leaving a merge/rebase conflict (re-observed via git)
  *   2. a streak of destructive git ops — reset --hard / force-push — read off
  *      the command string (no tool_response parsing), i.e. thrash.
+ *   3. the test suite entering/leaving a failing state — read off the output
+ *      of test-runner commands, tri-state honest (can't tell → don't update).
  *
  * Discipline (the BACKLOG's hard constraint):
- *   - fires only after Bash tool calls whose command mentions git
- *   - injects at most once per TRANSITION (conflict edge, or thrash threshold),
- *     never per tool
+ *   - fires only after Bash tool calls whose command mentions git or a test run
+ *   - injects at most once per TRANSITION (conflict edge, thrash threshold,
+ *     or tests-failing edge), never per tool
  *   - silent in every other case, silent on every error
  * ───────────────────────────────────────────────────────────────────────── */
 
@@ -38,15 +40,30 @@ interface PostToolInput {
   cwd?: string;
   tool_name?: string;
   tool_input?: { command?: unknown };
+  tool_response?: unknown;
 }
 
-// Gate 1: is this tool call even capable of changing git conflict state?
-// Only Bash commands that mention git — Edit/Read/etc. can't start a merge,
-// and checking the repo after every tool call would betray the silence rule.
+// Does this command run a test suite? Phrase-based like intent.ts — runner
+// names and `npm test`-shaped invocations, not the bare word "test" (which
+// would match `git stash list | grep test`). Pure + exported for tests.
+export function isTestCommand(cmd: string): boolean {
+  return (
+    /\b(?:npm|yarn|pnpm|bun)\s+(?:run\s+)?test\b/.test(cmd) ||
+    /\bnode\s+--test\b/.test(cmd) ||
+    /\b(?:jest|vitest|mocha|pytest|tape|ava)\b/.test(cmd) ||
+    /\bgo\s+test\b/.test(cmd) ||
+    /\bcargo\s+test\b/.test(cmd)
+  );
+}
+
+// Gate 1: is this tool call even capable of changing what we observe?
+// Only Bash commands that mention git (conflict/thrash) or run tests —
+// checking after every tool call would betray the silence rule.
 export function shouldCheck(input: PostToolInput): boolean {
   if (input.tool_name !== "Bash") return false;
   const cmd = input.tool_input?.command;
-  return typeof cmd === "string" && /\bgit\b/.test(cmd);
+  if (typeof cmd !== "string") return false;
+  return /\bgit\b/.test(cmd) || isTestCommand(cmd);
 }
 
 // Gate 2: did the observed state actually TRANSITION? Speak only on the edge.
@@ -74,6 +91,54 @@ export function refineContext(
     );
   }
   return null; // first observation of a clean repo: record silently
+}
+
+/* Did the test run fail? Tri-state honest, read off the runner's own summary:
+ *   true       a nonzero failure count, or an unambiguous failure marker
+ *   false      an explicit zero-failure count, or passes with no failure marks
+ *   undefined  can't tell → caller must NOT update state (couldn't look ≠ ok)
+ * Counts beat markers: "✖ 0 failing" is a pass even though ✖ appears. */
+export function testsFailedFrom(resp: unknown): boolean | undefined {
+  if (resp == null) return undefined;
+  const text = typeof resp === "string" ? resp : JSON.stringify(resp);
+  if (!text) return undefined;
+
+  // explicit counts, either word order: "2 failed" / "fail 2" / "failures: 0"
+  const counts = [
+    ...text.matchAll(/(\d+)\s*(?:tests?\s+)?fail(?:ed|ing|ures?)?\b/gi),
+    ...text.matchAll(/\bfail(?:ed|ing|ures?)?[:\s]+(\d+)/gi),
+  ].map((m) => Number(m[1]));
+  if (counts.some((n) => n > 0)) return true;
+  if (counts.length > 0) return false;
+
+  // unambiguous markers (go test FAIL, TAP "not ok", node/jest ✖ lists)
+  if (/\bFAIL(?:ED)?\b/.test(text) || /\bnot ok\b/.test(text) || /✖/.test(text)) return true;
+  // passes with no failure marks anywhere
+  if (/\b\d+\s+pass(?:ed|ing)?\b/i.test(text) || /\bok\b/.test(text)) return false;
+  return undefined;
+}
+
+// Same edge contract as refineContext, for the tests-failing state.
+export function refineTests(
+  prev: boolean | undefined,
+  failing: boolean
+): string | null {
+  if (prev === failing) return null;
+  if (failing) {
+    return (
+      "<user_state_update>observed work: the test suite just started failing. " +
+      "Read the cadence as debug now — verify before building further, and " +
+      "treat the failures as the current ground truth. If the user's words " +
+      "clearly mean otherwise, follow their words.</user_state_update>"
+    );
+  }
+  if (prev === true) {
+    return (
+      "<user_state_update>observed work: the tests are passing again — drop " +
+      "the debug framing and return to the user's prior cadence.</user_state_update>"
+    );
+  }
+  return null; // first observation of a passing suite: record silently
 }
 
 // Is this command a destructive/undo git op? Just `reset --hard` and a true
@@ -117,6 +182,7 @@ interface WorkEntry {
   at: number;
   thrashTimes?: number[];
   thrashAnnounced?: boolean;
+  testsFailing?: boolean;
 }
 type WorkState = Record<string, WorkEntry>;
 
@@ -168,12 +234,18 @@ async function main() {
   const state = await loadState();
   const prev = state[key];
   const now = Date.now();
+  const cmd = typeof input.tool_input?.command === "string" ? input.tool_input.command : "";
 
   // 1. conflict edge (re-observed via git)
   const conflictMsg = refineContext(prev?.conflicted, git.conflicted);
 
-  // 2. thrash threshold (read off the command string)
-  const cmd = typeof input.tool_input?.command === "string" ? input.tool_input.command : "";
+  // 2. tests-failing edge (read off the runner's output; tri-state honest —
+  //    an unreadable run keeps the previous observation, it never clears it)
+  const failed = isTestCommand(cmd) ? testsFailedFrom(input.tool_response) : undefined;
+  const testsFailing = failed ?? prev?.testsFailing;
+  const testsMsg = failed != null ? refineTests(prev?.testsFailing, failed) : null;
+
+  // 3. thrash threshold (read off the command string)
   const times = prev?.thrashTimes ?? [];
   const nextTimes = isThrashCommand(cmd) ? [...times, now] : times;
   const thrash = refineThrash(nextTimes, now, prev?.thrashAnnounced ?? false);
@@ -183,11 +255,12 @@ async function main() {
     at: now,
     thrashTimes: thrash.times,
     thrashAnnounced: thrash.announced,
+    ...(testsFailing != null ? { testsFailing } : {}),
   };
   await saveState(state);
 
-  // A conflict edge is the stronger tell; fall back to thrash. At most one.
-  const message = conflictMsg ?? thrash.message;
+  // Strongest tell wins: conflict > tests > thrash. At most one message.
+  const message = conflictMsg ?? testsMsg ?? thrash.message;
   if (message) {
     process.stdout.write(
       JSON.stringify({
