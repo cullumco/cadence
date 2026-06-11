@@ -145,7 +145,9 @@ const GENRE_AFFECT: Record<string, Affect> = {
 
 export interface Vibe {
   moods: Mood[]; // 2–4 clean adjectives, ordered by salience
-  energy: number; // averaged 0–1 — feeds the pace dial in cadence.ts
+  energy: number; // averaged 0–1 — feeds the pace + posture dials in cadence.ts
+  valence: number; // averaged 0–1 — positiveness, colors the mood words
+  acoustic: number; // averaged 0–1 — organic/acoustic-ness → warms the tone dial
 }
 
 // Keys sorted longest-first so the most SPECIFIC row wins per tag: a
@@ -168,8 +170,11 @@ export function tagsToVibe(tags: string[]): Vibe | null {
   }
   if (hits.length === 0) return null;
 
-  const energy =
-    hits.reduce((s, a) => s + a.energy, 0) / hits.length;
+  const avg = (pick: (a: Affect) => number) =>
+    hits.reduce((s, a) => s + pick(a), 0) / hits.length;
+  const energy = avg((a) => a.energy);
+  const valence = avg((a) => a.valence);
+  const acoustic = avg((a) => a.acoustic);
 
   // Mood words: collect from all hits, dedupe, keep most frequent first.
   const moodCounts = new Map<Mood, number>();
@@ -181,5 +186,5 @@ export function tagsToVibe(tags: string[]): Vibe | null {
     .slice(0, 4)
     .map(([m]) => m);
 
-  return { moods, energy };
+  return { moods, energy, valence, acoustic };
 }

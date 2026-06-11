@@ -9,6 +9,7 @@ import type {
   SelfReportSignal,
   GitSignal,
   ActivitySignal,
+  IntentSignal,
   AmbientSignal,
 } from "./types.js";
 
@@ -30,9 +31,10 @@ const LEVELS: DialLevel[] = ["low", "medium", "high"];
  *
  * Signals you can read (any subset present):
  *   report   { text }                  ← you said it; trust it most
+ *   intent   { kind }                  ← read from the prompt you just typed
  *   music    { vibe, energy }          ← energy 0–1 drives pace; vibe colors tone
- *   git      { commitsLastHour, ... }  ← work rhythm (when the provider lands)
- *   activity { minSinceLastPrompt, promptLength }
+ *   git      { commitsLastHour, ... }  ← work rhythm
+ *   activity { minSinceLastPrompt, promptLength, tempo }
  *
  * A working baseline is below so it runs end-to-end. The mapping is yours.
  * ───────────────────────────────────────────────────────────────────────── */
@@ -51,6 +53,9 @@ export function deriveCadence(state: UserState): Cadence {
     (s): s is SelfReportSignal => s.source === "self_report"
   );
   const git = state.signals.find((s): s is GitSignal => s.source === "git");
+  const intent = state.signals.find(
+    (s): s is IntentSignal => s.source === "intent"
+  );
   const activity = state.signals.find(
     (s): s is ActivitySignal => s.source === "activity"
   );
@@ -79,13 +84,22 @@ export function deriveCadence(state: UserState): Cadence {
     if (ambient.onBattery) c.pace = "high"; // mobile/untethered → quick hits
   }
 
-  // ── music energy → pace (only pace; leave tone/posture to other signals) ──
+  // ── music → pace + posture + tone (move WITH the music) ───────────────────
+  // Deliberately moves three dials, not one: a track has a tempo (pace), an
+  // intensity (decisive vs. spacious posture), and a texture (warm tone). It
+  // leaves PROACTIVITY alone — whether to act without checking in is the user's
+  // call (self-report/intent/git), never the soundtrack's. See CLAUDE.md.
   if (music?.energy != null) {
-    if (music.energy >= 0.7) c.pace = "high";
-    else if (music.energy <= 0.4) c.pace = "low";
+    if (music.energy >= 0.7) c.pace = "high"; // driving → fast
+    else if (music.energy <= 0.4) c.pace = "low"; // mellow → deliberate
+    if (music.energy >= 0.75) c.posture = "high"; // high intensity → decisive momentum
+    else if (music.energy <= 0.35) c.posture = "low"; // ambient → spacious, exploratory
   }
-  // mellow/organic vibe words warm the tone
-  if (music?.vibe && /\b(calm|chilled|ethereal|romantic|warm)\b/.test(music.vibe)) {
+  // organic/acoustic texture, or mellow vibe words, warm the tone
+  if (
+    (music?.acoustic != null && music.acoustic >= 0.5) ||
+    (music?.vibe && /\b(calm|chilled|ethereal|romantic|warm|sexy)\b/.test(music.vibe))
+  ) {
     c.tone = "low";
   }
 
@@ -96,6 +110,27 @@ export function deriveCadence(state: UserState): Cadence {
   if (git) {
     if (git.commitsLastHour >= 3) c.pace = "high"; // flow state
     if (git.conflicted) c.proactivity = "low"; // verify, don't barrel
+  }
+
+  // ── prompt intent → posture / proactivity / tone (what you JUST typed) ────
+  // Read from the live prompt, so the "same prompt, different room" behavior
+  // fires without a separate CLI step. Stronger than git (what you're doing),
+  // weaker than self-report below (a deliberate, out-of-band declaration), so
+  // an explicit `cadence state "thinking"` still beats a stray "ship it".
+  if (intent?.kind) {
+    if (intent.kind === "ship") {
+      c.posture = "high";
+      c.proactivity = "high";
+      c.pace = "high";
+    } else if (intent.kind === "think") {
+      c.posture = "low";
+      c.pace = "low";
+    } else if (intent.kind === "debug") {
+      c.posture = "low";
+      c.proactivity = "low";
+    } else if (intent.kind === "focus") {
+      c.tone = "high";
+    }
   }
 
   // ── self-report → posture / proactivity / tone (you know your state) ──────
@@ -121,7 +156,12 @@ export function deriveCadence(state: UserState): Cadence {
   // Still-dormant candidate nudges (see BACKLOG):
   //   ambient focus on → proactivity high (heads-down = fewer check-ins)
 
-  // ── activity → pace (returning from a break = slow back down) ─────────────
+  // ── activity → pace (motor tempo + return-from-break) ─────────────────────
+  // typing tempo (opt-in): rapid-fire short prompts read as fast; one long
+  // considered prompt reads as deliberate. Only set when the user opted in.
+  if (activity?.tempo === "rapid") c.pace = "high";
+  else if (activity?.tempo === "considered") c.pace = "low";
+  // a long gap since the last prompt = returning from a break = slow back down.
   if (activity?.minSinceLastPrompt != null && activity.minSinceLastPrompt > 30) {
     c.pace = "low";
   }

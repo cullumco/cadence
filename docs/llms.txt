@@ -1,14 +1,16 @@
 # Cadence
 
-> Cadence is an ambient context layer for Claude Code. It reads the room — music, time of day, self-reported state, git activity — and injects that state into every prompt so the agent can respond like someone who actually knows what you're in the middle of.
+> Cadence is an ambient context layer for Claude Code. It reads the room — the intent in your prompt, music, time of day, self-reported state, git activity — and injects that state into every prompt so the agent can respond like someone who actually knows what you're in the middle of.
 
-Cadence is built by Cullum & Co (https://cullum.co). It is a Claude Code plugin, currently a macOS-only alpha, distributed via npm as `@cullumco/cadence`.
+Cadence is built by Cullum & Co (https://cullum.co). It is an open-source (MIT) Claude Code plugin, built for the Mac (alpha), distributed via npm as `@cullumco/cadence`. The GitHub README is the canonical, complete documentation; this site is the why.
 
 ## What it does
 
-- Gathers ambient signals: currently playing music, time of day, system uptime, prompt timing, and optional self-reported state (`/cadence:state`).
+- Gathers ambient signals: prompt intent (ship/think/debug read from your own words), currently playing music, time of day, git work-state, prompt rhythm, and self-reported state (`/cadence:state`).
+- Privacy-adjacent signals (typing tempo, focused app, Spotify link, horoscope/moon) are opt-in and off by default; `cadence pause` silences everything instantly.
 - Infers four cadence dials — pace, tone, posture, proactivity — and injects them into every prompt as advisory context.
 - Gives the agent a reframe lens: read the prompt the way someone in that state meant it, without overriding the user's literal words.
+- Conservative Stop and PostToolUse hooks: catches soft handoffs when you're shipping, and speaks once when the repo enters/leaves a conflict or a destructive-git streak.
 
 ## Who it's for
 
@@ -18,9 +20,10 @@ Developer-practitioners who use Claude Code seriously — engineers, writers, an
 
 - `/plugin marketplace add cullumco/cadence`
 - `/plugin install cadence@cadence`
+- `/cadence:setup` — conversational setup; `/cadence:pause` — instant off switch
 
 ## Links
 
+- [GitHub — the full documentation](https://github.com/cullumco/cadence)
 - [Website](https://cadence.cullum.co/)
-- [GitHub](https://github.com/cullumco/cadence)
 - [npm](https://www.npmjs.com/package/@cullumco/cadence)

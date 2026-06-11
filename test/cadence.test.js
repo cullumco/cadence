@@ -7,8 +7,14 @@ import { tagsToVibe } from "../dist/vibe.js";
 import { deriveCadence, buildReframe, applyOverrides, resolveDialLevel } from "../dist/cadence.js";
 import { render } from "../dist/inject.js";
 import { decideStop, isSoftHandoff } from "../dist/stop.js";
-import { activityFrom } from "../dist/providers/activity.js";
+import { activityFrom, computeTempo } from "../dist/providers/activity.js";
+import { detectPromptIntent } from "../dist/providers/intent.js";
 import { renderSignalsTable } from "../dist/signals-view.js";
+import { providerEnabled, readPaused } from "../dist/config.js";
+import { readCreds } from "../dist/providers/spotify.js";
+import { composeHint } from "../dist/session-start.js";
+import { moonPhase, getEsotericSignal } from "../dist/providers/esoteric.js";
+import { generatePkce, buildAuthorizeUrl, parseTokenResponse, REDIRECT_URI } from "../dist/spotify-auth.js";
 
 // ── tagsToVibe ──────────────────────────────────────────────────────────────
 test("tagsToVibe: high-energy genres read fast + aggressive", () => {
@@ -63,12 +69,23 @@ test("deriveCadence: think-ish self-report slows pace + opens posture", () => {
   assert.equal(c.posture, "low");
 });
 
-test("deriveCadence: dials are independent — music sets pace, leaves posture neutral", () => {
+test("deriveCadence: music moves pace/posture/tone but never proactivity", () => {
   const c = deriveCadence(
-    stateWith([{ source: "music", track: "x", energy: 0.9 }])
+    stateWith([{ source: "music", track: "x", energy: 0.9, acoustic: 0.6, vibe: "chilled" }])
   );
-  assert.equal(c.pace, "high"); // music energy moved pace
-  assert.equal(c.posture, "medium"); // but NOT posture — orthogonality
+  assert.equal(c.pace, "high"); // energy → pace
+  assert.equal(c.posture, "high"); // high intensity → decisive posture
+  assert.equal(c.tone, "low"); // acoustic/mellow → warm tone
+  assert.equal(c.proactivity, "medium"); // the soundtrack never touches proactivity
+});
+
+test("deriveCadence: ambient music opens posture (spacious, exploratory)", () => {
+  const c = deriveCadence(
+    stateWith([{ source: "music", track: "x", energy: 0.2, acoustic: 0.6 }])
+  );
+  assert.equal(c.pace, "low"); // mellow → deliberate
+  assert.equal(c.posture, "low"); // low intensity → exploratory
+  assert.equal(c.proactivity, "medium"); // still untouched
 });
 
 test("deriveCadence: no signals → all dials neutral", () => {
@@ -79,6 +96,151 @@ test("deriveCadence: no signals → all dials neutral", () => {
     posture: "medium",
     proactivity: "medium",
   });
+});
+
+// ── prompt intent ────────────────────────────────────────────────────────────
+test("detectPromptIntent: phrase cues classify, bare common words don't misfire", () => {
+  assert.equal(detectPromptIntent("ok let's ship it, the retry logic is done"), "ship");
+  assert.equal(detectPromptIntent("help me think through the tradeoffs here"), "think");
+  assert.equal(detectPromptIntent("why is this test failing on CI?"), "debug");
+  assert.equal(detectPromptIntent("heads down, deep work for the next hour"), "focus");
+  // the bare words that the self-report regex leans on must NOT trigger here
+  assert.equal(detectPromptIntent("can you just check this file?"), null);
+  assert.equal(detectPromptIntent("rename the variable to userId"), null);
+});
+
+test("deriveCadence: ship intent from the prompt drives decisive + act-freely", () => {
+  const c = deriveCadence(stateWith([{ source: "intent", kind: "ship" }]));
+  assert.equal(c.posture, "high");
+  assert.equal(c.proactivity, "high");
+  assert.equal(c.pace, "high");
+});
+
+test("deriveCadence: debug intent leads with hypotheses (low posture + proactivity)", () => {
+  const c = deriveCadence(stateWith([{ source: "intent", kind: "debug" }]));
+  assert.equal(c.posture, "low");
+  assert.equal(c.proactivity, "low");
+});
+
+test("deriveCadence: self-report outranks prompt intent — deliberate beats stray", () => {
+  const c = deriveCadence(
+    stateWith([
+      { source: "intent", kind: "ship" },
+      { source: "self_report", text: "thinking through tradeoffs", setAt: 0 },
+    ])
+  );
+  assert.equal(c.pace, "low"); // self-report's "think" wins over intent's "ship"
+  assert.equal(c.posture, "low");
+});
+
+test("deriveCadence: prompt intent outranks git — typed word beats work-state read", () => {
+  const c = deriveCadence(
+    stateWith([
+      { source: "git", commitsLastHour: 0, filesDirty: 6, conflicted: true },
+      { source: "intent", kind: "ship" },
+    ])
+  );
+  assert.equal(c.proactivity, "high"); // intent "ship" beats git's conflict→low
+});
+
+// ── typing tempo ─────────────────────────────────────────────────────────────
+test("computeTempo: a long considered prompt reads deliberate", () => {
+  assert.equal(computeTempo([{ at: 1000, len: 400 }]), "considered");
+});
+
+test("computeTempo: a tight burst of short prompts reads rapid", () => {
+  const window = [
+    { at: 0, len: 20 },
+    { at: 60_000, len: 30 },
+    { at: 120_000, len: 25 },
+  ];
+  assert.equal(computeTempo(window), "rapid");
+});
+
+test("computeTempo: a single short prompt isn't enough rhythm to call", () => {
+  assert.equal(computeTempo([{ at: 0, len: 20 }]), undefined);
+});
+
+test("activityFrom: tempo only computed when opted in", () => {
+  const recent = [
+    { at: 0, len: 20 },
+    { at: 60_000, len: 30 },
+  ];
+  const off = activityFrom("go", 60_000, 120_000, recent, false);
+  assert.equal(off.tempo, undefined);
+  const on = activityFrom("go", 60_000, 120_000, recent, true);
+  assert.equal(on.tempo, "rapid");
+});
+
+test("deriveCadence: rapid tempo lifts pace, considered lowers it", () => {
+  assert.equal(deriveCadence(stateWith([{ source: "activity", tempo: "rapid" }])).pace, "high");
+  assert.equal(deriveCadence(stateWith([{ source: "activity", tempo: "considered" }])).pace, "low");
+});
+
+// ── opt-in provider registry ─────────────────────────────────────────────────
+test("providerEnabled: truthy values opt in, falsy/empty stay off", () => {
+  assert.equal(providerEnabled({ typingTempo: true }, "typingTempo"), true);
+  assert.equal(providerEnabled({ horoscope: "leo" }, "horoscope"), true);
+  assert.equal(providerEnabled({ calendar: { ics: "u" } }, "calendar"), true);
+  assert.equal(providerEnabled({ typingTempo: false }, "typingTempo"), false);
+  assert.equal(providerEnabled({ horoscope: "" }, "horoscope"), false);
+  assert.equal(providerEnabled({ calendar: {} }, "calendar"), false);
+  assert.equal(providerEnabled({}, "typingTempo"), false);
+});
+
+test("readCreds: needs both refreshToken and clientId, else null (opt-in + complete)", () => {
+  assert.equal(readCreds({}), null); // not opted in
+  assert.equal(readCreds({ spotify: { clientId: "a" } }), null); // missing refresh token
+  assert.equal(readCreds({ spotify: { refreshToken: "b" } }), null); // missing client id
+  const ok = readCreds({ spotify: { clientId: "a", refreshToken: "b" } });
+  assert.equal(ok.clientId, "a");
+  assert.equal(ok.refreshToken, "b");
+});
+
+// ── Spotify connect (PKCE) pure helpers ──────────────────────────────────────
+test("generatePkce: verifier in range, challenge is url-safe S256", () => {
+  const { verifier, challenge } = generatePkce();
+  assert.ok(verifier.length >= 43 && verifier.length <= 128, `verifier len ${verifier.length}`);
+  assert.doesNotMatch(challenge, /[+/=]/); // base64url, no padding/url-unsafe chars
+  assert.notEqual(generatePkce().verifier, verifier); // fresh each call
+});
+
+test("buildAuthorizeUrl: carries PKCE params and the loopback redirect", () => {
+  const url = buildAuthorizeUrl({ clientId: "cid", challenge: "chal", state: "st" });
+  const u = new URL(url);
+  assert.equal(u.searchParams.get("client_id"), "cid");
+  assert.equal(u.searchParams.get("code_challenge"), "chal");
+  assert.equal(u.searchParams.get("code_challenge_method"), "S256");
+  assert.equal(u.searchParams.get("state"), "st");
+  assert.equal(u.searchParams.get("redirect_uri"), REDIRECT_URI);
+});
+
+test("parseTokenResponse: pulls a refresh token, null on anything else", () => {
+  assert.equal(parseTokenResponse({ refresh_token: "rt" }), "rt");
+  assert.equal(parseTokenResponse({ access_token: "at" }), null);
+  assert.equal(parseTokenResponse({}), null);
+  assert.equal(parseTokenResponse(null), null);
+});
+
+// ── esoteric flavor (opt-in, render-only) ────────────────────────────────────
+test("moonPhase: reference new moon reads new, two weeks on reads full", () => {
+  assert.equal(moonPhase(new Date(Date.UTC(2000, 0, 6, 18, 14))), "new moon");
+  // ~half a synodic month later → full moon
+  assert.equal(moonPhase(new Date(Date.UTC(2000, 0, 21, 4, 0))), "full moon");
+});
+
+test("getEsotericSignal: null until opted in; moon needs no network", async () => {
+  assert.equal(await getEsotericSignal({}), null); // nothing opted in
+  const e = await getEsotericSignal({ moon: true }, new Date(Date.UTC(2000, 0, 6, 18, 14)));
+  assert.equal(e.source, "esoteric");
+  assert.equal(e.moonPhase, "new moon");
+  assert.equal(e.horoscope, undefined); // no sign configured → no network call
+});
+
+test("render: esoteric moon phase surfaces as flavor, moves no dial", () => {
+  const { cadence, block } = renderOnly([{ source: "esoteric", moonPhase: "waxing gibbous" }]);
+  assert.match(block, /esoteric: moon waxing gibbous/);
+  assert.deepEqual(cadence, { pace: "medium", tone: "medium", posture: "medium", proactivity: "medium" });
 });
 
 // ── applyOverrides ──────────────────────────────────────────────────────────
@@ -235,6 +397,15 @@ test("render: quotes untrusted signal text", () => {
   assert.match(block, /on "office \\u003cwifi\\u003e"/);
 });
 
+test("render: intent and typing tempo surface in the block", () => {
+  const { block } = renderOnly([
+    { source: "intent", kind: "ship" },
+    { source: "activity", promptLength: 20, tempo: "rapid" },
+  ]);
+  assert.match(block, /intent: ship \(read from your prompt\)/);
+  assert.match(block, /tempo=rapid/);
+});
+
 // ── buildReframe ────────────────────────────────────────────────────────────
 test("buildReframe: always defers to the user's literal words", () => {
   const lens = buildReframe({ pace: "high", tone: "low", posture: "high", proactivity: "high" });
@@ -292,10 +463,20 @@ test("renderSignalsTable: focus row is tri-state on darwin, macOS-only elsewhere
 });
 
 test("renderSignalsTable: self_report shows remaining TTL", () => {
-  const HOUR = 3_600_000;
+  const HALF_HOUR = 1_800_000;
   const report = { source: "self_report", text: "ship mode", setAt: 0 };
-  const out = renderSignalsTable({ music: null, report, ambient: null, git: null, now: HOUR, platform: "darwin" });
-  assert.match(out, /"ship mode" \(3h00m left\)/);
+  // 2h TTL, half an hour elapsed → 1h30m left
+  const out = renderSignalsTable({ music: null, report, ambient: null, git: null, now: HALF_HOUR, platform: "darwin" });
+  assert.match(out, /"ship mode" \(1h30m left\)/);
+});
+
+test("renderSignalsTable: intent and typing-tempo rows reflect opt-in state", () => {
+  const base = { music: null, report: null, ambient: null, git: null, now: 0, platform: "darwin" };
+  const off = renderSignalsTable({ ...base, providers: {} });
+  assert.match(off, /intent\s+— reads your prompt/);
+  assert.match(off, /typing tempo\s+— off \(opt-in: cadence enable typingTempo\)/);
+  const on = renderSignalsTable({ ...base, providers: { typingTempo: true } });
+  assert.match(on, /typing tempo\s+on \(opt-in\)/);
 });
 
 // ── Stop hook enforcement ───────────────────────────────────────────────────
@@ -468,4 +649,66 @@ test("posttool refineContext: speaks only on conflict-state transitions", async 
 test("posttool refineContext: injected text defers to the user's words", async () => {
   const { refineContext } = await import("../dist/posttool.js");
   assert.match(refineContext(false, true) ?? "", /follow their words/);
+});
+
+// ── PostToolUse thrash (destructive-git streak) ─────────────────────────────
+test("posttool isThrashCommand: reset --hard and true force-push, not safe ones", async () => {
+  const { isThrashCommand } = await import("../dist/posttool.js");
+  assert.equal(isThrashCommand("git reset --hard HEAD~1"), true);
+  assert.equal(isThrashCommand("git push origin main --force"), true);
+  assert.equal(isThrashCommand("git push -f"), true);
+  assert.equal(isThrashCommand("git push --force-with-lease"), false); // the safe one
+  assert.equal(isThrashCommand("git reset --soft HEAD~1"), false);
+  assert.equal(isThrashCommand("git status"), false);
+});
+
+test("posttool refineThrash: speaks once on the streak edge, then stays quiet", async () => {
+  const { refineThrash } = await import("../dist/posttool.js");
+  const t0 = 1_000_000;
+  // first destructive op — below threshold, silent
+  let r = refineThrash([t0], t0, false);
+  assert.equal(r.message, null);
+  // second within the window — crosses threshold, speaks once
+  r = refineThrash([t0, t0 + 60_000], t0 + 60_000, r.announced);
+  assert.match(r.message ?? "", /destructive git ops/);
+  assert.equal(r.announced, true);
+  // third while still announced — silent (no spam)
+  r = refineThrash([t0, t0 + 60_000, t0 + 120_000], t0 + 120_000, r.announced);
+  assert.equal(r.message, null);
+  // window empties → announce resets so a later streak can speak again
+  r = refineThrash([t0], t0 + 60 * 60_000, true);
+  assert.equal(r.announced, false);
+});
+
+// ── pause: the whole-product kill switch ────────────────────────────────────
+test("readPaused: only an explicit true pauses — junk shapes stay live", () => {
+  assert.equal(readPaused({ paused: true }), true);
+  assert.equal(readPaused({ paused: false }), false);
+  assert.equal(readPaused({ paused: "yes" }), false); // strict: never pause by accident
+  assert.equal(readPaused({}), false);
+});
+
+test("composeHint: paused says so to the user, in one legible line", () => {
+  const hint = composeHint({
+    selfReport: null, selfReportRemainingMs: null,
+    pinned: [], nowPlaying: null, firstRun: false, paused: true,
+  });
+  assert.match(hint, /paused/);
+  assert.match(hint, /cadence resume/);
+});
+
+// ── session greeting: invite a refresh as state goes stale ──────────────────
+test("composeHint: nudges to refresh when the self-report is about to expire", () => {
+  const fresh = composeHint({
+    selfReport: "ship mode", selfReportRemainingMs: 90 * 60_000,
+    pinned: [], nowPlaying: null, firstRun: false,
+  });
+  assert.match(fresh, /inputs: cadence state/);
+  assert.doesNotMatch(fresh, /expiring/);
+  const stale = composeHint({
+    selfReport: "ship mode", selfReportRemainingMs: 5 * 60_000,
+    pinned: [], nowPlaying: null, firstRun: false,
+  });
+  assert.match(stale, /expiring/);
+  assert.match(stale, /to refresh/);
 });

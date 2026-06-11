@@ -5,6 +5,7 @@ import { getSelfReportSignal } from "./providers/selfreport.js";
 import { getAmbientSignal } from "./providers/ambient.js";
 import { getGitSignal } from "./providers/git.js";
 import { deriveCadence, loadOverrides, applyOverrides } from "./cadence.js";
+import { isPaused } from "./config.js";
 import type { Cadence, Signal, UserState } from "./types.js";
 
 const TOTAL_BUDGET_MS = 1500;
@@ -111,6 +112,7 @@ export function decideStop(
 }
 
 async function main() {
+  if (await isPaused()) return; // user asked for silence — never block while paused
   const input = await readStdin();
   const projectDir = input.cwd ?? process.cwd();
   const [signals, overrides] = await Promise.all([

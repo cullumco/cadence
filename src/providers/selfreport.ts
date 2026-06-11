@@ -4,7 +4,12 @@ import { join } from "node:path";
 import type { SelfReportSignal } from "../types.js";
 
 const STATE_FILE = join(homedir(), ".cadence", "state.txt");
-export const STALE_AFTER_MS = 4 * 60 * 60 * 1000;
+// 2h, shortened from 4h: a self-report should track the room you're in now, not
+// the one you were in this morning. Cadence nudges you to refresh as it nears
+// expiry (see session-start composeHint).
+export const STALE_AFTER_MS = 2 * 60 * 60 * 1000;
+// When less than this is left, the session greeting invites a refresh.
+export const REFRESH_SOON_MS = 30 * 60 * 1000;
 
 export async function getSelfReportSignal(): Promise<SelfReportSignal | null> {
   try {

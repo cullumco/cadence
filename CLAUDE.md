@@ -78,19 +78,34 @@ mapping is meant to be evolved.
 
 ### Independence of the four dials
 
-The dials are deliberately orthogonal. A signal should usually move *one* dial,
-not all four. "High-energy-but-mellow music = fast pace, warm tone" is the kind
-of combination one mode word could never express; the test
-`deriveCadence: dials are independent — music sets pace, leaves posture neutral`
-locks this in. Avoid edits that collapse the dials back into a single mode.
+The dials are deliberately orthogonal. The invariant is **no single signal
+moves all four** — so nothing collapses back into one ship/think/debug mode.
+"High-energy-but-mellow music = fast pace, warm tone" is the kind of
+combination one mode word could never express.
+
+Music is the deliberate three-dial exception ("move with the music"): energy
+drives **pace** and **posture**, acoustic texture warms **tone** — but music
+never touches **proactivity** (whether to act without checking in is the
+user's call via self-report/intent/git, never the soundtrack's). The test
+`deriveCadence: music moves pace/posture/tone but never proactivity` locks
+that boundary in. Avoid edits that let any one signal drive the whole board.
 
 ### Signal hierarchy and `deriveCadence` order
 
 Inside `deriveCadence()`, signals are applied weakest-first so stronger signals
-override. Current order: ambient (soft nudges) → music energy → self-report →
-activity. Git is collected and rendered as flavor but is *intentionally dormant*
-in dial mapping — its nudges are written but commented out until they're proven
-trustworthy on real output (see `BACKLOG.md`).
+override. Current order: ambient (soft nudges) → music energy → git → prompt
+intent → self-report → activity (typing tempo + return-from-break). Each tier
+can override the one above it on a shared dial.
+
+Two notes on authority:
+- **Git is live** (since 2026-06-05), not dormant: `3+ commits/hr → pace high`,
+  `conflicted → proactivity low`. It sits *below* self-report so an explicit
+  `cadence state "shipping"` still beats a mid-conflict read.
+- **Prompt intent** (`src/providers/intent.ts`) reads ship/think/debug cues
+  from the live prompt and sits between git and self-report — strong enough to
+  drive the "same prompt, different room" behavior without a separate CLI step,
+  but a deliberate self-report still outranks it. The one nudge that's still
+  commented-out dormant is `ambient focus → proactivity` (see `deriveCadence`).
 
 ### Hook budget and "silent when empty"
 
@@ -129,11 +144,23 @@ expect to handle `array[i]` as possibly `undefined`.
 
 ### Skills
 
-`skills/try/SKILL.md` and `skills/state/SKILL.md` are the user-invocable plugin
-skills (`/cadence:try`, `/cadence:state`). Both have `disable-model-invocation:
-true` so they only fire on explicit user invocation, not automatic model
-matching. Keep their bodies short and operational — they should not
-re-explain the product.
+`skills/*/SKILL.md` are the user-invocable plugin skills: `/cadence:setup`
+(conversational onboarding — Claude interviews the user and drives the CLI),
+`/cadence:state`, `/cadence:try`, `/cadence:pause`, `/cadence:resume`. All have
+`disable-model-invocation: true` so they only fire on explicit user invocation,
+not automatic model matching. Keep their bodies short and operational — they
+should not re-explain the product. The rule that binds them: **skills
+orchestrate, the CLI is the source of truth** — a skill runs `cadence …`
+commands via Bash and never edits `~/.cadence/` files directly.
+
+### Pause (the kill switch)
+
+`cadence pause` sets `"paused": true` in `~/.cadence/config.json`. Every hook
+checks `isPaused()` (src/config.ts) FIRST and exits silently — no probes, no
+subprocesses, nothing injected. The one exception: the SessionStart greeting
+says "paused" once per session (user-facing legibility — "off" must never read
+as "broken"). State survives a pause untouched; `cadence resume` deletes the
+flag. Any new hook must add the same first-line check.
 
 ## Conventions worth knowing
 
@@ -141,12 +168,26 @@ re-explain the product.
   mode) live behind `process.platform === "darwin"` checks. Anything new in
   that category must degrade silently on Linux/Windows.
 - **No new network deps without a strong case.** Current network calls are
-  MusicBrainz (one-time per artist, cached forever in `~/.cadence/vibe-cache.json`)
-  and Open-Meteo (opt-in, requires explicit `cadence set-location`). Both are
-  keyless and bounded by short `AbortController` timeouts.
+  MusicBrainz (one-time per artist, cached forever in `~/.cadence/vibe-cache.json`),
+  Open-Meteo (opt-in, requires explicit `cadence set-location`), the opt-in
+  Spotify `currently-playing` endpoint, and the opt-in daily horoscope. All are
+  keyless or user-credentialed, opt-in, and bounded by short `AbortController`
+  timeouts.
+- **OAuth lives in the interactive CLI, never the hook.** The hook has no
+  browser and a 1.5s budget. `cadence spotify connect` (`src/spotify-auth.ts`)
+  runs a PKCE flow with a one-shot loopback server and stores a refresh token;
+  the hook-side provider (`src/providers/spotify.ts`) only ever reads/refreshes
+  the cached token, fail-silent. Any future "connect a service" follows this
+  shape — auth in the CLI, token-read in the hook.
+- **Opt-in provider registry** (`src/config.ts`, `OPT_IN_PROVIDERS`): anything
+  privacy-adjacent (typing tempo, focused app, esoteric, Spotify) stays off
+  until `cadence enable <signal>` / `cadence spotify connect`. New signals of
+  that kind register here and gate on `providerEnabled()`.
 - **Vibe table is a blocklist, not an allowlist** (`src/providers/music.ts`
   `isVibeTag`). Novel genres should pass through; we only reject known classes
   of junk (places, listener-meta tags, artist name fragments).
-- **State lives in `~/.cadence/`**: `state.txt` (self-report, 4h TTL),
-  `config.json` (pinned dials + weather location), `activity.json` (last
-  prompt timestamp), `vibe-cache.json` (MusicBrainz tag cache).
+- **State lives in `~/.cadence/`**: `state.txt` (self-report, 2h TTL),
+  `config.json` (pinned dials + weather location + `providers` opt-in registry),
+  `activity.json` (last prompt timestamp + tempo window), `vibe-cache.json`
+  (MusicBrainz tag cache), `spotify-token.json` (cached access token),
+  `workstate.json` (PostToolUse conflict/thrash state).

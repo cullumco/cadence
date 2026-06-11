@@ -91,20 +91,29 @@ and renderers should remain portable. Candidate future surfaces:
 
 ---
 
-## Esoteric / opt-in signal providers (V2+)
+## Esoteric / opt-in signal providers — SHIPPED (flavor-only)
 
-User idea: let people opt into playful, non-work signal sources that feed the
-dials (or just color the vibe) — **only if the user indicates them as an input.**
+`src/providers/esoteric.ts` ships both, render-only (they never move a dial,
+per the lean below):
+- **Moon phase** — computed offline from the date, no API, gated on
+  `providers.moon`.
+- **Horoscope** — `providers.horoscope = "<sign>"`; daily text via a keyless
+  API, opt-in and fail-silent exactly like the weather probe.
 
-- **Horoscope provider** — user sets their sign; fetch a daily horoscope, let its
-  tone nudge dials (or just surface as flavor). Opt-in, off by default.
-- **Moon phase provider** — current lunar phase as ambient context. Computable
-  offline, no API.
-- Slot in as ordinary `Signal` providers behind an opt-in flag in
-  `~/.cadence/config.json` (e.g. `"providers": { "horoscope": "leo" }`). No
-  rework needed — the provider/signal architecture already supports it.
-- Open Q: do esoteric signals move dials, or only render as `vibe`/flavor so they
-  never override real work signals? (Lean: flavor-only unless the user maps them.)
+Resolved open Q: esoteric signals are **flavor-only** — they color the block,
+never override real work signals. Revisit only if a user explicitly wants to
+map one to a dial.
+
+**Focused app** also shipped here (opt-in `providers.focusedApp`, macOS): the
+frontmost non-terminal app as flavor on the ambient context line. Caveat baked
+in — it's read at UserPromptSubmit, when your terminal/IDE is usually frontmost,
+so it filters known shells/editors and speaks only when something else is in
+front. Flavor for now; `focused app → posture/proactivity` stays a candidate
+nudge once real output shows it's worth steering on.
+
+**Calendar density: cut.** The audience is solo builders in a long project, not
+people racing between meetings — so meeting-proximity isn't a fit. Removed from
+the roadmap above.
 
 ## Known nuance: intra-tier nudge collisions
 
@@ -122,6 +131,27 @@ Enabled after the flavor proved trustworthy in real use:
 Applied below self-report in the hierarchy, so "I'm shipping" beats a
 mid-conflict read. Watch for false positives (e.g. rebase-heavy workflows
 reading as flow state) before adding more git nudges.
+
+## Prompt intent — SHIPPED
+
+`src/providers/intent.ts` reads ship/think/debug/focus cues from the live
+prompt and drives the same dials as a self-report, applied *between* git and
+self-report (a deliberate `cadence state` still wins). This is what makes the
+"same prompt, different room" demo true without a separate CLI step. Patterns
+are deliberately phrase-based, not bare-word, so ordinary prompts ("can you
+just check…", "why is this slow?") don't misfire — and the reframe still
+defers to the literal words, so a miss stays cheap.
+
+## Opt-in provider registry — SHIPPED
+
+`src/config.ts` adds a `providers` block to `~/.cadence/config.json` — the
+consent layer for "as many signals as the user is willing to give." Anything
+privacy-adjacent stays off until `cadence enable <signal>`. `OPT_IN_PROVIDERS`
+is the single source of truth (CLI + signals view + providers). First opt-in
+signal on it: **typing tempo** — a rolling prompt-rhythm window in
+`activity.ts` (`computeTempo`), where rapid-fire short prompts → pace high and
+one long considered prompt → pace low. Next opt-in signals to slot in here:
+focused app, calendar density, esoteric (horoscope/moon).
 
 ## Other deferred provider/feature ideas
 
@@ -159,9 +189,20 @@ reading as flow state) before adding more git nudges.
 ## Settled decisions (context for the above)
 
 - **Music = identity + vibe**, not numeric affect (Spotify audio-features
-  deprecated 2024-11-27 for new apps; dev-mode Premium-gated 2026-02).
+  deprecated 2024-11-27 for new apps; dev-mode Premium-gated 2026-02). Music
+  now moves THREE dials (energy → pace + posture, acoustic → warm tone), never
+  proactivity — "move with the music," see `deriveCadence`.
 - **Now-playing via AppleScript** (Spotify/Music) — survives the macOS 15.4
-  MediaRemote lockdown that killed system-wide taps like `nowplaying-cli`.
+  MediaRemote lockdown that killed system-wide taps like `nowplaying-cli`. The
+  cross-platform path (opt-in `src/providers/spotify.ts`) uses only the live
+  `currently-playing` endpoint — identity only, no audio-features. Linking is a
+  PKCE browser flow in the *interactive CLI* (`cadence spotify connect`,
+  `src/spotify-auth.ts`): a one-shot loopback server catches the redirect and
+  exchanges the code for a refresh token. OAuth NEVER runs in the hook — the
+  hook only reads the cached token. To ship zero-config, register a "Cadence"
+  Spotify app and set `DEFAULT_SPOTIFY_CLIENT_ID` (or `CADENCE_SPOTIFY_CLIENT_ID`)
+  with `http://127.0.0.1:8888/callback` as a redirect URI. Manual
+  `cadence spotify <clientId> <refreshToken>` remains for the browser-less.
 - **Vibe via MusicBrainz** — keyless, no auth, cached per-artist forever.
 - **Mood vocabulary = Cyanite's 13** (research-verified controlled set).
 - **Influence = prompt only** — a hook cannot change the model, system prompt,

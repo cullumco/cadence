@@ -5,6 +5,7 @@ import type {
   AmbientSignal,
 } from "./types.js";
 import { STALE_AFTER_MS } from "./providers/selfreport.js";
+import { providerEnabled, providerSetting, type ProviderConfig } from "./config.js";
 
 /* ─────────────────────────────────────────────────────────────────────────
  * Signals table — the legibility view behind `cadence signals`.
@@ -23,6 +24,7 @@ export interface RawSignals {
   git: GitSignal | null;
   now: number; // injected so the view stays pure/testable
   platform: NodeJS.Platform; // ditto — decides "unavailable" vs "macOS only"
+  providers?: ProviderConfig; // the opt-in registry, for "on/off" on opt-in signals
 }
 
 const LABEL_W = 12; // sub-row label column
@@ -116,8 +118,11 @@ function ambientRows(a: AmbientSignal | null, platform: NodeJS.Platform): string
   return lines;
 }
 
-function musicRows(m: MusicSignal | null): string[] {
-  if (!m?.track) return [top("music", "— nothing playing")];
+function musicRows(m: MusicSignal | null, providers: ProviderConfig): string[] {
+  const spotify = providerEnabled(providers, "spotify")
+    ? row("source", "macOS apps + Spotify (cross-platform, linked)")
+    : row("source", "macOS apps only", "(cross-platform: cadence spotify)");
+  if (!m?.track) return [top("music", "— nothing playing"), spotify];
   const lines = ["  music"];
   lines.push(
     row(
@@ -126,6 +131,7 @@ function musicRows(m: MusicSignal | null): string[] {
     )
   );
   lines.push(m.vibe ? row("vibe", m.vibe) : row("vibe", "— no tags yet (looked up once per artist)"));
+  lines.push(spotify);
   return lines;
 }
 
@@ -148,12 +154,51 @@ function gitRow(g: GitSignal | null): string {
   return top("git", parts.join(", "));
 }
 
+function intentRow(): string {
+  return top("intent", "— reads your prompt (the hook infers ship/think/debug per-prompt)");
+}
+
+function tempoRow(providers: ProviderConfig): string {
+  return providerEnabled(providers, "typingTempo")
+    ? top("typing tempo", "on (opt-in) — rapid vs. considered prompt rhythm → pace")
+    : top("typing tempo", "— off (opt-in: cadence enable typingTempo)");
+}
+
+function optInFlavorRows(providers: ProviderConfig, ambient: AmbientSignal | null): string[] {
+  const sign = providerSetting(providers, "horoscope");
+  return [
+    "  opt-in flavor",
+    row(
+      "focused app",
+      providerEnabled(providers, "focusedApp")
+        ? ambient?.focusedApp ?? "on — nothing non-terminal in front"
+        : "— off (cadence enable focusedApp)"
+    ),
+    row(
+      "moon",
+      providerEnabled(providers, "moon")
+        ? "on — phase shows in the block"
+        : "— off (cadence enable moon)"
+    ),
+    row(
+      "horoscope",
+      typeof sign === "string"
+        ? `on (${sign}) — daily text shows in the block`
+        : "— off (cadence enable horoscope <sign>)"
+    ),
+  ];
+}
+
 export function renderSignalsTable(raw: RawSignals): string {
+  const providers = raw.providers ?? {};
   return [
     ...ambientRows(raw.ambient, raw.platform),
-    ...musicRows(raw.music),
+    ...musicRows(raw.music, providers),
     reportRow(raw.report, raw.now),
+    intentRow(),
     gitRow(raw.git),
     top("activity", "— session-only (the hook injects it per-prompt)"),
+    tempoRow(providers),
+    ...optInFlavorRows(providers, raw.ambient),
   ].join("\n");
 }

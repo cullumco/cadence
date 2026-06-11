@@ -4,7 +4,11 @@ import { getSelfReportSignal } from "./providers/selfreport.js";
 import { getAmbientSignal } from "./providers/ambient.js";
 import { getGitSignal } from "./providers/git.js";
 import { getActivitySignal } from "./providers/activity.js";
+import { getIntentSignal } from "./providers/intent.js";
+import { getEsotericSignal } from "./providers/esoteric.js";
 import { deriveCadence, buildReframe, loadOverrides, applyOverrides } from "./cadence.js";
+import { loadProviders, providerEnabled, isPaused } from "./config.js";
+import type { ProviderConfig } from "./config.js";
 import { render } from "./inject.js";
 import { debug } from "./debug.js";
 import type { Signal, UserState, StateWithCadence } from "./types.js";
@@ -29,13 +33,20 @@ async function readStdin(): Promise<{ cwd?: string; prompt?: string }> {
   }
 }
 
-async function collectSignals(cwd: string, prompt?: string): Promise<Signal[]> {
-  const [music, report, ambient, git, activity] = await Promise.allSettled([
-    getMusicSignal(),
+async function collectSignals(
+  cwd: string,
+  prompt: string | undefined,
+  providers: ProviderConfig
+): Promise<Signal[]> {
+  const tempoEnabled = providerEnabled(providers, "typingTempo");
+  const [music, report, ambient, git, activity, intent, esoteric] = await Promise.allSettled([
+    getMusicSignal(providers),
     getSelfReportSignal(),
-    getAmbientSignal(new Date()),
+    getAmbientSignal(new Date(), { focusedAppEnabled: providerEnabled(providers, "focusedApp") }),
     getGitSignal(cwd),
-    getActivitySignal(prompt),
+    getActivitySignal(prompt, Date.now(), { tempoEnabled }),
+    getIntentSignal(prompt),
+    getEsotericSignal(providers),
   ]);
   const signals: Signal[] = [];
   if (music.status === "fulfilled" && music.value) signals.push(music.value);
@@ -43,24 +54,31 @@ async function collectSignals(cwd: string, prompt?: string): Promise<Signal[]> {
   if (ambient.status === "fulfilled" && ambient.value) signals.push(ambient.value);
   if (git.status === "fulfilled" && git.value) signals.push(git.value);
   if (activity.status === "fulfilled" && activity.value) signals.push(activity.value);
+  if (intent.status === "fulfilled" && intent.value) signals.push(intent.value);
+  if (esoteric.status === "fulfilled" && esoteric.value) signals.push(esoteric.value);
   return signals;
 }
 
 async function main() {
+  // Paused = the user asked for silence. Check FIRST: no signals read, no
+  // subprocesses spawned, nothing injected. `cadence resume` turns it back on.
+  if (await isPaused()) process.exit(0);
+
   const { cwd, prompt } = await readStdin();
   const projectDir = cwd ?? process.cwd();
 
-  const [signals, overrides] = await Promise.all([
-    Promise.race<Signal[]>([
-      collectSignals(projectDir, prompt),
-      new Promise<Signal[]>((resolve) =>
-        setTimeout(() => {
-          debug("hook", `signal collection exceeded ${TOTAL_BUDGET_MS}ms budget — injecting without signals`);
-          resolve([]);
-        }, TOTAL_BUDGET_MS)
-      ),
-    ]),
-    loadOverrides(),
+  // Pins + the opt-in registry are tiny local reads; load them first so signal
+  // collection knows which opt-in providers to run, then race only the
+  // subprocess-heavy collection against the budget.
+  const [overrides, providers] = await Promise.all([loadOverrides(), loadProviders()]);
+  const signals = await Promise.race<Signal[]>([
+    collectSignals(projectDir, prompt, providers),
+    new Promise<Signal[]>((resolve) =>
+      setTimeout(() => {
+        debug("hook", `signal collection exceeded ${TOTAL_BUDGET_MS}ms budget — injecting without signals`);
+        resolve([]);
+      }, TOTAL_BUDGET_MS)
+    ),
   ]);
 
   // Nothing to say: no signals AND no pinned dials.

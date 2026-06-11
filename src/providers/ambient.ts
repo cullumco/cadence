@@ -142,23 +142,45 @@ export async function getFocus(now: Date = new Date()): Promise<boolean | undefi
   return manual;
 }
 
+// Frontmost app — opt-in, macOS, flavor only. Read at UserPromptSubmit, so the
+// terminal/IDE you typed into is usually frontmost; we filter known shells and
+// editors out, so this speaks only when a genuinely different app (a browser,
+// Slack, a PDF) is in front. Flavor for now; a dial nudge stays a candidate.
+const TERMINAL_APPS =
+  /^(Terminal|iTerm2?|Alacritty|kitty|WezTerm|Warp|Hyper|Code|Code - Insiders|Cursor|Windsurf|Electron|Ghostty|Tabby|rio)$/i;
+
+export async function getFocusedApp(now: boolean): Promise<string | undefined> {
+  if (!now || process.platform !== "darwin") return undefined;
+  const app = await sh(
+    `osascript -e 'tell application "System Events" to name of first application process whose frontmost is true'`,
+    700
+  );
+  if (!app) return undefined;
+  const name = app.split("\n")[0]?.trim();
+  if (!name || TERMINAL_APPS.test(name)) return undefined; // you're in your terminal — no news
+  return name;
+}
+
 // ── mac context: best-effort shell-outs, all flavor (no dial nudges) ─────────
-async function getMacContext(): Promise<{
+async function getMacContext(focusedAppEnabled: boolean): Promise<{
   focus?: boolean;
   displays?: number;
   network?: string;
   darkMode?: boolean;
+  focusedApp?: string;
 }> {
   if (process.platform !== "darwin") return {};
-  const [dark, ssid, displays, focus] = await Promise.all([
+  const [dark, ssid, displays, focus, focusedApp] = await Promise.all([
     sh("defaults read -g AppleInterfaceStyle"), // "Dark", or error (=light)
     sh("ipconfig getsummary en0 | awk -F ' SSID : ' '/ SSID : / {print $2}'", 700),
     // fast display count via AppleScript (~100ms) — NOT system_profiler (1-3s)
     sh(`osascript -e 'tell application "System Events" to count of desktops'`, 700),
     getFocus(),
+    getFocusedApp(focusedAppEnabled),
   ]);
 
-  const ctx: { focus?: boolean; displays?: number; network?: string; darkMode?: boolean } = {};
+  const ctx: { focus?: boolean; displays?: number; network?: string; darkMode?: boolean; focusedApp?: string } = {};
+  if (focusedApp) ctx.focusedApp = focusedApp;
   // `defaults read` exits non-zero when the key is unset — which is exactly
   // what light mode looks like. So error/null ⇒ light, not unknown.
   ctx.darkMode = dark != null && /dark/i.test(dark);
@@ -213,14 +235,17 @@ async function getWeather(): Promise<string | undefined> {
   }
 }
 
-export async function getAmbientSignal(now: Date): Promise<AmbientSignal> {
+export async function getAmbientSignal(
+  now: Date,
+  opts: { focusedAppEnabled?: boolean } = {}
+): Promise<AmbientSignal> {
   const hour = now.getHours();
   const vitals = getVitals(); // sync, free
   // all probes run in parallel; each resolves to a safe default on failure.
   const [weather, battery, mac] = await Promise.all([
     getWeather(),
     getBattery(),
-    getMacContext(),
+    getMacContext(opts.focusedAppEnabled ?? false),
   ]);
 
   return {
@@ -238,5 +263,6 @@ export async function getAmbientSignal(now: Date): Promise<AmbientSignal> {
     displays: mac.displays,
     network: mac.network,
     darkMode: mac.darkMode,
+    focusedApp: mac.focusedApp,
   };
 }

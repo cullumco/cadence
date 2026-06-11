@@ -10,7 +10,9 @@ Developer-practitioners who use Claude Code seriously — engineers, writers, an
 
 ## Product Purpose
 
-Cadence is an ambient context layer for agents. It reads the room — music, time, self-report, git state — and injects that state into every prompt so Claude can respond like someone who actually knows what you're in the middle of. The landing page's job is to make that idea land for a developer who has never heard of it: show them what it does in under 30 seconds, give them one clear path to install it.
+Cadence is an ambient context layer for agents. It reads the room — the intent in your prompt, music, time, self-report, git state — and injects that state into every prompt so Claude can respond like someone who actually knows what you're in the middle of.
+
+**Division of labor:** the landing page carries the *why* and the *strategy* — make the idea land in under 30 seconds, give one clear install path, and let the open repo do the talking. The GitHub README is the manual: every signal, every command, every convention lives there, not here. Copy that re-explains what the README documents is noise; copy that argues why the product should exist is the job.
 
 ## Brand Personality
 
