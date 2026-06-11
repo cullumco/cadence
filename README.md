@@ -149,7 +149,7 @@ absent.
 ## Daily use
 
 ```bash
-cadence state "two beers, shipping"   # set self-reported state (expires in 4h)
+cadence state "two beers, shipping"   # set self-reported state (expires in 2h)
 cadence state                         # print current self-report
 cadence clear                         # clear it
 cadence test                          # preview exactly what the hook would inject

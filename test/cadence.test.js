@@ -12,6 +12,7 @@ import { detectPromptIntent } from "../dist/providers/intent.js";
 import { renderSignalsTable } from "../dist/signals-view.js";
 import { providerEnabled } from "../dist/config.js";
 import { readCreds } from "../dist/providers/spotify.js";
+import { composeHint } from "../dist/session-start.js";
 
 // ── tagsToVibe ──────────────────────────────────────────────────────────────
 test("tagsToVibe: high-energy genres read fast + aggressive", () => {
@@ -414,10 +415,11 @@ test("renderSignalsTable: focus row is tri-state on darwin, macOS-only elsewhere
 });
 
 test("renderSignalsTable: self_report shows remaining TTL", () => {
-  const HOUR = 3_600_000;
+  const HALF_HOUR = 1_800_000;
   const report = { source: "self_report", text: "ship mode", setAt: 0 };
-  const out = renderSignalsTable({ music: null, report, ambient: null, git: null, now: HOUR, platform: "darwin" });
-  assert.match(out, /"ship mode" \(3h00m left\)/);
+  // 2h TTL, half an hour elapsed → 1h30m left
+  const out = renderSignalsTable({ music: null, report, ambient: null, git: null, now: HALF_HOUR, platform: "darwin" });
+  assert.match(out, /"ship mode" \(1h30m left\)/);
 });
 
 test("renderSignalsTable: intent and typing-tempo rows reflect opt-in state", () => {
@@ -599,4 +601,49 @@ test("posttool refineContext: speaks only on conflict-state transitions", async 
 test("posttool refineContext: injected text defers to the user's words", async () => {
   const { refineContext } = await import("../dist/posttool.js");
   assert.match(refineContext(false, true) ?? "", /follow their words/);
+});
+
+// ── PostToolUse thrash (destructive-git streak) ─────────────────────────────
+test("posttool isThrashCommand: reset --hard and true force-push, not safe ones", async () => {
+  const { isThrashCommand } = await import("../dist/posttool.js");
+  assert.equal(isThrashCommand("git reset --hard HEAD~1"), true);
+  assert.equal(isThrashCommand("git push origin main --force"), true);
+  assert.equal(isThrashCommand("git push -f"), true);
+  assert.equal(isThrashCommand("git push --force-with-lease"), false); // the safe one
+  assert.equal(isThrashCommand("git reset --soft HEAD~1"), false);
+  assert.equal(isThrashCommand("git status"), false);
+});
+
+test("posttool refineThrash: speaks once on the streak edge, then stays quiet", async () => {
+  const { refineThrash } = await import("../dist/posttool.js");
+  const t0 = 1_000_000;
+  // first destructive op — below threshold, silent
+  let r = refineThrash([t0], t0, false);
+  assert.equal(r.message, null);
+  // second within the window — crosses threshold, speaks once
+  r = refineThrash([t0, t0 + 60_000], t0 + 60_000, r.announced);
+  assert.match(r.message ?? "", /destructive git ops/);
+  assert.equal(r.announced, true);
+  // third while still announced — silent (no spam)
+  r = refineThrash([t0, t0 + 60_000, t0 + 120_000], t0 + 120_000, r.announced);
+  assert.equal(r.message, null);
+  // window empties → announce resets so a later streak can speak again
+  r = refineThrash([t0], t0 + 60 * 60_000, true);
+  assert.equal(r.announced, false);
+});
+
+// ── session greeting: invite a refresh as state goes stale ──────────────────
+test("composeHint: nudges to refresh when the self-report is about to expire", () => {
+  const fresh = composeHint({
+    selfReport: "ship mode", selfReportRemainingMs: 90 * 60_000,
+    pinned: [], nowPlaying: null, firstRun: false,
+  });
+  assert.match(fresh, /inputs: cadence state/);
+  assert.doesNotMatch(fresh, /expiring/);
+  const stale = composeHint({
+    selfReport: "ship mode", selfReportRemainingMs: 5 * 60_000,
+    pinned: [], nowPlaying: null, firstRun: false,
+  });
+  assert.match(stale, /expiring/);
+  assert.match(stale, /to refresh/);
 });

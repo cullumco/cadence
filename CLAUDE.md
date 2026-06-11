@@ -162,6 +162,6 @@ re-explain the product.
 - **Vibe table is a blocklist, not an allowlist** (`src/providers/music.ts`
   `isVibeTag`). Novel genres should pass through; we only reject known classes
   of junk (places, listener-meta tags, artist name fragments).
-- **State lives in `~/.cadence/`**: `state.txt` (self-report, 4h TTL),
+- **State lives in `~/.cadence/`**: `state.txt` (self-report, 2h TTL),
   `config.json` (pinned dials + weather location), `activity.json` (last
   prompt timestamp), `vibe-cache.json` (MusicBrainz tag cache).

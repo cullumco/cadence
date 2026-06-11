@@ -323,7 +323,7 @@ async function hasUserInput(): Promise<boolean> {
 }
 
 const INPUTS_FOOTER = `  where you can input:
-    cadence state "..."              how you are right now (4h TTL)
+    cadence state "..."              how you are right now (2h TTL)
     cadence set <dial> <level>       pin a dial: ${DIALS.join(", ")}
     cadence set-location <lat> <lon> opt into weather
     cadence start                    interactive setup
@@ -364,7 +364,7 @@ async function cmdStart() {
     if (state) {
       await mkdir(CADENCE_DIR, { recursive: true });
       await writeFile(STATE_FILE, state, "utf-8");
-      console.log('       ✓ set — expires after 4h; update anytime: cadence state "..."\n');
+      console.log('       ✓ set — expires after 2h; update anytime: cadence state "..."\n');
     } else {
       console.log('       skipped — later: cadence state "..."\n');
     }

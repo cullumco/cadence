@@ -14,15 +14,23 @@ import { getGitSignal } from "./providers/git.js";
  * event: the repo entering or leaving a merge/rebase conflict — the
  * strongest debug tell we have, far stronger than music ever was.
  *
+ * Two material events now, same discipline:
+ *   1. the repo entering/leaving a merge/rebase conflict (re-observed via git)
+ *   2. a streak of destructive git ops — reset --hard / force-push — read off
+ *      the command string (no tool_response parsing), i.e. thrash.
+ *
  * Discipline (the BACKLOG's hard constraint):
  *   - fires only after Bash tool calls whose command mentions git
- *   - injects at most once per conflict-state TRANSITION, never per tool
+ *   - injects at most once per TRANSITION (conflict edge, or thrash threshold),
+ *     never per tool
  *   - silent in every other case, silent on every error
  * ───────────────────────────────────────────────────────────────────────── */
 
 const TOTAL_BUDGET_MS = 1500;
 const STATE_FILE = join(homedir(), ".cadence", "workstate.json");
 const MAX_SESSIONS = 20;
+const THRASH_WINDOW_MS = 10 * 60_000; // destructive ops within 10 min count as a streak
+const THRASH_MIN = 2; // 2nd destructive op in the window = thrash
 
 interface PostToolInput {
   session_id?: string;
@@ -67,7 +75,49 @@ export function refineContext(
   return null; // first observation of a clean repo: record silently
 }
 
-type WorkState = Record<string, { conflicted: boolean; at: number }>;
+// Is this command a destructive/undo git op? Just `reset --hard` and a true
+// force-push — NOT --force-with-lease (the safe one), checkout, or restore
+// (too ordinary to read as thrash). Pure + exported for tests.
+export function isThrashCommand(cmd: string): boolean {
+  return (
+    /git\s+reset\s+--hard\b/.test(cmd) ||
+    (/git\s+push\b/.test(cmd) && /(--force\b|\s-f\b)/.test(cmd) && !/--force-with-lease\b/.test(cmd))
+  );
+}
+
+/* Edge-trigger thrash off the rolling window of destructive-op timestamps.
+ * Speaks once when the streak first crosses THRASH_MIN inside the window, then
+ * stays quiet until the window empties (so it can fire again on a later run).
+ * Pure + exported; `times` already includes the current op if it was one. */
+export function refineThrash(
+  times: number[],
+  now: number,
+  announced: boolean
+): { message: string | null; times: number[]; announced: boolean } {
+  const recent = times.filter((t) => now - t <= THRASH_WINDOW_MS);
+  if (recent.length === 0) return { message: null, times: recent, announced: false };
+  if (recent.length >= THRASH_MIN && !announced) {
+    return {
+      message:
+        "<user_state_update>observed work: a streak of destructive git ops " +
+        "(reset --hard / force-push). Read this as thrash — pause, verify the " +
+        "repo state and what's being undone before the next destructive step. " +
+        "If the user's words clearly mean otherwise, follow their words." +
+        "</user_state_update>",
+      times: recent,
+      announced: true,
+    };
+  }
+  return { message: null, times: recent, announced };
+}
+
+interface WorkEntry {
+  conflicted: boolean;
+  at: number;
+  thrashTimes?: number[];
+  thrashAnnounced?: boolean;
+}
+type WorkState = Record<string, WorkEntry>;
 
 async function loadState(): Promise<WorkState> {
   try {
@@ -114,12 +164,28 @@ async function main() {
 
   const key = input.session_id ?? "default";
   const state = await loadState();
-  const prev = state[key]?.conflicted;
-  const message = refineContext(prev, git.conflicted);
+  const prev = state[key];
+  const now = Date.now();
 
-  state[key] = { conflicted: git.conflicted, at: Date.now() };
+  // 1. conflict edge (re-observed via git)
+  const conflictMsg = refineContext(prev?.conflicted, git.conflicted);
+
+  // 2. thrash threshold (read off the command string)
+  const cmd = typeof input.tool_input?.command === "string" ? input.tool_input.command : "";
+  const times = prev?.thrashTimes ?? [];
+  const nextTimes = isThrashCommand(cmd) ? [...times, now] : times;
+  const thrash = refineThrash(nextTimes, now, prev?.thrashAnnounced ?? false);
+
+  state[key] = {
+    conflicted: git.conflicted,
+    at: now,
+    thrashTimes: thrash.times,
+    thrashAnnounced: thrash.announced,
+  };
   await saveState(state);
 
+  // A conflict edge is the stronger tell; fall back to thrash. At most one.
+  const message = conflictMsg ?? thrash.message;
   if (message) {
     process.stdout.write(
       JSON.stringify({
