@@ -75,8 +75,8 @@ Same words. The room around them changed, and the agent finally saw it.
      the hook payload: `activity: { min_since_prompt=45 prompt_len=123 }`.
    - **music** — what's playing (via macOS now-playing, any player), turned into
      a clean *vibe* (mood words) via [MusicBrainz](https://musicbrainz.org). No
-     Spotify login, no API key, no Premium on macOS. Off the Mac, you can link
-     Spotify as a cross-platform source (`cadence spotify`, opt-in). Music moves
+     Spotify login, no API key, no Premium on macOS. Off the Mac, link Spotify
+     once with `cadence spotify connect` (browser OAuth, opt-in). Music moves
      three dials — energy → pace + posture, organic texture → warm tone.
    - **self-report** — what you tell it: `cadence state "two beers, shipping"`.
    - **intent** — read from the prompt you just typed: "let's ship this" →
@@ -145,6 +145,12 @@ Nothing to set up. If Spotify.app or Music.app is playing, Cadence reads the
 track, looks the artist's vibe up on MusicBrainz once, and caches it forever at
 `~/.cadence/vibe-cache.json`. If nothing's playing, the music signal is simply
 absent.
+
+**Off macOS?** Run `cadence spotify connect <clientId>` once: register a Spotify
+app (add `http://127.0.0.1:8888/callback` as a redirect URI), and Cadence does
+the browser OAuth and stores a refresh token. From then on it reads your
+currently-playing track cross-platform — identity only, vibe still from
+MusicBrainz, no audio-features.
 
 ## Daily use
 

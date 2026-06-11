@@ -156,12 +156,26 @@ re-explain the product.
   mode) live behind `process.platform === "darwin"` checks. Anything new in
   that category must degrade silently on Linux/Windows.
 - **No new network deps without a strong case.** Current network calls are
-  MusicBrainz (one-time per artist, cached forever in `~/.cadence/vibe-cache.json`)
-  and Open-Meteo (opt-in, requires explicit `cadence set-location`). Both are
-  keyless and bounded by short `AbortController` timeouts.
+  MusicBrainz (one-time per artist, cached forever in `~/.cadence/vibe-cache.json`),
+  Open-Meteo (opt-in, requires explicit `cadence set-location`), the opt-in
+  Spotify `currently-playing` endpoint, and the opt-in daily horoscope. All are
+  keyless or user-credentialed, opt-in, and bounded by short `AbortController`
+  timeouts.
+- **OAuth lives in the interactive CLI, never the hook.** The hook has no
+  browser and a 1.5s budget. `cadence spotify connect` (`src/spotify-auth.ts`)
+  runs a PKCE flow with a one-shot loopback server and stores a refresh token;
+  the hook-side provider (`src/providers/spotify.ts`) only ever reads/refreshes
+  the cached token, fail-silent. Any future "connect a service" follows this
+  shape — auth in the CLI, token-read in the hook.
+- **Opt-in provider registry** (`src/config.ts`, `OPT_IN_PROVIDERS`): anything
+  privacy-adjacent (typing tempo, focused app, esoteric, Spotify) stays off
+  until `cadence enable <signal>` / `cadence spotify connect`. New signals of
+  that kind register here and gate on `providerEnabled()`.
 - **Vibe table is a blocklist, not an allowlist** (`src/providers/music.ts`
   `isVibeTag`). Novel genres should pass through; we only reject known classes
   of junk (places, listener-meta tags, artist name fragments).
 - **State lives in `~/.cadence/`**: `state.txt` (self-report, 2h TTL),
-  `config.json` (pinned dials + weather location), `activity.json` (last
-  prompt timestamp), `vibe-cache.json` (MusicBrainz tag cache).
+  `config.json` (pinned dials + weather location + `providers` opt-in registry),
+  `activity.json` (last prompt timestamp + tempo window), `vibe-cache.json`
+  (MusicBrainz tag cache), `spotify-token.json` (cached access token),
+  `workstate.json` (PostToolUse conflict/thrash state).

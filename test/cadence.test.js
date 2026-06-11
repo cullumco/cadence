@@ -14,6 +14,7 @@ import { providerEnabled } from "../dist/config.js";
 import { readCreds } from "../dist/providers/spotify.js";
 import { composeHint } from "../dist/session-start.js";
 import { moonPhase, getEsotericSignal } from "../dist/providers/esoteric.js";
+import { generatePkce, buildAuthorizeUrl, parseTokenResponse, REDIRECT_URI } from "../dist/spotify-auth.js";
 
 // ── tagsToVibe ──────────────────────────────────────────────────────────────
 test("tagsToVibe: high-energy genres read fast + aggressive", () => {
@@ -194,6 +195,31 @@ test("readCreds: needs both refreshToken and clientId, else null (opt-in + compl
   const ok = readCreds({ spotify: { clientId: "a", refreshToken: "b" } });
   assert.equal(ok.clientId, "a");
   assert.equal(ok.refreshToken, "b");
+});
+
+// ── Spotify connect (PKCE) pure helpers ──────────────────────────────────────
+test("generatePkce: verifier in range, challenge is url-safe S256", () => {
+  const { verifier, challenge } = generatePkce();
+  assert.ok(verifier.length >= 43 && verifier.length <= 128, `verifier len ${verifier.length}`);
+  assert.doesNotMatch(challenge, /[+/=]/); // base64url, no padding/url-unsafe chars
+  assert.notEqual(generatePkce().verifier, verifier); // fresh each call
+});
+
+test("buildAuthorizeUrl: carries PKCE params and the loopback redirect", () => {
+  const url = buildAuthorizeUrl({ clientId: "cid", challenge: "chal", state: "st" });
+  const u = new URL(url);
+  assert.equal(u.searchParams.get("client_id"), "cid");
+  assert.equal(u.searchParams.get("code_challenge"), "chal");
+  assert.equal(u.searchParams.get("code_challenge_method"), "S256");
+  assert.equal(u.searchParams.get("state"), "st");
+  assert.equal(u.searchParams.get("redirect_uri"), REDIRECT_URI);
+});
+
+test("parseTokenResponse: pulls a refresh token, null on anything else", () => {
+  assert.equal(parseTokenResponse({ refresh_token: "rt" }), "rt");
+  assert.equal(parseTokenResponse({ access_token: "at" }), null);
+  assert.equal(parseTokenResponse({}), null);
+  assert.equal(parseTokenResponse(null), null);
 });
 
 // ── esoteric flavor (opt-in, render-only) ────────────────────────────────────

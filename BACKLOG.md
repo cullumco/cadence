@@ -195,8 +195,14 @@ focused app, calendar density, esoteric (horoscope/moon).
 - **Now-playing via AppleScript** (Spotify/Music) — survives the macOS 15.4
   MediaRemote lockdown that killed system-wide taps like `nowplaying-cli`. The
   cross-platform path (opt-in `src/providers/spotify.ts`) uses only the live
-  `currently-playing` endpoint with BYO refresh-token creds — identity only,
-  no audio-features, no shared client, no callback server in the hook.
+  `currently-playing` endpoint — identity only, no audio-features. Linking is a
+  PKCE browser flow in the *interactive CLI* (`cadence spotify connect`,
+  `src/spotify-auth.ts`): a one-shot loopback server catches the redirect and
+  exchanges the code for a refresh token. OAuth NEVER runs in the hook — the
+  hook only reads the cached token. To ship zero-config, register a "Cadence"
+  Spotify app and set `DEFAULT_SPOTIFY_CLIENT_ID` (or `CADENCE_SPOTIFY_CLIENT_ID`)
+  with `http://127.0.0.1:8888/callback` as a redirect URI. Manual
+  `cadence spotify <clientId> <refreshToken>` remains for the browser-less.
 - **Vibe via MusicBrainz** — keyless, no auth, cached per-artist forever.
 - **Mood vocabulary = Cyanite's 13** (research-verified controlled set).
 - **Influence = prompt only** — a hook cannot change the model, system prompt,

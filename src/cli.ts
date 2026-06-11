@@ -19,6 +19,7 @@ import {
 import { render } from "./inject.js";
 import { renderSignalsTable } from "./signals-view.js";
 import { loadProviders, providerEnabled, OPT_IN_PROVIDERS } from "./config.js";
+import { connectSpotify, REDIRECT_URI } from "./spotify-auth.js";
 import type { Signal, UserState, Cadence, DialLevel } from "./types.js";
 
 const CADENCE_DIR = join(homedir(), ".cadence");
@@ -177,25 +178,55 @@ async function cmdDisable(args: string[]) {
   console.log(`  disabled ${name}`);
 }
 
-// Spotify is the cross-platform music source — opt-in, bring-your-own app
-// credentials (no shared client, no callback server in a background hook).
+// Spotify is the cross-platform music source — opt-in, browser-authorized via
+// PKCE (no client secret to keep). Bring your own Spotify app client id (or
+// bake one in below / via env for a zero-config experience).
+const DEFAULT_SPOTIFY_CLIENT_ID = ""; // register a "Cadence" app and set this to ship zero-config
+
 const SPOTIFY_HELP = `  cadence spotify — link Spotify as a cross-platform now-playing source
 
   macOS already reads Spotify.app / Music.app with zero setup. This is for
-  Linux / Windows (or anyone not scripting the desktop app). One-time setup:
+  Linux / Windows (or anyone not scripting the desktop app).
 
+  One-time setup, then we handle the token dance for you:
     1. Create an app at https://developer.spotify.com/dashboard
-       (redirect URI can be http://localhost — you only need a refresh token).
-    2. Authorize it once with the "user-read-currently-playing" scope and keep
-       the refresh token (any standard OAuth helper / the docs' example will do).
-    3. cadence spotify <clientId> <refreshToken> [clientSecret]
+    2. Add this redirect URI to it: ${REDIRECT_URI}
+    3. cadence spotify connect <clientId>   (opens your browser once)
 
   Then it's just another music signal — vibe still comes from MusicBrainz.
+  Advanced (skip the browser): cadence spotify <clientId> <refreshToken>
   Turn it off: cadence spotify off`;
 
+async function cmdSpotifyConnect(clientIdArg: string | undefined) {
+  const clientId =
+    clientIdArg || process.env["CADENCE_SPOTIFY_CLIENT_ID"] || DEFAULT_SPOTIFY_CLIENT_ID;
+  if (!clientId) {
+    console.log("  cadence spotify connect needs a Spotify app client id.\n");
+    console.log(SPOTIFY_HELP);
+    return;
+  }
+  if (!process.stdin.isTTY) {
+    console.log("  spotify connect is interactive — run it in a terminal.");
+    return;
+  }
+  try {
+    const refreshToken = await connectSpotify(clientId, (m) => console.log(m));
+    const cfg = await loadCfg();
+    const providers = cfgProviders(cfg);
+    providers["spotify"] = { clientId, refreshToken };
+    cfg["providers"] = providers;
+    await saveCfg(cfg);
+    console.log("  ✓ Spotify linked — currently-playing is now a cross-platform signal");
+  } catch (e) {
+    console.error(`  couldn't link Spotify: ${e instanceof Error ? e.message : String(e)}`);
+    process.exit(1);
+  }
+}
+
 async function cmdSpotify(args: string[]) {
-  const [clientId, refreshToken, clientSecret] = args;
-  if (clientId === "off") {
+  const [first, second, third] = args;
+  if (first === "connect") return cmdSpotifyConnect(second);
+  if (first === "off") {
     const cfg = await loadCfg();
     const providers = cfgProviders(cfg);
     delete providers["spotify"];
@@ -204,18 +235,19 @@ async function cmdSpotify(args: string[]) {
     console.log("  unlinked Spotify");
     return;
   }
-  if (!clientId || !refreshToken) {
-    console.log(SPOTIFY_HELP);
+  // advanced manual path: clientId + refreshToken (+ optional secret)
+  if (first && second) {
+    const cfg = await loadCfg();
+    const providers = cfgProviders(cfg);
+    providers["spotify"] = third
+      ? { clientId: first, refreshToken: second, clientSecret: third }
+      : { clientId: first, refreshToken: second };
+    cfg["providers"] = providers;
+    await saveCfg(cfg);
+    console.log("  Spotify linked — currently-playing is now a cross-platform signal");
     return;
   }
-  const cfg = await loadCfg();
-  const providers = cfgProviders(cfg);
-  providers["spotify"] = clientSecret
-    ? { clientId, refreshToken, clientSecret }
-    : { clientId, refreshToken };
-  cfg["providers"] = providers;
-  await saveCfg(cfg);
-  console.log("  Spotify linked — currently-playing is now a cross-platform signal");
+  console.log(SPOTIFY_HELP);
 }
 
 const LEVELS: DialLevel[] = ["low", "medium", "high"];
@@ -443,7 +475,8 @@ const HELP = `
                                       see them all: cadence signals
 
   music (macOS reads Spotify.app / Music.app automatically):
-    cadence spotify                   link Spotify as a cross-platform source
+    cadence spotify connect <id>      link Spotify (cross-platform, opens browser)
+    cadence spotify off               unlink it
 `;
 
 async function main() {
