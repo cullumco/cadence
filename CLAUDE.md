@@ -87,10 +87,19 @@ locks this in. Avoid edits that collapse the dials back into a single mode.
 ### Signal hierarchy and `deriveCadence` order
 
 Inside `deriveCadence()`, signals are applied weakest-first so stronger signals
-override. Current order: ambient (soft nudges) → music energy → self-report →
-activity. Git is collected and rendered as flavor but is *intentionally dormant*
-in dial mapping — its nudges are written but commented out until they're proven
-trustworthy on real output (see `BACKLOG.md`).
+override. Current order: ambient (soft nudges) → music energy → git → prompt
+intent → self-report → activity (typing tempo + return-from-break). Each tier
+can override the one above it on a shared dial.
+
+Two notes on authority:
+- **Git is live** (since 2026-06-05), not dormant: `3+ commits/hr → pace high`,
+  `conflicted → proactivity low`. It sits *below* self-report so an explicit
+  `cadence state "shipping"` still beats a mid-conflict read.
+- **Prompt intent** (`src/providers/intent.ts`) reads ship/think/debug cues
+  from the live prompt and sits between git and self-report — strong enough to
+  drive the "same prompt, different room" behavior without a separate CLI step,
+  but a deliberate self-report still outranks it. The one nudge that's still
+  commented-out dormant is `ambient focus → proactivity` (see `deriveCadence`).
 
 ### Hook budget and "silent when empty"
 

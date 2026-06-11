@@ -123,6 +123,27 @@ Applied below self-report in the hierarchy, so "I'm shipping" beats a
 mid-conflict read. Watch for false positives (e.g. rebase-heavy workflows
 reading as flow state) before adding more git nudges.
 
+## Prompt intent — SHIPPED
+
+`src/providers/intent.ts` reads ship/think/debug/focus cues from the live
+prompt and drives the same dials as a self-report, applied *between* git and
+self-report (a deliberate `cadence state` still wins). This is what makes the
+"same prompt, different room" demo true without a separate CLI step. Patterns
+are deliberately phrase-based, not bare-word, so ordinary prompts ("can you
+just check…", "why is this slow?") don't misfire — and the reframe still
+defers to the literal words, so a miss stays cheap.
+
+## Opt-in provider registry — SHIPPED
+
+`src/config.ts` adds a `providers` block to `~/.cadence/config.json` — the
+consent layer for "as many signals as the user is willing to give." Anything
+privacy-adjacent stays off until `cadence enable <signal>`. `OPT_IN_PROVIDERS`
+is the single source of truth (CLI + signals view + providers). First opt-in
+signal on it: **typing tempo** — a rolling prompt-rhythm window in
+`activity.ts` (`computeTempo`), where rapid-fire short prompts → pace high and
+one long considered prompt → pace low. Next opt-in signals to slot in here:
+focused app, calendar density, esoteric (horoscope/moon).
+
 ## Other deferred provider/feature ideas
 
 - **`activity.ts` provider** — first cut shipped: prompt length plus minutes

@@ -9,6 +9,7 @@
  * The four embodied dimensions, each a provider emitting one Signal:
  *   - MusicSignal      → what's playing            (music)
  *   - SelfReportSignal → what you told us          (mood, ground truth)
+ *   - IntentSignal     → what your prompt implies  (mood, inferred from words)
  *   - ActivitySignal   → your motor/typing tempo   (mood, inferred)
  *   - GitSignal        → your work state           (context)
  *   - PlaceSignal      → where & in what setting    (place)
@@ -33,6 +34,18 @@ export interface ActivitySignal {
   source: "activity";
   minSinceLastPrompt?: number; // gap before this prompt — flow vs. return-from-break
   promptLength?: number; // chars in the current prompt — terse vs. rambling
+  // typing tempo — only set when the user opts into providers.typingTempo.
+  // "rapid"     → quick succession of short prompts → fast pace
+  // "considered" → one long, deliberate prompt       → slow pace
+  // "measured"  → neither extreme                    → no nudge
+  tempo?: "rapid" | "measured" | "considered";
+}
+
+/* Prompt intent — the cadence read straight from the words just typed.
+ * Weaker than a deliberate self-report, stronger than git inference. */
+export interface IntentSignal {
+  source: "intent";
+  kind: "ship" | "think" | "debug" | "focus" | null;
 }
 
 export interface GitSignal {
@@ -76,6 +89,7 @@ export type Signal =
   | MusicSignal
   | SelfReportSignal
   | ActivitySignal
+  | IntentSignal
   | GitSignal
   | PlaceSignal
   | AmbientSignal;

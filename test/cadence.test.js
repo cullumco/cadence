@@ -7,8 +7,10 @@ import { tagsToVibe } from "../dist/vibe.js";
 import { deriveCadence, buildReframe, applyOverrides, resolveDialLevel } from "../dist/cadence.js";
 import { render } from "../dist/inject.js";
 import { decideStop, isSoftHandoff } from "../dist/stop.js";
-import { activityFrom } from "../dist/providers/activity.js";
+import { activityFrom, computeTempo } from "../dist/providers/activity.js";
+import { detectPromptIntent } from "../dist/providers/intent.js";
 import { renderSignalsTable } from "../dist/signals-view.js";
+import { providerEnabled } from "../dist/config.js";
 
 // ── tagsToVibe ──────────────────────────────────────────────────────────────
 test("tagsToVibe: high-energy genres read fast + aggressive", () => {
@@ -79,6 +81,96 @@ test("deriveCadence: no signals → all dials neutral", () => {
     posture: "medium",
     proactivity: "medium",
   });
+});
+
+// ── prompt intent ────────────────────────────────────────────────────────────
+test("detectPromptIntent: phrase cues classify, bare common words don't misfire", () => {
+  assert.equal(detectPromptIntent("ok let's ship it, the retry logic is done"), "ship");
+  assert.equal(detectPromptIntent("help me think through the tradeoffs here"), "think");
+  assert.equal(detectPromptIntent("why is this test failing on CI?"), "debug");
+  assert.equal(detectPromptIntent("heads down, deep work for the next hour"), "focus");
+  // the bare words that the self-report regex leans on must NOT trigger here
+  assert.equal(detectPromptIntent("can you just check this file?"), null);
+  assert.equal(detectPromptIntent("rename the variable to userId"), null);
+});
+
+test("deriveCadence: ship intent from the prompt drives decisive + act-freely", () => {
+  const c = deriveCadence(stateWith([{ source: "intent", kind: "ship" }]));
+  assert.equal(c.posture, "high");
+  assert.equal(c.proactivity, "high");
+  assert.equal(c.pace, "high");
+});
+
+test("deriveCadence: debug intent leads with hypotheses (low posture + proactivity)", () => {
+  const c = deriveCadence(stateWith([{ source: "intent", kind: "debug" }]));
+  assert.equal(c.posture, "low");
+  assert.equal(c.proactivity, "low");
+});
+
+test("deriveCadence: self-report outranks prompt intent — deliberate beats stray", () => {
+  const c = deriveCadence(
+    stateWith([
+      { source: "intent", kind: "ship" },
+      { source: "self_report", text: "thinking through tradeoffs", setAt: 0 },
+    ])
+  );
+  assert.equal(c.pace, "low"); // self-report's "think" wins over intent's "ship"
+  assert.equal(c.posture, "low");
+});
+
+test("deriveCadence: prompt intent outranks git — typed word beats work-state read", () => {
+  const c = deriveCadence(
+    stateWith([
+      { source: "git", commitsLastHour: 0, filesDirty: 6, conflicted: true },
+      { source: "intent", kind: "ship" },
+    ])
+  );
+  assert.equal(c.proactivity, "high"); // intent "ship" beats git's conflict→low
+});
+
+// ── typing tempo ─────────────────────────────────────────────────────────────
+test("computeTempo: a long considered prompt reads deliberate", () => {
+  assert.equal(computeTempo([{ at: 1000, len: 400 }]), "considered");
+});
+
+test("computeTempo: a tight burst of short prompts reads rapid", () => {
+  const window = [
+    { at: 0, len: 20 },
+    { at: 60_000, len: 30 },
+    { at: 120_000, len: 25 },
+  ];
+  assert.equal(computeTempo(window), "rapid");
+});
+
+test("computeTempo: a single short prompt isn't enough rhythm to call", () => {
+  assert.equal(computeTempo([{ at: 0, len: 20 }]), undefined);
+});
+
+test("activityFrom: tempo only computed when opted in", () => {
+  const recent = [
+    { at: 0, len: 20 },
+    { at: 60_000, len: 30 },
+  ];
+  const off = activityFrom("go", 60_000, 120_000, recent, false);
+  assert.equal(off.tempo, undefined);
+  const on = activityFrom("go", 60_000, 120_000, recent, true);
+  assert.equal(on.tempo, "rapid");
+});
+
+test("deriveCadence: rapid tempo lifts pace, considered lowers it", () => {
+  assert.equal(deriveCadence(stateWith([{ source: "activity", tempo: "rapid" }])).pace, "high");
+  assert.equal(deriveCadence(stateWith([{ source: "activity", tempo: "considered" }])).pace, "low");
+});
+
+// ── opt-in provider registry ─────────────────────────────────────────────────
+test("providerEnabled: truthy values opt in, falsy/empty stay off", () => {
+  assert.equal(providerEnabled({ typingTempo: true }, "typingTempo"), true);
+  assert.equal(providerEnabled({ horoscope: "leo" }, "horoscope"), true);
+  assert.equal(providerEnabled({ calendar: { ics: "u" } }, "calendar"), true);
+  assert.equal(providerEnabled({ typingTempo: false }, "typingTempo"), false);
+  assert.equal(providerEnabled({ horoscope: "" }, "horoscope"), false);
+  assert.equal(providerEnabled({ calendar: {} }, "calendar"), false);
+  assert.equal(providerEnabled({}, "typingTempo"), false);
 });
 
 // ── applyOverrides ──────────────────────────────────────────────────────────
@@ -235,6 +327,15 @@ test("render: quotes untrusted signal text", () => {
   assert.match(block, /on "office \\u003cwifi\\u003e"/);
 });
 
+test("render: intent and typing tempo surface in the block", () => {
+  const { block } = renderOnly([
+    { source: "intent", kind: "ship" },
+    { source: "activity", promptLength: 20, tempo: "rapid" },
+  ]);
+  assert.match(block, /intent: ship \(read from your prompt\)/);
+  assert.match(block, /tempo=rapid/);
+});
+
 // ── buildReframe ────────────────────────────────────────────────────────────
 test("buildReframe: always defers to the user's literal words", () => {
   const lens = buildReframe({ pace: "high", tone: "low", posture: "high", proactivity: "high" });
@@ -296,6 +397,15 @@ test("renderSignalsTable: self_report shows remaining TTL", () => {
   const report = { source: "self_report", text: "ship mode", setAt: 0 };
   const out = renderSignalsTable({ music: null, report, ambient: null, git: null, now: HOUR, platform: "darwin" });
   assert.match(out, /"ship mode" \(3h00m left\)/);
+});
+
+test("renderSignalsTable: intent and typing-tempo rows reflect opt-in state", () => {
+  const base = { music: null, report: null, ambient: null, git: null, now: 0, platform: "darwin" };
+  const off = renderSignalsTable({ ...base, providers: {} });
+  assert.match(off, /intent\s+— reads your prompt/);
+  assert.match(off, /typing tempo\s+— off \(opt-in: cadence enable typingTempo\)/);
+  const on = renderSignalsTable({ ...base, providers: { typingTempo: true } });
+  assert.match(on, /typing tempo\s+on \(opt-in\)/);
 });
 
 // ── Stop hook enforcement ───────────────────────────────────────────────────

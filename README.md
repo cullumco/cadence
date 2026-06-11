@@ -77,11 +77,15 @@ Same words. The room around them changed, and the agent finally saw it.
      a clean *vibe* (mood words) via [MusicBrainz](https://musicbrainz.org). No
      Spotify login, no API key, no Premium.
    - **self-report** — what you tell it: `cadence state "two beers, shipping"`.
+   - **intent** — read from the prompt you just typed: "let's ship this" →
+     decisive/act-freely, "help me debug" → verify-first. Cross-platform, no
+     setup; this is what makes the same prompt read differently per room.
 
-   Time/day, self-report, and git move the dials (git reads *what you're
-   doing*: 3+ commits/hr → fast pace, mid-conflict → verify-first); the rest
-   render as context the agent reads (flavor). Self-report always outranks
-   inference — "I'm shipping" beats a mid-conflict read.
+   Time/day, self-report, git, and prompt intent move the dials (git reads
+   *what you're doing*: 3+ commits/hr → fast pace, mid-conflict → verify-first);
+   the rest render as context the agent reads (flavor). Self-report outranks
+   prompt intent outranks git — your deliberate "I'm shipping" beats a stray
+   "ship" in a prompt, which beats a mid-conflict read.
 2. **Dials** — four independent knobs, each `low | medium | high`, inferred from
    the signals (or pinned by you):
    - **pace** — deliberate ↔ fast
@@ -221,13 +225,19 @@ the gate to run on every push to `main`.
 
 See [`BACKLOG.md`](BACKLOG.md). Highlights:
 
-- **Git nudges** — the highest-value next step: built but dormant, they move
-  the dials from *what you said* to *what you're actually doing*.
-- **More signals** — candidates on the bench:
+- **Git nudges** — *shipped:* they move the dials from *what you said* to *what
+  you're actually doing* (`3+ commits/hr → fast pace`, `mid-conflict →
+  verify-first`), applied below self-report so your explicit word still wins.
+- **Prompt intent** — *shipped:* ship/think/debug read straight from the prompt
+  you just typed, so the "same prompt, different room" behavior fires without a
+  separate `cadence state` step.
+- **Opt-in signals** — anything privacy-adjacent stays off until you turn it on
+  (`cadence enable <signal>`):
+  - **typing tempo** — *shipped (opt-in):* prompt rhythm beyond length —
+    rapid-fire short prompts read fast, one long considered prompt reads
+    deliberate.
   - **calendar density** — a meeting in 20 minutes should read as `pace=fast,
     posture=decisive`; a clear afternoon as room to explore.
-  - **typing tempo** — prompt rhythm beyond length: rapid-fire short prompts vs.
-    one long considered one.
   - **focused app** — what's frontmost next to the terminal (docs? a profiler?
     Slack?).
   - **deeper Focus** — manual + scheduled Focus detection ship now; geofenced/

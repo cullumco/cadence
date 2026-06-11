@@ -17,6 +17,7 @@ import {
 } from "./cadence.js";
 import { render } from "./inject.js";
 import { renderSignalsTable } from "./signals-view.js";
+import { loadProviders, OPT_IN_PROVIDERS } from "./config.js";
 import type { Signal, UserState, Cadence, DialLevel } from "./types.js";
 
 const CADENCE_DIR = join(homedir(), ".cadence");
@@ -81,17 +82,91 @@ async function cmdTest() {
 // The legibility view: every signal Cadence can read — live value, or the
 // reason it's absent. Unlike `test`, this never goes silent.
 async function cmdSignals() {
-  const [music, report, ambient, git] = await Promise.all([
+  const [music, report, ambient, git, providers] = await Promise.all([
     getMusicSignal().catch(() => null),
     getSelfReportSignal().catch(() => null),
     getAmbientSignal(new Date()).catch(() => null),
     getGitSignal(process.cwd()).catch(() => null),
+    loadProviders(),
   ]);
   console.log(
     "\n" +
-      renderSignalsTable({ music, report, ambient, git, now: Date.now(), platform: process.platform }) +
+      renderSignalsTable({
+        music,
+        report,
+        ambient,
+        git,
+        providers,
+        now: Date.now(),
+        platform: process.platform,
+      }) +
       "\n"
   );
+}
+
+// ── opt-in provider registry: the consent layer ────────────────────────────
+function knownProvider(name: string | undefined): name is keyof typeof OPT_IN_PROVIDERS {
+  return name != null && name in OPT_IN_PROVIDERS;
+}
+
+function listProviders() {
+  console.log("  opt-in signals (off until you enable them):");
+  for (const [name, desc] of Object.entries(OPT_IN_PROVIDERS)) {
+    console.log(`    ${name.padEnd(14)} ${desc}`);
+  }
+}
+
+async function cmdEnable(args: string[]) {
+  const [name, ...valueParts] = args;
+  if (!name) {
+    console.log("  usage: cadence enable <signal> [value]   e.g. cadence enable typingTempo");
+    listProviders();
+    return;
+  }
+  if (!knownProvider(name)) {
+    console.error(`  unknown signal "${name}".`);
+    listProviders();
+    process.exit(1);
+  }
+  await mkdir(CADENCE_DIR, { recursive: true });
+  let cfg: Record<string, unknown> = {};
+  try {
+    cfg = JSON.parse(await readFile(CONFIG_FILE, "utf-8")) as Record<string, unknown>;
+  } catch {
+    // no config yet
+  }
+  const providers =
+    cfg["providers"] && typeof cfg["providers"] === "object"
+      ? (cfg["providers"] as Record<string, unknown>)
+      : {};
+  providers[name] = valueParts.length ? valueParts.join(" ") : true;
+  cfg["providers"] = providers;
+  await writeFile(CONFIG_FILE, JSON.stringify(cfg, null, 2), "utf-8");
+  console.log(`  enabled ${name}${valueParts.length ? ` = "${valueParts.join(" ")}"` : ""}`);
+}
+
+async function cmdDisable(args: string[]) {
+  const [name] = args;
+  if (!name) {
+    console.log("  usage: cadence disable <signal>");
+    listProviders();
+    return;
+  }
+  await mkdir(CADENCE_DIR, { recursive: true });
+  let cfg: Record<string, unknown> = {};
+  try {
+    cfg = JSON.parse(await readFile(CONFIG_FILE, "utf-8")) as Record<string, unknown>;
+  } catch {
+    // none
+  }
+  const providers =
+    cfg["providers"] && typeof cfg["providers"] === "object"
+      ? (cfg["providers"] as Record<string, unknown>)
+      : {};
+  delete providers[name];
+  cfg["providers"] = providers;
+  await writeFile(CONFIG_FILE, JSON.stringify(cfg, null, 2), "utf-8");
+  console.log(`  disabled ${name}`);
 }
 
 const LEVELS: DialLevel[] = ["low", "medium", "high"];
@@ -312,6 +387,11 @@ const HELP = `
 
   ambient (time & day are automatic; weather is opt-in):
     cadence set-location <lat> <lon> [name]   turn on weather for your area
+
+  opt-in signals (off until you turn them on — as much as you're willing to give):
+    cadence enable <signal> [value]   turn an opt-in signal on (e.g. typingTempo)
+    cadence disable <signal>          turn it back off
+                                      see them all: cadence signals
 `;
 
 async function main() {
@@ -335,6 +415,10 @@ async function main() {
       return cmdDials();
     case "set-location":
       return cmdLocation(rest);
+    case "enable":
+      return cmdEnable(rest);
+    case "disable":
+      return cmdDisable(rest);
     case undefined:
       return cmdRoot(); // live status + inputs, not the help dump
     case "help":

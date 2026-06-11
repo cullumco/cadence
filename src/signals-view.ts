@@ -5,6 +5,7 @@ import type {
   AmbientSignal,
 } from "./types.js";
 import { STALE_AFTER_MS } from "./providers/selfreport.js";
+import { providerEnabled, type ProviderConfig } from "./config.js";
 
 /* ─────────────────────────────────────────────────────────────────────────
  * Signals table — the legibility view behind `cadence signals`.
@@ -23,6 +24,7 @@ export interface RawSignals {
   git: GitSignal | null;
   now: number; // injected so the view stays pure/testable
   platform: NodeJS.Platform; // ditto — decides "unavailable" vs "macOS only"
+  providers?: ProviderConfig; // the opt-in registry, for "on/off" on opt-in signals
 }
 
 const LABEL_W = 12; // sub-row label column
@@ -148,12 +150,25 @@ function gitRow(g: GitSignal | null): string {
   return top("git", parts.join(", "));
 }
 
+function intentRow(): string {
+  return top("intent", "— reads your prompt (the hook infers ship/think/debug per-prompt)");
+}
+
+function tempoRow(providers: ProviderConfig): string {
+  return providerEnabled(providers, "typingTempo")
+    ? top("typing tempo", "on (opt-in) — rapid vs. considered prompt rhythm → pace")
+    : top("typing tempo", "— off (opt-in: cadence enable typingTempo)");
+}
+
 export function renderSignalsTable(raw: RawSignals): string {
+  const providers = raw.providers ?? {};
   return [
     ...ambientRows(raw.ambient, raw.platform),
     ...musicRows(raw.music),
     reportRow(raw.report, raw.now),
+    intentRow(),
     gitRow(raw.git),
     top("activity", "— session-only (the hook injects it per-prompt)"),
+    tempoRow(providers),
   ].join("\n");
 }

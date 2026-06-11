@@ -3,6 +3,7 @@ import type {
   MusicSignal,
   SelfReportSignal,
   ActivitySignal,
+  IntentSignal,
   GitSignal,
   PlaceSignal,
   AmbientSignal,
@@ -42,10 +43,16 @@ function renderGit(g: GitSignal): string {
   return `    git: ${parts.join(", ")}`;
 }
 
+function renderIntent(i: IntentSignal): string[] {
+  if (!i.kind) return [];
+  return [`    intent: ${i.kind} (read from your prompt)`];
+}
+
 function renderActivity(a: ActivitySignal): string {
   const parts = [
     a.minSinceLastPrompt != null ? `min_since_prompt=${a.minSinceLastPrompt}` : null,
     a.promptLength != null ? `prompt_len=${a.promptLength}` : null,
+    a.tempo ? `tempo=${a.tempo}` : null,
   ].filter(Boolean);
   return `    activity: { ${parts.join(" ")} }`;
 }
@@ -96,6 +103,7 @@ export function render(state: StateWithCadence): string {
     if (sig.source === "music") lines.push(...renderMusic(sig));
     else if (sig.source === "self_report") lines.push(renderReport(sig));
     else if (sig.source === "git") lines.push(renderGit(sig));
+    else if (sig.source === "intent") lines.push(...renderIntent(sig));
     else if (sig.source === "activity") lines.push(renderActivity(sig));
     else if (sig.source === "place") lines.push(renderPlace(sig));
     else if (sig.source === "ambient") lines.push(renderAmbient(sig));
