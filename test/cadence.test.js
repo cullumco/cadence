@@ -11,6 +11,7 @@ import { activityFrom, computeTempo } from "../dist/providers/activity.js";
 import { detectPromptIntent } from "../dist/providers/intent.js";
 import { renderSignalsTable } from "../dist/signals-view.js";
 import { providerEnabled } from "../dist/config.js";
+import { readCreds } from "../dist/providers/spotify.js";
 
 // ── tagsToVibe ──────────────────────────────────────────────────────────────
 test("tagsToVibe: high-energy genres read fast + aggressive", () => {
@@ -182,6 +183,15 @@ test("providerEnabled: truthy values opt in, falsy/empty stay off", () => {
   assert.equal(providerEnabled({ horoscope: "" }, "horoscope"), false);
   assert.equal(providerEnabled({ calendar: {} }, "calendar"), false);
   assert.equal(providerEnabled({}, "typingTempo"), false);
+});
+
+test("readCreds: needs both refreshToken and clientId, else null (opt-in + complete)", () => {
+  assert.equal(readCreds({}), null); // not opted in
+  assert.equal(readCreds({ spotify: { clientId: "a" } }), null); // missing refresh token
+  assert.equal(readCreds({ spotify: { refreshToken: "b" } }), null); // missing client id
+  const ok = readCreds({ spotify: { clientId: "a", refreshToken: "b" } });
+  assert.equal(ok.clientId, "a");
+  assert.equal(ok.refreshToken, "b");
 });
 
 // ── applyOverrides ──────────────────────────────────────────────────────────

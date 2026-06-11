@@ -180,9 +180,14 @@ focused app, calendar density, esoteric (horoscope/moon).
 ## Settled decisions (context for the above)
 
 - **Music = identity + vibe**, not numeric affect (Spotify audio-features
-  deprecated 2024-11-27 for new apps; dev-mode Premium-gated 2026-02).
+  deprecated 2024-11-27 for new apps; dev-mode Premium-gated 2026-02). Music
+  now moves THREE dials (energy → pace + posture, acoustic → warm tone), never
+  proactivity — "move with the music," see `deriveCadence`.
 - **Now-playing via AppleScript** (Spotify/Music) — survives the macOS 15.4
-  MediaRemote lockdown that killed system-wide taps like `nowplaying-cli`.
+  MediaRemote lockdown that killed system-wide taps like `nowplaying-cli`. The
+  cross-platform path (opt-in `src/providers/spotify.ts`) uses only the live
+  `currently-playing` endpoint with BYO refresh-token creds — identity only,
+  no audio-features, no shared client, no callback server in the hook.
 - **Vibe via MusicBrainz** — keyless, no auth, cached per-artist forever.
 - **Mood vocabulary = Cyanite's 13** (research-verified controlled set).
 - **Influence = prompt only** — a hook cannot change the model, system prompt,

@@ -105,6 +105,25 @@ async function cmdSignals() {
 }
 
 // ── opt-in provider registry: the consent layer ────────────────────────────
+async function loadCfg(): Promise<Record<string, unknown>> {
+  try {
+    return JSON.parse(await readFile(CONFIG_FILE, "utf-8")) as Record<string, unknown>;
+  } catch {
+    return {};
+  }
+}
+
+async function saveCfg(cfg: Record<string, unknown>): Promise<void> {
+  await mkdir(CADENCE_DIR, { recursive: true });
+  await writeFile(CONFIG_FILE, JSON.stringify(cfg, null, 2), "utf-8");
+}
+
+function cfgProviders(cfg: Record<string, unknown>): Record<string, unknown> {
+  return cfg["providers"] && typeof cfg["providers"] === "object"
+    ? (cfg["providers"] as Record<string, unknown>)
+    : {};
+}
+
 function knownProvider(name: string | undefined): name is keyof typeof OPT_IN_PROVIDERS {
   return name != null && name in OPT_IN_PROVIDERS;
 }
@@ -125,23 +144,15 @@ async function cmdEnable(args: string[]) {
   }
   if (!knownProvider(name)) {
     console.error(`  unknown signal "${name}".`);
+    if (name === "spotify") console.error("  spotify takes credentials — run: cadence spotify");
     listProviders();
     process.exit(1);
   }
-  await mkdir(CADENCE_DIR, { recursive: true });
-  let cfg: Record<string, unknown> = {};
-  try {
-    cfg = JSON.parse(await readFile(CONFIG_FILE, "utf-8")) as Record<string, unknown>;
-  } catch {
-    // no config yet
-  }
-  const providers =
-    cfg["providers"] && typeof cfg["providers"] === "object"
-      ? (cfg["providers"] as Record<string, unknown>)
-      : {};
+  const cfg = await loadCfg();
+  const providers = cfgProviders(cfg);
   providers[name] = valueParts.length ? valueParts.join(" ") : true;
   cfg["providers"] = providers;
-  await writeFile(CONFIG_FILE, JSON.stringify(cfg, null, 2), "utf-8");
+  await saveCfg(cfg);
   console.log(`  enabled ${name}${valueParts.length ? ` = "${valueParts.join(" ")}"` : ""}`);
 }
 
@@ -152,21 +163,53 @@ async function cmdDisable(args: string[]) {
     listProviders();
     return;
   }
-  await mkdir(CADENCE_DIR, { recursive: true });
-  let cfg: Record<string, unknown> = {};
-  try {
-    cfg = JSON.parse(await readFile(CONFIG_FILE, "utf-8")) as Record<string, unknown>;
-  } catch {
-    // none
-  }
-  const providers =
-    cfg["providers"] && typeof cfg["providers"] === "object"
-      ? (cfg["providers"] as Record<string, unknown>)
-      : {};
+  const cfg = await loadCfg();
+  const providers = cfgProviders(cfg);
   delete providers[name];
   cfg["providers"] = providers;
-  await writeFile(CONFIG_FILE, JSON.stringify(cfg, null, 2), "utf-8");
+  await saveCfg(cfg);
   console.log(`  disabled ${name}`);
+}
+
+// Spotify is the cross-platform music source — opt-in, bring-your-own app
+// credentials (no shared client, no callback server in a background hook).
+const SPOTIFY_HELP = `  cadence spotify — link Spotify as a cross-platform now-playing source
+
+  macOS already reads Spotify.app / Music.app with zero setup. This is for
+  Linux / Windows (or anyone not scripting the desktop app). One-time setup:
+
+    1. Create an app at https://developer.spotify.com/dashboard
+       (redirect URI can be http://localhost — you only need a refresh token).
+    2. Authorize it once with the "user-read-currently-playing" scope and keep
+       the refresh token (any standard OAuth helper / the docs' example will do).
+    3. cadence spotify <clientId> <refreshToken> [clientSecret]
+
+  Then it's just another music signal — vibe still comes from MusicBrainz.
+  Turn it off: cadence spotify off`;
+
+async function cmdSpotify(args: string[]) {
+  const [clientId, refreshToken, clientSecret] = args;
+  if (clientId === "off") {
+    const cfg = await loadCfg();
+    const providers = cfgProviders(cfg);
+    delete providers["spotify"];
+    cfg["providers"] = providers;
+    await saveCfg(cfg);
+    console.log("  unlinked Spotify");
+    return;
+  }
+  if (!clientId || !refreshToken) {
+    console.log(SPOTIFY_HELP);
+    return;
+  }
+  const cfg = await loadCfg();
+  const providers = cfgProviders(cfg);
+  providers["spotify"] = clientSecret
+    ? { clientId, refreshToken, clientSecret }
+    : { clientId, refreshToken };
+  cfg["providers"] = providers;
+  await saveCfg(cfg);
+  console.log("  Spotify linked — currently-playing is now a cross-platform signal");
 }
 
 const LEVELS: DialLevel[] = ["low", "medium", "high"];
@@ -392,6 +435,9 @@ const HELP = `
     cadence enable <signal> [value]   turn an opt-in signal on (e.g. typingTempo)
     cadence disable <signal>          turn it back off
                                       see them all: cadence signals
+
+  music (macOS reads Spotify.app / Music.app automatically):
+    cadence spotify                   link Spotify as a cross-platform source
 `;
 
 async function main() {
@@ -419,6 +465,8 @@ async function main() {
       return cmdEnable(rest);
     case "disable":
       return cmdDisable(rest);
+    case "spotify":
+      return cmdSpotify(rest);
     case undefined:
       return cmdRoot(); // live status + inputs, not the help dump
     case "help":

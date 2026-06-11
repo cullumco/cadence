@@ -118,8 +118,11 @@ function ambientRows(a: AmbientSignal | null, platform: NodeJS.Platform): string
   return lines;
 }
 
-function musicRows(m: MusicSignal | null): string[] {
-  if (!m?.track) return [top("music", "— nothing playing")];
+function musicRows(m: MusicSignal | null, providers: ProviderConfig): string[] {
+  const spotify = providerEnabled(providers, "spotify")
+    ? row("source", "macOS apps + Spotify (cross-platform, linked)")
+    : row("source", "macOS apps only", "(cross-platform: cadence spotify)");
+  if (!m?.track) return [top("music", "— nothing playing"), spotify];
   const lines = ["  music"];
   lines.push(
     row(
@@ -128,6 +131,7 @@ function musicRows(m: MusicSignal | null): string[] {
     )
   );
   lines.push(m.vibe ? row("vibe", m.vibe) : row("vibe", "— no tags yet (looked up once per artist)"));
+  lines.push(spotify);
   return lines;
 }
 
@@ -164,7 +168,7 @@ export function renderSignalsTable(raw: RawSignals): string {
   const providers = raw.providers ?? {};
   return [
     ...ambientRows(raw.ambient, raw.platform),
-    ...musicRows(raw.music),
+    ...musicRows(raw.music, providers),
     reportRow(raw.report, raw.now),
     intentRow(),
     gitRow(raw.git),

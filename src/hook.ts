@@ -39,7 +39,7 @@ async function collectSignals(
 ): Promise<Signal[]> {
   const tempoEnabled = providerEnabled(providers, "typingTempo");
   const [music, report, ambient, git, activity, intent] = await Promise.allSettled([
-    getMusicSignal(),
+    getMusicSignal(providers),
     getSelfReportSignal(),
     getAmbientSignal(new Date()),
     getGitSignal(cwd),

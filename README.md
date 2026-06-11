@@ -75,7 +75,9 @@ Same words. The room around them changed, and the agent finally saw it.
      the hook payload: `activity: { min_since_prompt=45 prompt_len=123 }`.
    - **music** — what's playing (via macOS now-playing, any player), turned into
      a clean *vibe* (mood words) via [MusicBrainz](https://musicbrainz.org). No
-     Spotify login, no API key, no Premium.
+     Spotify login, no API key, no Premium on macOS. Off the Mac, you can link
+     Spotify as a cross-platform source (`cadence spotify`, opt-in). Music moves
+     three dials — energy → pace + posture, organic texture → warm tone.
    - **self-report** — what you tell it: `cadence state "two beers, shipping"`.
    - **intent** — read from the prompt you just typed: "let's ship this" →
      decisive/act-freely, "help me debug" → verify-first. Cross-platform, no
@@ -96,9 +98,11 @@ Same words. The room around them changed, and the agent finally saw it.
    *read* your prompt. Generated fresh each time; always ends "if my words
    clearly mean otherwise, follow my words."
 
-The dials are independent on purpose — high-energy-but-mellow music can read as
+The dials move mostly independently — high-energy-but-mellow music reads as
 "fast pace, warm tone," something a single ship/think/debug label could never
-express.
+express. Music is the deliberate exception: it moves pace, posture, and tone
+together (you move *with* the music) but never proactivity — whether to act
+without checking in stays your call, not the soundtrack's.
 
 ## Requirements
 
@@ -253,9 +257,12 @@ See [`BACKLOG.md`](BACKLOG.md). Highlights:
 - **macOS-only.** The alpha targets the Mac: music, battery, dark mode,
   displays, wifi, and Focus are all macOS probes. Other platforms get
   self-report + dials + time/git; everything else degrades silently.
-- **Spotify's Web API is not used** and not needed — Spotify deprecated audio
-  features for new apps (2024) and gated dev-mode behind Premium (2026). Cadence
-  reads what's playing at the OS level instead.
+- **Spotify's audio-features API is not used** — Spotify deprecated it for new
+  apps (2024) and gated dev-mode behind Premium (2026), so vibe comes from
+  MusicBrainz, not Spotify. On macOS, Cadence reads what's playing at the OS
+  level (no Spotify account at all). The only Spotify API call is the still-live
+  `currently-playing` endpoint, and only if you opt in via `cadence spotify` to
+  get music off the Mac — identity only, never audio-features.
 
 ## License
 
