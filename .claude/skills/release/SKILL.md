@@ -63,3 +63,6 @@ do not re-ask.
 - Remote sessions cannot push tags (the git proxy 403s `refs/tags/*` while
   branch pushes succeed, and reports a misleading "Everything up-to-date").
   That's why the workflow creates the tag server-side via `--target`.
+- `target` must be the FULL 40-char commit SHA (or a branch name) —
+  GitHub's release API rejects abbreviated SHAs with
+  "Release.target_commitish is invalid". Use `git rev-parse <short-sha>`.
