@@ -4,6 +4,7 @@ import { readFile, writeFile, mkdir } from "node:fs/promises";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { getGitSignal } from "./providers/git.js";
+import { isPaused } from "./config.js";
 
 /* ─────────────────────────────────────────────────────────────────────────
  * PostToolUse adapter — V2 "after-the-fact" refinement, conservative cut.
@@ -153,6 +154,7 @@ async function readStdin(): Promise<PostToolInput> {
 }
 
 async function main() {
+  if (await isPaused()) return; // user asked for silence — observe nothing
   const input = await readStdin();
   if (!shouldCheck(input)) return;
 

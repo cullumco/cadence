@@ -2,6 +2,7 @@
 import { getMusicSignal } from "./providers/music.js";
 import { getSelfReportSignal, STALE_AFTER_MS, REFRESH_SOON_MS } from "./providers/selfreport.js";
 import { loadOverrides } from "./cadence.js";
+import { isPaused } from "./config.js";
 import { debug } from "./debug.js";
 
 /* ─────────────────────────────────────────────────────────────────────────
@@ -23,6 +24,7 @@ export interface SessionInfo {
   pinned: string[]; // dial names pinned in ~/.cadence/config.json
   nowPlaying: { artist: string; player: string } | null;
   firstRun: boolean; // Cadence has never been told anything (no state, no pins)
+  paused: boolean; // the kill switch — hooks are silent until `cadence resume`
 }
 
 // The voice of the product's first impression. Return null to stay silent.
@@ -30,6 +32,11 @@ export interface SessionInfo {
 // are signals, point at the inputs when there's nothing yet, and invite a
 // refresh when the self-report is about to go stale ("inquire about updating").
 export function composeHint(info: SessionInfo): string | null {
+  // Paused: the model-facing hooks are silent, but this line is for the USER —
+  // say so once per session so "off" never reads as "broken".
+  if (info.paused) {
+    return "cadence: paused — prompts go through untouched (`cadence resume` or /cadence:resume to turn it back on)";
+  }
   if (info.firstRun) {
     return 'cadence: on, but it hasn\'t heard from you — try `cadence start` (or just `cadence state "deep work"`)';
   }
@@ -55,6 +62,17 @@ export function composeHint(info: SessionInfo): string | null {
 }
 
 async function collectInfo(): Promise<SessionInfo> {
+  // Paused short-circuits everything — don't even probe for music.
+  if (await isPaused()) {
+    return {
+      selfReport: null,
+      selfReportRemainingMs: null,
+      pinned: [],
+      nowPlaying: null,
+      firstRun: false,
+      paused: true,
+    };
+  }
   // Race music against the budget — MusicBrainz on a brand-new artist can
   // be slow, and a session greeting must never delay the session.
   const [report, overrides, music] = await Promise.all([
@@ -73,6 +91,7 @@ async function collectInfo(): Promise<SessionInfo> {
     pinned,
     nowPlaying: music?.artist ? { artist: music.artist, player: music.player ?? "music" } : null,
     firstRun: !report && pinned.length === 0,
+    paused: false,
   };
 }
 

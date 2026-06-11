@@ -10,7 +10,7 @@ import { decideStop, isSoftHandoff } from "../dist/stop.js";
 import { activityFrom, computeTempo } from "../dist/providers/activity.js";
 import { detectPromptIntent } from "../dist/providers/intent.js";
 import { renderSignalsTable } from "../dist/signals-view.js";
-import { providerEnabled } from "../dist/config.js";
+import { providerEnabled, readPaused } from "../dist/config.js";
 import { readCreds } from "../dist/providers/spotify.js";
 import { composeHint } from "../dist/session-start.js";
 import { moonPhase, getEsotericSignal } from "../dist/providers/esoteric.js";
@@ -678,6 +678,23 @@ test("posttool refineThrash: speaks once on the streak edge, then stays quiet", 
   // window empties → announce resets so a later streak can speak again
   r = refineThrash([t0], t0 + 60 * 60_000, true);
   assert.equal(r.announced, false);
+});
+
+// ── pause: the whole-product kill switch ────────────────────────────────────
+test("readPaused: only an explicit true pauses — junk shapes stay live", () => {
+  assert.equal(readPaused({ paused: true }), true);
+  assert.equal(readPaused({ paused: false }), false);
+  assert.equal(readPaused({ paused: "yes" }), false); // strict: never pause by accident
+  assert.equal(readPaused({}), false);
+});
+
+test("composeHint: paused says so to the user, in one legible line", () => {
+  const hint = composeHint({
+    selfReport: null, selfReportRemainingMs: null,
+    pinned: [], nowPlaying: null, firstRun: false, paused: true,
+  });
+  assert.match(hint, /paused/);
+  assert.match(hint, /cadence resume/);
 });
 
 // ── session greeting: invite a refresh as state goes stale ──────────────────

@@ -7,7 +7,7 @@ import { getActivitySignal } from "./providers/activity.js";
 import { getIntentSignal } from "./providers/intent.js";
 import { getEsotericSignal } from "./providers/esoteric.js";
 import { deriveCadence, buildReframe, loadOverrides, applyOverrides } from "./cadence.js";
-import { loadProviders, providerEnabled } from "./config.js";
+import { loadProviders, providerEnabled, isPaused } from "./config.js";
 import type { ProviderConfig } from "./config.js";
 import { render } from "./inject.js";
 import { debug } from "./debug.js";
@@ -60,6 +60,10 @@ async function collectSignals(
 }
 
 async function main() {
+  // Paused = the user asked for silence. Check FIRST: no signals read, no
+  // subprocesses spawned, nothing injected. `cadence resume` turns it back on.
+  if (await isPaused()) process.exit(0);
+
   const { cwd, prompt } = await readStdin();
   const projectDir = cwd ?? process.cwd();
 

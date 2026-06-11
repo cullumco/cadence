@@ -144,11 +144,23 @@ expect to handle `array[i]` as possibly `undefined`.
 
 ### Skills
 
-`skills/try/SKILL.md` and `skills/state/SKILL.md` are the user-invocable plugin
-skills (`/cadence:try`, `/cadence:state`). Both have `disable-model-invocation:
-true` so they only fire on explicit user invocation, not automatic model
-matching. Keep their bodies short and operational — they should not
-re-explain the product.
+`skills/*/SKILL.md` are the user-invocable plugin skills: `/cadence:setup`
+(conversational onboarding — Claude interviews the user and drives the CLI),
+`/cadence:state`, `/cadence:try`, `/cadence:pause`, `/cadence:resume`. All have
+`disable-model-invocation: true` so they only fire on explicit user invocation,
+not automatic model matching. Keep their bodies short and operational — they
+should not re-explain the product. The rule that binds them: **skills
+orchestrate, the CLI is the source of truth** — a skill runs `cadence …`
+commands via Bash and never edits `~/.cadence/` files directly.
+
+### Pause (the kill switch)
+
+`cadence pause` sets `"paused": true` in `~/.cadence/config.json`. Every hook
+checks `isPaused()` (src/config.ts) FIRST and exits silently — no probes, no
+subprocesses, nothing injected. The one exception: the SessionStart greeting
+says "paused" once per session (user-facing legibility — "off" must never read
+as "broken"). State survives a pause untouched; `cadence resume` deletes the
+flag. Any new hook must add the same first-line check.
 
 ## Conventions worth knowing
 

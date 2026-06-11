@@ -69,3 +69,17 @@ export function providerEnabled(providers: ProviderConfig, name: string): boolea
 export function providerSetting(providers: ProviderConfig, name: string): unknown {
   return providerEnabled(providers, name) ? providers[name] : undefined;
 }
+
+/* ── pause: the whole-product kill switch ──────────────────────────────────
+ * An ambient layer that injects into every prompt needs a visible, instant
+ * off switch. `cadence pause` sets `"paused": true`; every hook checks it
+ * FIRST and exits silently — no signals read, no subprocesses spawned, no
+ * block injected. State (pins, opt-ins, self-report) is preserved untouched,
+ * so `cadence resume` picks up exactly where you left off. */
+export function readPaused(cfg: Record<string, unknown>): boolean {
+  return cfg["paused"] === true;
+}
+
+export async function isPaused(): Promise<boolean> {
+  return readPaused(await loadConfig());
+}

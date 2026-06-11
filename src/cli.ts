@@ -18,7 +18,7 @@ import {
 } from "./cadence.js";
 import { render } from "./inject.js";
 import { renderSignalsTable } from "./signals-view.js";
-import { loadProviders, providerEnabled, OPT_IN_PROVIDERS } from "./config.js";
+import { loadProviders, providerEnabled, isPaused, OPT_IN_PROVIDERS } from "./config.js";
 import { connectSpotify, REDIRECT_URI } from "./spotify-auth.js";
 import type { Signal, UserState, Cadence, DialLevel } from "./types.js";
 
@@ -161,6 +161,22 @@ async function cmdEnable(args: string[]) {
   cfg["providers"] = providers;
   await saveCfg(cfg);
   console.log(`  enabled ${name}${valueParts.length ? ` = "${valueParts.join(" ")}"` : ""}`);
+}
+
+// The whole-product kill switch. State (pins, opt-ins, self-report) survives a
+// pause untouched — resume picks up exactly where you left off.
+async function cmdPause() {
+  const cfg = await loadCfg();
+  cfg["paused"] = true;
+  await saveCfg(cfg);
+  console.log("  cadence paused — prompts go through untouched. resume: cadence resume");
+}
+
+async function cmdResume() {
+  const cfg = await loadCfg();
+  delete cfg["paused"];
+  await saveCfg(cfg);
+  console.log("  cadence resumed — reading the room again. preview: cadence test");
 }
 
 async function cmdDisable(args: string[]) {
@@ -369,6 +385,11 @@ const INPUTS_FOOTER = `  where you can input:
 
 // Bare \`cadence\`: live status + where to input — not a help dump.
 async function cmdRoot() {
+  if (await isPaused()) {
+    console.log("\n  cadence is paused — prompts go through untouched.");
+    console.log("  resume: cadence resume\n");
+    return;
+  }
   if (!(await hasUserInput())) {
     console.log("\n  cadence — agents that read the room");
     console.log("  It hasn't heard from you yet. Fastest start:\n");
@@ -458,6 +479,8 @@ const HELP = `
     cadence clear               clear self-reported state
     cadence test                preview what the hook would inject right now
     cadence signals             every signal — live value, or why it's absent
+    cadence pause               silence all hooks (state survives untouched)
+    cadence resume              start reading the room again
 
   dials (your determination — pinned dials override inference):
     cadence dials               show the mixing board and what's pinned
@@ -500,6 +523,10 @@ async function main() {
       return cmdDials();
     case "set-location":
       return cmdLocation(rest);
+    case "pause":
+      return cmdPause();
+    case "resume":
+      return cmdResume();
     case "enable":
       return cmdEnable(rest);
     case "disable":

@@ -160,6 +160,8 @@ cadence state                         # print current self-report
 cadence clear                         # clear it
 cadence test                          # preview exactly what the hook would inject
 cadence signals                       # every signal — live value, or why it's absent
+cadence pause                         # silence all hooks (state survives untouched)
+cadence resume                        # start reading the room again
 ```
 
 `cadence signals` is the legibility view: it never goes silent. Every signal
@@ -167,12 +169,22 @@ Cadence knows how to read is listed with its live value, or the exact reason
 it's absent — opt-in not taken, below a render threshold, missing permission
 (Focus needs Full Disk Access), or platform-gated.
 
-From inside Claude Code, the plugin skill gives the same self-report path:
+From inside Claude Code, the plugin skills cover the same ground without
+leaving the conversation:
 
 ```text
+/cadence:setup                    # guided, conversational setup — shape the
+                                  # influence and pick your opt-in signals
 /cadence:state two beers, shipping
-/cadence:try
+/cadence:try                      # what is Cadence seeing right now?
+/cadence:pause                    # instant silence — prompts go through untouched
+/cadence:resume                   # back to reading the room
 ```
+
+`/cadence:setup` is the recommended first run inside Claude Code: instead of a
+fixed wizard, you tell Claude how you work in plain language and it drives the
+CLI for you — state, dial pins, and which opt-in signals you're willing to
+share.
 
 ### Driving the dials by hand
 
