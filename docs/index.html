@@ -675,7 +675,7 @@
         <button class="ambient-ctx" id="ambient-ctx" aria-expanded="false" aria-haspopup="true" aria-label="Current ambient period — click to explore alternates"></button>
         <div class="period-panel" id="period-panel" role="listbox" aria-label="Time periods"></div>
       </div>
-      <a href="#install" data-goatcounter-click="install-nav">install</a>
+      <a href="#install" data-evt="install-nav">install</a>
       <a href="https://github.com/cullumco/cadence">github</a>
       <span class="proj">a <a href="https://cullum.co">Cullum&amp;Co</a> project</span>
     </div>
@@ -688,7 +688,7 @@
       <h1 class="load d2">Agents that<br><em>read the room.</em></h1>
       <p class="lede load d3">The missing input is not another instruction. It is the room around the prompt.</p>
       <div class="cta-row load d4">
-        <a href="#install" class="btn btn-primary" data-goatcounter-click="install-hero">Install the plugin →</a>
+        <a href="#install" class="btn btn-primary" data-evt="install-hero">Install the plugin →</a>
         <a href="https://github.com/cullumco/cadence" class="btn btn-ghost">View source</a>
       </div>
     </div>
@@ -740,7 +740,7 @@
         <p>Ambient music, <em>"thinking through tradeoffs"</em> — said to it, or just visible in how you're working. Options laid out patiently, no pressure to pick yet.</p>
       </div>
     </div>
-    <p class="small">Same words. The room around them changed, and the agent finally saw it. No setup — your prompt, your music, and your repo are already signals. <a href="#install" class="inline" data-goatcounter-click="install-impact">Install it</a> and feel the difference in two minutes.</p>
+    <p class="small">Same words. The room around them changed, and the agent finally saw it. No setup — your prompt, your music, and your repo are already signals. <a href="#install" class="inline" data-evt="install-impact">Install it</a> and feel the difference in two minutes.</p>
   </section>
 
   <!-- ── how it works ────────────────────────────────────────── -->
@@ -1138,14 +1138,17 @@
 })();
 </script>
 
-<!-- GoatCounter: privacy-friendly page analytics (no cookies, no PII).
-     Dashboard: https://cullumco.goatcounter.com -->
-<script data-goatcounter="https://cullumco.goatcounter.com/count"
-        async src="//gc.zgo.at/count.js"></script>
-
-<!-- Vercel Analytics: enable in project dashboard to activate.
-     Script is served by Vercel infrastructure; no-ops locally. -->
+<!-- Vercel Analytics: page views + the install-CTA custom events
+     (install-nav / install-hero / install-impact — the conversion read).
+     Enable Web Analytics in the Vercel project dashboard to activate;
+     the script is served by Vercel infrastructure and no-ops locally. -->
 <script>window.va=window.va||function(){(window.vaq=window.vaq||[]).push(arguments);};</script>
+<script>
+document.addEventListener('click', function (e) {
+  var el = e.target && e.target.closest && e.target.closest('[data-evt]');
+  if (el) window.va('event', { name: el.getAttribute('data-evt') });
+});
+</script>
 <script defer src="/_vercel/insights/script.js"></script>
 
 </body>
