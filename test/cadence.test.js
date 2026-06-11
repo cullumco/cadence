@@ -65,12 +65,23 @@ test("deriveCadence: think-ish self-report slows pace + opens posture", () => {
   assert.equal(c.posture, "low");
 });
 
-test("deriveCadence: dials are independent — music sets pace, leaves posture neutral", () => {
+test("deriveCadence: music moves pace/posture/tone but never proactivity", () => {
   const c = deriveCadence(
-    stateWith([{ source: "music", track: "x", energy: 0.9 }])
+    stateWith([{ source: "music", track: "x", energy: 0.9, acoustic: 0.6, vibe: "chilled" }])
   );
-  assert.equal(c.pace, "high"); // music energy moved pace
-  assert.equal(c.posture, "medium"); // but NOT posture — orthogonality
+  assert.equal(c.pace, "high"); // energy → pace
+  assert.equal(c.posture, "high"); // high intensity → decisive posture
+  assert.equal(c.tone, "low"); // acoustic/mellow → warm tone
+  assert.equal(c.proactivity, "medium"); // the soundtrack never touches proactivity
+});
+
+test("deriveCadence: ambient music opens posture (spacious, exploratory)", () => {
+  const c = deriveCadence(
+    stateWith([{ source: "music", track: "x", energy: 0.2, acoustic: 0.6 }])
+  );
+  assert.equal(c.pace, "low"); // mellow → deliberate
+  assert.equal(c.posture, "low"); // low intensity → exploratory
+  assert.equal(c.proactivity, "medium"); // still untouched
 });
 
 test("deriveCadence: no signals → all dials neutral", () => {

@@ -78,11 +78,17 @@ mapping is meant to be evolved.
 
 ### Independence of the four dials
 
-The dials are deliberately orthogonal. A signal should usually move *one* dial,
-not all four. "High-energy-but-mellow music = fast pace, warm tone" is the kind
-of combination one mode word could never express; the test
-`deriveCadence: dials are independent — music sets pace, leaves posture neutral`
-locks this in. Avoid edits that collapse the dials back into a single mode.
+The dials are deliberately orthogonal. The invariant is **no single signal
+moves all four** — so nothing collapses back into one ship/think/debug mode.
+"High-energy-but-mellow music = fast pace, warm tone" is the kind of
+combination one mode word could never express.
+
+Music is the deliberate three-dial exception ("move with the music"): energy
+drives **pace** and **posture**, acoustic texture warms **tone** — but music
+never touches **proactivity** (whether to act without checking in is the
+user's call via self-report/intent/git, never the soundtrack's). The test
+`deriveCadence: music moves pace/posture/tone but never proactivity` locks
+that boundary in. Avoid edits that let any one signal drive the whole board.
 
 ### Signal hierarchy and `deriveCadence` order
 

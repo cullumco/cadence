@@ -203,5 +203,6 @@ export async function getMusicSignal(): Promise<MusicSignal | null> {
     player: np.player || undefined,
     vibe: vibe && vibe.moods.length ? vibe.moods.join(", ") : undefined,
     energy: vibe?.energy,
+    acoustic: vibe?.acoustic,
   };
 }

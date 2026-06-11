@@ -84,13 +84,22 @@ export function deriveCadence(state: UserState): Cadence {
     if (ambient.onBattery) c.pace = "high"; // mobile/untethered → quick hits
   }
 
-  // ── music energy → pace (only pace; leave tone/posture to other signals) ──
+  // ── music → pace + posture + tone (move WITH the music) ───────────────────
+  // Deliberately moves three dials, not one: a track has a tempo (pace), an
+  // intensity (decisive vs. spacious posture), and a texture (warm tone). It
+  // leaves PROACTIVITY alone — whether to act without checking in is the user's
+  // call (self-report/intent/git), never the soundtrack's. See CLAUDE.md.
   if (music?.energy != null) {
-    if (music.energy >= 0.7) c.pace = "high";
-    else if (music.energy <= 0.4) c.pace = "low";
+    if (music.energy >= 0.7) c.pace = "high"; // driving → fast
+    else if (music.energy <= 0.4) c.pace = "low"; // mellow → deliberate
+    if (music.energy >= 0.75) c.posture = "high"; // high intensity → decisive momentum
+    else if (music.energy <= 0.35) c.posture = "low"; // ambient → spacious, exploratory
   }
-  // mellow/organic vibe words warm the tone
-  if (music?.vibe && /\b(calm|chilled|ethereal|romantic|warm)\b/.test(music.vibe)) {
+  // organic/acoustic texture, or mellow vibe words, warm the tone
+  if (
+    (music?.acoustic != null && music.acoustic >= 0.5) ||
+    (music?.vibe && /\b(calm|chilled|ethereal|romantic|warm|sexy)\b/.test(music.vibe))
+  ) {
     c.tone = "low";
   }
 

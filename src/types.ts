@@ -21,7 +21,8 @@ export interface MusicSignal {
   artist?: string;
   player?: string; // "Spotify" | "Music"
   vibe?: string; // clean mood words derived from genre tags, e.g. "chilled, calm"
-  energy?: number; // 0–1 averaged from genre tags — feeds the pace dial
+  energy?: number; // 0–1 averaged from genre tags — feeds the pace + posture dials
+  acoustic?: number; // 0–1 organic-ness — warms the tone dial when high
 }
 
 export interface SelfReportSignal {
