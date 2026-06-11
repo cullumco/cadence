@@ -6,6 +6,7 @@ import { getMusicSignal } from "./providers/music.js";
 import { getSelfReportSignal } from "./providers/selfreport.js";
 import { getAmbientSignal } from "./providers/ambient.js";
 import { getGitSignal } from "./providers/git.js";
+import { getEsotericSignal } from "./providers/esoteric.js";
 import {
   deriveCadence,
   buildReframe,
@@ -17,7 +18,7 @@ import {
 } from "./cadence.js";
 import { render } from "./inject.js";
 import { renderSignalsTable } from "./signals-view.js";
-import { loadProviders, OPT_IN_PROVIDERS } from "./config.js";
+import { loadProviders, providerEnabled, OPT_IN_PROVIDERS } from "./config.js";
 import type { Signal, UserState, Cadence, DialLevel } from "./types.js";
 
 const CADENCE_DIR = join(homedir(), ".cadence");
@@ -50,17 +51,22 @@ async function cmdClear() {
 // or null when there's nothing to say. Shared by `test` and the bare command.
 async function buildPreview(): Promise<string | null> {
   const signals: Signal[] = [];
-  const [music, report, ambient, git, overrides] = await Promise.all([
-    getMusicSignal().catch(() => null),
+  const providers = await loadProviders();
+  const [music, report, ambient, git, esoteric, overrides] = await Promise.all([
+    getMusicSignal(providers).catch(() => null),
     getSelfReportSignal().catch(() => null),
-    getAmbientSignal(new Date()).catch(() => null),
+    getAmbientSignal(new Date(), {
+      focusedAppEnabled: providerEnabled(providers, "focusedApp"),
+    }).catch(() => null),
     getGitSignal(process.cwd()).catch(() => null),
+    getEsotericSignal(providers).catch(() => null),
     loadOverrides(),
   ]);
   if (music) signals.push(music);
   if (report) signals.push(report);
   if (ambient) signals.push(ambient);
   if (git) signals.push(git);
+  if (esoteric) signals.push(esoteric);
 
   if (signals.length === 0 && Object.keys(overrides).length === 0) return null;
 

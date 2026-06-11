@@ -49,6 +49,14 @@ export interface IntentSignal {
   kind: "ship" | "think" | "debug" | "focus" | null;
 }
 
+/* Esoteric flavor — opt-in, render-only, never moves a dial. */
+export interface EsotericSignal {
+  source: "esoteric";
+  moonPhase?: string; // computed offline from the date
+  horoscope?: string; // daily text for the configured sign (keyless, opt-in)
+  sign?: string; // the configured zodiac sign
+}
+
 export interface GitSignal {
   source: "git";
   commitsLastHour: number;
@@ -84,6 +92,7 @@ export interface AmbientSignal {
   displays?: number; // external monitors → "at the desk"
   network?: string; // wifi SSID → home / office / café
   darkMode?: boolean; // UI dark mode → night session
+  focusedApp?: string; // opt-in: frontmost non-terminal app (macOS) → flavor
 }
 
 export type Signal =
@@ -93,7 +102,8 @@ export type Signal =
   | IntentSignal
   | GitSignal
   | PlaceSignal
-  | AmbientSignal;
+  | AmbientSignal
+  | EsotericSignal;
 
 export interface UserState {
   signals: Signal[];

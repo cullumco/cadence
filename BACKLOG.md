@@ -91,20 +91,29 @@ and renderers should remain portable. Candidate future surfaces:
 
 ---
 
-## Esoteric / opt-in signal providers (V2+)
+## Esoteric / opt-in signal providers — SHIPPED (flavor-only)
 
-User idea: let people opt into playful, non-work signal sources that feed the
-dials (or just color the vibe) — **only if the user indicates them as an input.**
+`src/providers/esoteric.ts` ships both, render-only (they never move a dial,
+per the lean below):
+- **Moon phase** — computed offline from the date, no API, gated on
+  `providers.moon`.
+- **Horoscope** — `providers.horoscope = "<sign>"`; daily text via a keyless
+  API, opt-in and fail-silent exactly like the weather probe.
 
-- **Horoscope provider** — user sets their sign; fetch a daily horoscope, let its
-  tone nudge dials (or just surface as flavor). Opt-in, off by default.
-- **Moon phase provider** — current lunar phase as ambient context. Computable
-  offline, no API.
-- Slot in as ordinary `Signal` providers behind an opt-in flag in
-  `~/.cadence/config.json` (e.g. `"providers": { "horoscope": "leo" }`). No
-  rework needed — the provider/signal architecture already supports it.
-- Open Q: do esoteric signals move dials, or only render as `vibe`/flavor so they
-  never override real work signals? (Lean: flavor-only unless the user maps them.)
+Resolved open Q: esoteric signals are **flavor-only** — they color the block,
+never override real work signals. Revisit only if a user explicitly wants to
+map one to a dial.
+
+**Focused app** also shipped here (opt-in `providers.focusedApp`, macOS): the
+frontmost non-terminal app as flavor on the ambient context line. Caveat baked
+in — it's read at UserPromptSubmit, when your terminal/IDE is usually frontmost,
+so it filters known shells/editors and speaks only when something else is in
+front. Flavor for now; `focused app → posture/proactivity` stays a candidate
+nudge once real output shows it's worth steering on.
+
+**Calendar density: cut.** The audience is solo builders in a long project, not
+people racing between meetings — so meeting-proximity isn't a fit. Removed from
+the roadmap above.
 
 ## Known nuance: intra-tier nudge collisions
 

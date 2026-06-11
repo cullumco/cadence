@@ -242,10 +242,18 @@ See [`BACKLOG.md`](BACKLOG.md). Highlights:
     deliberate.
   - **calendar density** — a meeting in 20 minutes should read as `pace=fast,
     posture=decisive`; a clear afternoon as room to explore.
-  - **focused app** — what's frontmost next to the terminal (docs? a profiler?
-    Slack?).
+  - **focused app** — *shipped (opt-in, macOS):* the frontmost non-terminal app
+    (a browser, Slack, a PDF) renders as flavor. Read at prompt-submit, so it
+    only speaks when something other than your terminal/IDE is genuinely in
+    front. Flavor for now; a dial nudge stays a candidate.
+  - **esoteric flavor** — *shipped (opt-in):* `moon` phase (computed offline)
+    and a daily `horoscope` for your sign. Render-only — they color the room,
+    they never steer the work.
   - **deeper Focus** — manual + scheduled Focus detection ship now; geofenced/
     iPhone-synced Focus leaves no local trace and stays undetectable.
+
+- **Calendar density** — intentionally *not* built: Cadence targets solo
+  builders deep in a project, not people racing between meetings.
 - **After-the-fact injection** — the first cut ships: a `PostToolUse` hook
   watches git-ish commands and speaks exactly once when the repo enters or
   leaves a merge/rebase conflict ("this is debug now" / "conflict resolved").

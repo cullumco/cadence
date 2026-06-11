@@ -13,6 +13,7 @@ import { renderSignalsTable } from "../dist/signals-view.js";
 import { providerEnabled } from "../dist/config.js";
 import { readCreds } from "../dist/providers/spotify.js";
 import { composeHint } from "../dist/session-start.js";
+import { moonPhase, getEsotericSignal } from "../dist/providers/esoteric.js";
 
 // ── tagsToVibe ──────────────────────────────────────────────────────────────
 test("tagsToVibe: high-energy genres read fast + aggressive", () => {
@@ -193,6 +194,27 @@ test("readCreds: needs both refreshToken and clientId, else null (opt-in + compl
   const ok = readCreds({ spotify: { clientId: "a", refreshToken: "b" } });
   assert.equal(ok.clientId, "a");
   assert.equal(ok.refreshToken, "b");
+});
+
+// ── esoteric flavor (opt-in, render-only) ────────────────────────────────────
+test("moonPhase: reference new moon reads new, two weeks on reads full", () => {
+  assert.equal(moonPhase(new Date(Date.UTC(2000, 0, 6, 18, 14))), "new moon");
+  // ~half a synodic month later → full moon
+  assert.equal(moonPhase(new Date(Date.UTC(2000, 0, 21, 4, 0))), "full moon");
+});
+
+test("getEsotericSignal: null until opted in; moon needs no network", async () => {
+  assert.equal(await getEsotericSignal({}), null); // nothing opted in
+  const e = await getEsotericSignal({ moon: true }, new Date(Date.UTC(2000, 0, 6, 18, 14)));
+  assert.equal(e.source, "esoteric");
+  assert.equal(e.moonPhase, "new moon");
+  assert.equal(e.horoscope, undefined); // no sign configured → no network call
+});
+
+test("render: esoteric moon phase surfaces as flavor, moves no dial", () => {
+  const { cadence, block } = renderOnly([{ source: "esoteric", moonPhase: "waxing gibbous" }]);
+  assert.match(block, /esoteric: moon waxing gibbous/);
+  assert.deepEqual(cadence, { pace: "medium", tone: "medium", posture: "medium", proactivity: "medium" });
 });
 
 // ── applyOverrides ──────────────────────────────────────────────────────────

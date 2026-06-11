@@ -5,6 +5,7 @@ import { getAmbientSignal } from "./providers/ambient.js";
 import { getGitSignal } from "./providers/git.js";
 import { getActivitySignal } from "./providers/activity.js";
 import { getIntentSignal } from "./providers/intent.js";
+import { getEsotericSignal } from "./providers/esoteric.js";
 import { deriveCadence, buildReframe, loadOverrides, applyOverrides } from "./cadence.js";
 import { loadProviders, providerEnabled } from "./config.js";
 import type { ProviderConfig } from "./config.js";
@@ -38,13 +39,14 @@ async function collectSignals(
   providers: ProviderConfig
 ): Promise<Signal[]> {
   const tempoEnabled = providerEnabled(providers, "typingTempo");
-  const [music, report, ambient, git, activity, intent] = await Promise.allSettled([
+  const [music, report, ambient, git, activity, intent, esoteric] = await Promise.allSettled([
     getMusicSignal(providers),
     getSelfReportSignal(),
-    getAmbientSignal(new Date()),
+    getAmbientSignal(new Date(), { focusedAppEnabled: providerEnabled(providers, "focusedApp") }),
     getGitSignal(cwd),
     getActivitySignal(prompt, Date.now(), { tempoEnabled }),
     getIntentSignal(prompt),
+    getEsotericSignal(providers),
   ]);
   const signals: Signal[] = [];
   if (music.status === "fulfilled" && music.value) signals.push(music.value);
@@ -53,6 +55,7 @@ async function collectSignals(
   if (git.status === "fulfilled" && git.value) signals.push(git.value);
   if (activity.status === "fulfilled" && activity.value) signals.push(activity.value);
   if (intent.status === "fulfilled" && intent.value) signals.push(intent.value);
+  if (esoteric.status === "fulfilled" && esoteric.value) signals.push(esoteric.value);
   return signals;
 }
 

@@ -5,7 +5,7 @@ import type {
   AmbientSignal,
 } from "./types.js";
 import { STALE_AFTER_MS } from "./providers/selfreport.js";
-import { providerEnabled, type ProviderConfig } from "./config.js";
+import { providerEnabled, providerSetting, type ProviderConfig } from "./config.js";
 
 /* ─────────────────────────────────────────────────────────────────────────
  * Signals table — the legibility view behind `cadence signals`.
@@ -164,6 +164,31 @@ function tempoRow(providers: ProviderConfig): string {
     : top("typing tempo", "— off (opt-in: cadence enable typingTempo)");
 }
 
+function optInFlavorRows(providers: ProviderConfig, ambient: AmbientSignal | null): string[] {
+  const sign = providerSetting(providers, "horoscope");
+  return [
+    "  opt-in flavor",
+    row(
+      "focused app",
+      providerEnabled(providers, "focusedApp")
+        ? ambient?.focusedApp ?? "on — nothing non-terminal in front"
+        : "— off (cadence enable focusedApp)"
+    ),
+    row(
+      "moon",
+      providerEnabled(providers, "moon")
+        ? "on — phase shows in the block"
+        : "— off (cadence enable moon)"
+    ),
+    row(
+      "horoscope",
+      typeof sign === "string"
+        ? `on (${sign}) — daily text shows in the block`
+        : "— off (cadence enable horoscope <sign>)"
+    ),
+  ];
+}
+
 export function renderSignalsTable(raw: RawSignals): string {
   const providers = raw.providers ?? {};
   return [
@@ -174,5 +199,6 @@ export function renderSignalsTable(raw: RawSignals): string {
     gitRow(raw.git),
     top("activity", "— session-only (the hook injects it per-prompt)"),
     tempoRow(providers),
+    ...optInFlavorRows(providers, raw.ambient),
   ].join("\n");
 }

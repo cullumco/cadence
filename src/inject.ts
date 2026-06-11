@@ -7,6 +7,7 @@ import type {
   GitSignal,
   PlaceSignal,
   AmbientSignal,
+  EsotericSignal,
 } from "./types.js";
 import { DIAL_WORDS } from "./cadence.js";
 
@@ -75,6 +76,7 @@ function renderAmbient(a: AmbientSignal): string {
       ? `unplugged${a.batteryPct != null ? ` ${a.batteryPct}%` : ""}`
       : null,
     a.focus === true ? "focus on" : null,
+    a.focusedApp ? `in ${quote(a.focusedApp)}` : null,
     a.darkMode === true ? "dark mode" : null,
     a.displays != null && a.displays > 1 ? `${a.displays} displays` : null,
     a.network ? `on ${quote(a.network)}` : null,
@@ -82,6 +84,14 @@ function renderAmbient(a: AmbientSignal): string {
     a.uptimeHours != null && a.uptimeHours >= 12 ? `up ${a.uptimeHours}h` : null,
   ].filter(Boolean);
   return `    context: ${parts.join(", ")}`;
+}
+
+function renderEsoteric(e: EsotericSignal): string[] {
+  const parts = [
+    e.moonPhase ? `moon ${e.moonPhase}` : null,
+    e.horoscope ? `${e.sign ?? "horoscope"}: ${quote(e.horoscope)}` : null,
+  ].filter(Boolean);
+  return parts.length ? [`    esoteric: ${parts.join(" · ")}`] : [];
 }
 
 function renderCadence(
@@ -107,6 +117,7 @@ export function render(state: StateWithCadence): string {
     else if (sig.source === "activity") lines.push(renderActivity(sig));
     else if (sig.source === "place") lines.push(renderPlace(sig));
     else if (sig.source === "ambient") lines.push(renderAmbient(sig));
+    else if (sig.source === "esoteric") lines.push(...renderEsoteric(sig));
   }
   // Render even with zero signals if the user pinned dials — a hand-set board
   // is itself a signal worth injecting.
