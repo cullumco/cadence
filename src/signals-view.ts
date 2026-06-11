@@ -2,7 +2,7 @@ import type {
   MusicSignal,
   SelfReportSignal,
   GitSignal,
-  AmbientSignal,
+  EnvironmentSignal,
 } from "./types.js";
 import { STALE_AFTER_MS } from "./providers/selfreport.js";
 import { providerEnabled, providerSetting, type ProviderConfig } from "./config.js";
@@ -14,13 +14,13 @@ import { providerEnabled, providerSetting, type ProviderConfig } from "./config.
  * FULL shape: every signal Cadence knows how to read, its live value, and —
  * when it isn't in the injected block — exactly why (off, opt-in, threshold,
  * platform, not implemented). The "hidden:" notes mirror the thresholds in
- * inject.ts renderAmbient(); keep the two in sync when tuning.
+ * inject.ts renderEnvironment(); keep the two in sync when tuning.
  * ───────────────────────────────────────────────────────────────────────── */
 
 export interface RawSignals {
   music: MusicSignal | null;
   report: SelfReportSignal | null;
-  ambient: AmbientSignal | null;
+  environment: EnvironmentSignal | null;
   git: GitSignal | null;
   now: number; // injected so the view stays pure/testable
   platform: NodeJS.Platform; // ditto — decides "unavailable" vs "macOS only"
@@ -46,12 +46,12 @@ function ttlLeft(setAt: number, now: number): string {
   return h > 0 ? `${h}h${String(m).padStart(2, "0")}m left` : `${m}m left`;
 }
 
-function ambientRows(a: AmbientSignal | null, platform: NodeJS.Platform): string[] {
-  if (!a) return [top("ambient", "— unavailable")];
+function environmentRows(a: EnvironmentSignal | null, platform: NodeJS.Platform): string[] {
+  if (!a) return [top("environment", "— unavailable")];
   const mac = platform === "darwin";
   const macNote = "— macOS only";
 
-  const lines = ["  ambient"];
+  const lines = ["  environment"];
   lines.push(row("time", `${a.partOfDay} (${a.dayOfWeek})`));
   lines.push(
     row("weather", a.weather ?? "— off (run: cadence set-location <lat> <lon>)")
@@ -136,7 +136,7 @@ function musicRows(m: MusicSignal | null, providers: ProviderConfig): string[] {
 }
 
 function reportRow(r: SelfReportSignal | null, now: number): string {
-  if (!r) return top("self_report", '— none set (run: cadence state "...")');
+  if (!r) return top("self_report", '— none set (run: cadence report "...")');
   const text = r.text.length > 44 ? `${r.text.slice(0, 43)}…` : r.text;
   return top("self_report", `${JSON.stringify(text)} (${ttlLeft(r.setAt, now)})`);
 }
@@ -164,14 +164,14 @@ function tempoRow(providers: ProviderConfig): string {
     : top("typing tempo", "— off (opt-in: cadence enable typingTempo)");
 }
 
-function optInFlavorRows(providers: ProviderConfig, ambient: AmbientSignal | null): string[] {
+function optInFlavorRows(providers: ProviderConfig, environment: EnvironmentSignal | null): string[] {
   const sign = providerSetting(providers, "horoscope");
   return [
     "  opt-in flavor",
     row(
       "focused app",
       providerEnabled(providers, "focusedApp")
-        ? ambient?.focusedApp ?? "on — nothing non-terminal in front"
+        ? environment?.focusedApp ?? "on — nothing non-terminal in front"
         : "— off (cadence enable focusedApp)"
     ),
     row(
@@ -192,13 +192,13 @@ function optInFlavorRows(providers: ProviderConfig, ambient: AmbientSignal | nul
 export function renderSignalsTable(raw: RawSignals): string {
   const providers = raw.providers ?? {};
   return [
-    ...ambientRows(raw.ambient, raw.platform),
+    ...environmentRows(raw.environment, raw.platform),
     ...musicRows(raw.music, providers),
     reportRow(raw.report, raw.now),
     intentRow(),
     gitRow(raw.git),
     top("activity", "— session-only (the hook injects it per-prompt)"),
     tempoRow(providers),
-    ...optInFlavorRows(providers, raw.ambient),
+    ...optInFlavorRows(providers, raw.environment),
   ].join("\n");
 }

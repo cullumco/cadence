@@ -2,7 +2,7 @@ import { exec } from "node:child_process";
 import { readFile } from "node:fs/promises";
 import { homedir, uptime, loadavg, cpus } from "node:os";
 import { join } from "node:path";
-import type { AmbientSignal } from "../types.js";
+import type { EnvironmentSignal } from "../types.js";
 
 // One-liner shell helper for the best-effort macOS probes. Always resolves
 // (never throws) so a missing command can't break the hook.
@@ -34,7 +34,7 @@ const DND_MODE_CONFIGS = join(DND_DIR, "ModeConfigurations.json");
 const WEATHER_TIMEOUT_MS = 900;
 const DAYS = ["sunday", "monday", "tuesday", "wednesday", "thursday", "friday", "saturday"];
 
-function partOfDay(hour: number): AmbientSignal["partOfDay"] {
+function partOfDay(hour: number): EnvironmentSignal["partOfDay"] {
   if (hour < 5) return "late night";
   if (hour < 9) return "early morning";
   if (hour < 12) return "morning";
@@ -235,10 +235,10 @@ async function getWeather(): Promise<string | undefined> {
   }
 }
 
-export async function getAmbientSignal(
+export async function getEnvironmentSignal(
   now: Date,
   opts: { focusedAppEnabled?: boolean } = {}
-): Promise<AmbientSignal> {
+): Promise<EnvironmentSignal> {
   const hour = now.getHours();
   const vitals = getVitals(); // sync, free
   // all probes run in parallel; each resolves to a safe default on failure.
@@ -249,7 +249,7 @@ export async function getAmbientSignal(
   ]);
 
   return {
-    source: "ambient",
+    source: "environment",
     partOfDay: partOfDay(hour),
     dayOfWeek: DAYS[now.getDay()] ?? "",
     isWeekend: now.getDay() === 0 || now.getDay() === 6,

@@ -48,7 +48,7 @@ options, a trade-off table, and a closing "Would you like me to implement one
 of these?"
 
 **With Cadence, shipping cadence** — hardcore at 3 commits/hr, a "let's ship
-it" earlier in your prompt (or `cadence state "ship mode"`) →
+it" earlier in your prompt (or `cadence report "ship mode"`) →
 `{ pace=fast posture=decisive proactivity=act-freely }`. You get the call,
 made: exponential backoff with jitter, three attempts, here's the diff, tests
 pass.
@@ -83,7 +83,7 @@ deliberate self-report just outranks it.
      Spotify login, no API key, no Premium on macOS. Off the Mac, link Spotify
      once with `cadence spotify connect` (browser OAuth, opt-in). Music moves
      three dials — energy → pace + posture, organic texture → warm tone.
-   - **self-report** — what you tell it: `cadence state "two beers, shipping"`.
+   - **self-report** — what you tell it: `cadence report "two beers, shipping"`.
    - **intent** — read from the prompt you just typed: "let's ship this" →
      decisive/act-freely, "help me debug" → verify-first. Cross-platform, no
      setup; this is what makes the same prompt read differently per room.
@@ -166,8 +166,8 @@ MusicBrainz, no audio-features.
 ## Daily use
 
 ```bash
-cadence state "two beers, shipping"   # set self-reported state (expires in 2h)
-cadence state                         # print current self-report
+cadence report "two beers, shipping"   # set self-reported state (expires in 2h)
+cadence report                         # print current self-report
 cadence clear                         # clear it
 cadence test                          # preview exactly what the hook would inject
 cadence signals                       # every signal — live value, or why it's absent
@@ -260,7 +260,7 @@ See [`BACKLOG.md`](BACKLOG.md). Highlights:
   verify-first`), applied below self-report so your explicit word still wins.
 - **Prompt intent** — *shipped:* ship/think/debug read straight from the prompt
   you just typed, so the "same prompt, different room" behavior fires without a
-  separate `cadence state` step.
+  separate `cadence report` step.
 - **Opt-in signals** — anything privacy-adjacent stays off until you turn it on
   (`cadence enable <signal>`):
   - **typing tempo** — *shipped (opt-in):* prompt rhythm beyond length —

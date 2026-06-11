@@ -8,12 +8,12 @@ disable-model-invocation: true
 Use this skill when the user invokes `/cadence:state`.
 
 If `$ARGUMENTS` is non-empty:
-- Run `cadence state "$ARGUMENTS"` with Bash.
+- Run `cadence report "$ARGUMENTS"` with Bash.
 - Then tell the user the state is set and will expire after two hours.
 - Keep it to one short sentence.
 
 If `$ARGUMENTS` is empty:
-- Run `cadence state` with Bash.
+- Run `cadence report` with Bash.
 - Tell the user the current state, or that none is set.
 
 Do not explain the whole product.

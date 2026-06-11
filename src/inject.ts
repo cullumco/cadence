@@ -6,7 +6,7 @@ import type {
   IntentSignal,
   GitSignal,
   PlaceSignal,
-  AmbientSignal,
+  EnvironmentSignal,
   EsotericSignal,
 } from "./types.js";
 import { DIAL_WORDS } from "./cadence.js";
@@ -66,7 +66,7 @@ function renderPlace(p: PlaceSignal): string {
   return `    place: { ${parts.join(" ")} }`;
 }
 
-function renderAmbient(a: AmbientSignal): string {
+function renderEnvironment(a: EnvironmentSignal): string {
   // Human-readable atmosphere line, e.g.
   //   "friday late night, rainy, unplugged 8%, dark mode, on Home-wifi, up 14h"
   const parts = [
@@ -116,7 +116,7 @@ export function render(state: StateWithCadence): string {
     else if (sig.source === "intent") lines.push(...renderIntent(sig));
     else if (sig.source === "activity") lines.push(renderActivity(sig));
     else if (sig.source === "place") lines.push(renderPlace(sig));
-    else if (sig.source === "ambient") lines.push(renderAmbient(sig));
+    else if (sig.source === "environment") lines.push(renderEnvironment(sig));
     else if (sig.source === "esoteric") lines.push(...renderEsoteric(sig));
   }
   // Render even with zero signals if the user pinned dials — a hand-set board

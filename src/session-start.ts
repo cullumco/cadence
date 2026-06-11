@@ -38,7 +38,7 @@ export function composeHint(info: SessionInfo): string | null {
     return "cadence: paused — prompts go through untouched (`cadence resume` or /cadence:resume to turn it back on)";
   }
   if (info.firstRun) {
-    return 'cadence: on, but it hasn\'t heard from you — try `cadence start` (or just `cadence state "deep work"`)';
+    return 'cadence: on, but it hasn\'t heard from you — try `cadence start` (or just `cadence report "deep work"`)';
   }
   const expiringSoon =
     info.selfReport != null &&
@@ -51,13 +51,13 @@ export function composeHint(info: SessionInfo): string | null {
   if (info.nowPlaying) seen.push(`${info.nowPlaying.player}: ${info.nowPlaying.artist}`);
   if (info.pinned.length) seen.push(`pinned ${info.pinned.join(", ")}`);
   if (seen.length === 0) {
-    return 'cadence: live, no signals right now — `cadence state "..."` to give it one';
+    return 'cadence: live, no signals right now — `cadence report "..."` to give it one';
   }
   // When state is about to expire, the inputs hint becomes an explicit nudge to
   // re-declare — so a long session keeps the cadence honest as the room shifts.
   const tail = expiringSoon
-    ? "still in this cadence? `cadence state \"...\"` to refresh"
-    : "inputs: cadence state | dials";
+    ? "still in this cadence? `cadence report \"...\"` to refresh"
+    : "inputs: cadence report | dials";
   return `cadence: live — ${seen.join(" · ")}  (${tail})`;
 }
 
@@ -80,7 +80,7 @@ async function collectInfo(): Promise<SessionInfo> {
     loadOverrides(),
     Promise.race([
       getMusicSignal().catch(() => null),
-      new Promise<null>((resolve) => setTimeout(() => resolve(null), BUDGET_MS)),
+      new Promise<null>((resolve) => setTimeout(() => resolve(null), BUDGET_MS).unref()),
     ]),
   ]);
   const pinned = Object.keys(overrides);

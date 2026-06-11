@@ -75,8 +75,8 @@ export interface PlaceSignal {
  * dependency-free (the one signal that works on every OS, never absent);
  * weather is opt-in (needs a config-set location + network); battery is macOS.
  * Renders as flavor AND applies soft dial nudges (see deriveCadence). */
-export interface AmbientSignal {
-  source: "ambient";
+export interface EnvironmentSignal {
+  source: "environment";
   partOfDay: "early morning" | "morning" | "midday" | "afternoon" | "evening" | "late night";
   dayOfWeek: string; // "monday" … "sunday"
   isWeekend: boolean;
@@ -102,7 +102,7 @@ export type Signal =
   | IntentSignal
   | GitSignal
   | PlaceSignal
-  | AmbientSignal
+  | EnvironmentSignal
   | EsotericSignal;
 
 export interface UserState {

@@ -100,7 +100,7 @@ can override the one above it on a shared dial.
 Two notes on authority:
 - **Git is live** (since 2026-06-05), not dormant: `3+ commits/hr → pace high`,
   `conflicted → proactivity low`. It sits *below* self-report so an explicit
-  `cadence state "shipping"` still beats a mid-conflict read.
+  `cadence report "shipping"` still beats a mid-conflict read.
 - **Prompt intent** (`src/providers/intent.ts`) reads ship/think/debug cues
   from the live prompt and sits between git and self-report — strong enough to
   drive the "same prompt, different room" behavior without a separate CLI step,

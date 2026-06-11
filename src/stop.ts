@@ -2,7 +2,7 @@
 import { pathToFileURL } from "node:url";
 import { getMusicSignal } from "./providers/music.js";
 import { getSelfReportSignal } from "./providers/selfreport.js";
-import { getAmbientSignal } from "./providers/ambient.js";
+import { getEnvironmentSignal } from "./providers/environment.js";
 import { getGitSignal } from "./providers/git.js";
 import { deriveCadence, loadOverrides, applyOverrides } from "./cadence.js";
 import { isPaused } from "./config.js";
@@ -38,16 +38,16 @@ async function readStdin(): Promise<StopInput> {
 }
 
 async function collectSignals(cwd: string): Promise<Signal[]> {
-  const [music, report, ambient, git] = await Promise.allSettled([
+  const [music, report, environment, git] = await Promise.allSettled([
     getMusicSignal(),
     getSelfReportSignal(),
-    getAmbientSignal(new Date()),
+    getEnvironmentSignal(new Date()),
     getGitSignal(cwd),
   ]);
   const signals: Signal[] = [];
   if (music.status === "fulfilled" && music.value) signals.push(music.value);
   if (report.status === "fulfilled" && report.value) signals.push(report.value);
-  if (ambient.status === "fulfilled" && ambient.value) signals.push(ambient.value);
+  if (environment.status === "fulfilled" && environment.value) signals.push(environment.value);
   if (git.status === "fulfilled" && git.value) signals.push(git.value);
   return signals;
 }
@@ -118,7 +118,7 @@ async function main() {
   const [signals, overrides] = await Promise.all([
     Promise.race<Signal[]>([
       collectSignals(projectDir),
-      new Promise<Signal[]>((resolve) => setTimeout(() => resolve([]), TOTAL_BUDGET_MS)),
+      new Promise<Signal[]>((resolve) => setTimeout(() => resolve([]), TOTAL_BUDGET_MS).unref()),
     ]),
     loadOverrides(),
   ]);

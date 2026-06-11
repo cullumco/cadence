@@ -14,7 +14,7 @@ they don't care about. The arc:
 
 1. **State** — ask how they're working right now (shipping? thinking through
    something? debugging? just vibing?). Phrase it naturally. Turn their answer
-   into `cadence state "<their words>"`. Tell them it expires after 2 hours and
+   into `cadence report "<their words>"`. Tell them it expires after 2 hours and
    they can refresh with `/cadence:state`.
 
 2. **Dials** — ask if there's anything they ALWAYS want, regardless of signals

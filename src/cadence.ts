@@ -10,7 +10,7 @@ import type {
   GitSignal,
   ActivitySignal,
   IntentSignal,
-  AmbientSignal,
+  EnvironmentSignal,
 } from "./types.js";
 
 export const DIALS = ["pace", "tone", "posture", "proactivity"] as const;
@@ -59,8 +59,8 @@ export function deriveCadence(state: UserState): Cadence {
   const activity = state.signals.find(
     (s): s is ActivitySignal => s.source === "activity"
   );
-  const ambient = state.signals.find(
-    (s): s is AmbientSignal => s.source === "ambient"
+  const environment = state.signals.find(
+    (s): s is EnvironmentSignal => s.source === "environment"
   );
 
   // Start neutral; each signal nudges individual dials.
@@ -71,17 +71,17 @@ export function deriveCadence(state: UserState): Cadence {
     proactivity: "medium",
   };
 
-  // ── ambient → soft nudges FIRST (weakest), so stronger signals below win ──
+  // ── environment → soft nudges FIRST (weakest), so stronger signals below win ──
   // Atmosphere, not orders: it colors the default, then music/self-report/git
   // can override. "It's late" shouldn't beat "I'm shipping."
-  if (ambient) {
-    if (ambient.hour >= 22 || ambient.hour < 6) c.pace = "low"; // late → gentler
-    if (ambient.partOfDay === "early morning") c.pace = "low"; // easing in
-    if (ambient.isWeekend) c.tone = "low"; // looser on weekends
-    if (ambient.weather && /rain|snow|fog|storm|cloud/.test(ambient.weather)) {
+  if (environment) {
+    if (environment.hour >= 22 || environment.hour < 6) c.pace = "low"; // late → gentler
+    if (environment.partOfDay === "early morning") c.pace = "low"; // easing in
+    if (environment.isWeekend) c.tone = "low"; // looser on weekends
+    if (environment.weather && /rain|snow|fog|storm|cloud/.test(environment.weather)) {
       c.tone = "low"; // gloomy out → warmer in
     }
-    if (ambient.onBattery) c.pace = "high"; // mobile/untethered → quick hits
+    if (environment.onBattery) c.pace = "high"; // mobile/untethered → quick hits
   }
 
   // ── music → pace + posture + tone (move WITH the music) ───────────────────
@@ -116,7 +116,7 @@ export function deriveCadence(state: UserState): Cadence {
   // Read from the live prompt, so the "same prompt, different room" behavior
   // fires without a separate CLI step. Stronger than git (what you're doing),
   // weaker than self-report below (a deliberate, out-of-band declaration), so
-  // an explicit `cadence state "thinking"` still beats a stray "ship it".
+  // an explicit `cadence report "thinking"` still beats a stray "ship it".
   if (intent?.kind) {
     if (intent.kind === "ship") {
       c.posture = "high";
@@ -154,7 +154,7 @@ export function deriveCadence(state: UserState): Cadence {
   }
 
   // Still-dormant candidate nudges (see BACKLOG):
-  //   ambient focus on → proactivity high (heads-down = fewer check-ins)
+  //   environment focus on → proactivity high (heads-down = fewer check-ins)
 
   // ── activity → pace (motor tempo + return-from-break) ─────────────────────
   // typing tempo (opt-in): rapid-fire short prompts read as fast; one long

@@ -136,7 +136,7 @@ reading as flow state) before adding more git nudges.
 
 `src/providers/intent.ts` reads ship/think/debug/focus cues from the live
 prompt and drives the same dials as a self-report, applied *between* git and
-self-report (a deliberate `cadence state` still wins). This is what makes the
+self-report (a deliberate `cadence report` still wins). This is what makes the
 "same prompt, different room" demo true without a separate CLI step. Patterns
 are deliberately phrase-based, not bare-word, so ordinary prompts ("can you
 just check…", "why is this slow?") don't misfire — and the reframe still

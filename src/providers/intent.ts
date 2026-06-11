@@ -3,7 +3,7 @@ import type { IntentSignal } from "../types.js";
 /* ─────────────────────────────────────────────────────────────────────────
  * Prompt intent — read the cadence out of the words the user JUST typed.
  *
- * Self-report (`cadence state "…"`) is deliberate and out-of-band; it stays
+ * Self-report (`cadence report "…"`) is deliberate and out-of-band; it stays
  * the higher authority. But most users never run it, so the marquee
  * "same prompt, different room" only ever fired from a separate CLI step.
  * This closes that gap: the live prompt itself is a signal.

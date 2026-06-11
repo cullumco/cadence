@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 import { getMusicSignal } from "./providers/music.js";
 import { getSelfReportSignal } from "./providers/selfreport.js";
-import { getAmbientSignal } from "./providers/ambient.js";
+import { getEnvironmentSignal } from "./providers/environment.js";
 import { getGitSignal } from "./providers/git.js";
 import { getActivitySignal } from "./providers/activity.js";
 import { getIntentSignal } from "./providers/intent.js";
@@ -39,10 +39,10 @@ async function collectSignals(
   providers: ProviderConfig
 ): Promise<Signal[]> {
   const tempoEnabled = providerEnabled(providers, "typingTempo");
-  const [music, report, ambient, git, activity, intent, esoteric] = await Promise.allSettled([
+  const [music, report, environment, git, activity, intent, esoteric] = await Promise.allSettled([
     getMusicSignal(providers),
     getSelfReportSignal(),
-    getAmbientSignal(new Date(), { focusedAppEnabled: providerEnabled(providers, "focusedApp") }),
+    getEnvironmentSignal(new Date(), { focusedAppEnabled: providerEnabled(providers, "focusedApp") }),
     getGitSignal(cwd),
     getActivitySignal(prompt, Date.now(), { tempoEnabled }),
     getIntentSignal(prompt),
@@ -51,7 +51,7 @@ async function collectSignals(
   const signals: Signal[] = [];
   if (music.status === "fulfilled" && music.value) signals.push(music.value);
   if (report.status === "fulfilled" && report.value) signals.push(report.value);
-  if (ambient.status === "fulfilled" && ambient.value) signals.push(ambient.value);
+  if (environment.status === "fulfilled" && environment.value) signals.push(environment.value);
   if (git.status === "fulfilled" && git.value) signals.push(git.value);
   if (activity.status === "fulfilled" && activity.value) signals.push(activity.value);
   if (intent.status === "fulfilled" && intent.value) signals.push(intent.value);
@@ -73,11 +73,13 @@ async function main() {
   const [overrides, providers] = await Promise.all([loadOverrides(), loadProviders()]);
   const signals = await Promise.race<Signal[]>([
     collectSignals(projectDir, prompt, providers),
+    // unref: the losing timer must not hold the process open after the
+    // race settles — Claude Code waits on our EXIT, not our output.
     new Promise<Signal[]>((resolve) =>
       setTimeout(() => {
         debug("hook", `signal collection exceeded ${TOTAL_BUDGET_MS}ms budget — injecting without signals`);
         resolve([]);
-      }, TOTAL_BUDGET_MS)
+      }, TOTAL_BUDGET_MS).unref()
     ),
   ]);
 
@@ -92,13 +94,16 @@ async function main() {
   const stateWithCadence: StateWithCadence = { ...state, cadence, pinned, reframe };
   const block = render(stateWithCadence);
 
+  // Exit in the write callback (stdout to a pipe can flush async): a straggling
+  // provider subprocess must never keep the user's prompt waiting on our exit.
   process.stdout.write(
     JSON.stringify({
       hookSpecificOutput: {
         hookEventName: "UserPromptSubmit",
         additionalContext: block,
       },
-    })
+    }),
+    () => process.exit(0)
   );
 }
 
