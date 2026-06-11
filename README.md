@@ -9,8 +9,10 @@ listening to, what you told it, how you want it to respond — into every prompt
 then asks Claude to *read your prompt through that lens*. The agent stops being
 deaf to the room.
 
-**macOS-only (alpha).** Most signals read the Mac around you; other platforms
-degrade to self-report + dials + time/git.
+**Built for the Mac (alpha).** The richest ambient signals read the Mac around
+you. Other platforms still get the dial-movers — prompt intent, self-report,
+git, time/day, typing tempo — and can link Spotify for music
+(`cadence spotify connect`).
 
 A [Cullum&Co](https://cullum.co) project · [cadence.cullum.co](https://cadence.cullum.co)
 
@@ -45,17 +47,20 @@ defers to what you actually typed.
 options, a trade-off table, and a closing "Would you like me to implement one
 of these?"
 
-**With Cadence, shipping cadence** — hardcore at 3 commits/hr, state set to
-`"ship mode"` → `{ pace=fast posture=decisive proactivity=act-freely }`. You
-get the call, made: exponential backoff with jitter, three attempts, here's
-the diff, tests pass.
+**With Cadence, shipping cadence** — hardcore at 3 commits/hr, a "let's ship
+it" earlier in your prompt (or `cadence state "ship mode"`) →
+`{ pace=fast posture=decisive proactivity=act-freely }`. You get the call,
+made: exponential backoff with jitter, three attempts, here's the diff, tests
+pass.
 
-**With Cadence, thinking cadence** — ambient music, state set to
-`"thinking through tradeoffs"` → `{ pace=deliberate posture=exploratory }`.
-You get the options laid out patiently, trade-offs actually explored, no
-pressure to pick one yet.
+**With Cadence, thinking cadence** — ambient music, "thinking through
+tradeoffs" in your own words → `{ pace=deliberate posture=exploratory }`. You
+get the options laid out patiently, trade-offs actually explored, no pressure
+to pick one yet.
 
-Same words. The room around them changed, and the agent finally saw it.
+Same words. The room around them changed, and the agent finally saw it. No
+setup required for the intent read — your prompt itself is a signal; a
+deliberate self-report just outranks it.
 
 ## How it works
 
@@ -106,11 +111,12 @@ without checking in stays your call, not the soundtrack's.
 
 ## Requirements
 
-- **macOS.** Cadence is mac-only for the alpha: music (AppleScript
-  now-playing), battery, dark mode, displays, wifi, and Focus/DND all read the
-  Mac around you. On other platforms it still runs — self-report, dials,
-  time/day, and git work anywhere, the rest degrade silently — but the product
-  is built for the Mac.
+- **Built for the Mac.** The richest ambient probes — music via AppleScript
+  now-playing, battery, dark mode, displays, wifi, Focus/DND, focused app —
+  read the Mac around you. On other platforms Cadence still runs and still
+  moves the dials: prompt intent, self-report, git, time/day, and typing tempo
+  work anywhere, Spotify can be linked for music, and the Mac-only probes
+  degrade silently.
 - **Node 20+**
 - Claude Code for the alpha adapter
 
@@ -122,14 +128,19 @@ In Claude Code:
 /plugin marketplace add cullumco/cadence
 /plugin install cadence@cadence
 /reload-plugins
-/cadence:try
+/cadence:setup
 ```
 
-Then set a self-report so you can feel the difference:
+`/cadence:setup` is a short conversation, not a wizard — tell Claude how you
+work, pick which signals you're willing to share, and see exactly what gets
+injected. Or skip it and just set a self-report:
 
 ```text
 /cadence:state shipping, locked in
 ```
+
+Change your mind anytime: `/cadence:pause` silences everything instantly,
+`/cadence:resume` brings it back.
 
 Alpha testers running from source — while `@cullumco/cadence` is pending npm
 publish — see [`ALPHA.md`](ALPHA.md).
@@ -258,8 +269,6 @@ See [`BACKLOG.md`](BACKLOG.md). Highlights:
   - **typing tempo** — *shipped (opt-in):* prompt rhythm beyond length —
     rapid-fire short prompts read fast, one long considered prompt reads
     deliberate.
-  - **calendar density** — a meeting in 20 minutes should read as `pace=fast,
-    posture=decisive`; a clear afternoon as room to explore.
   - **focused app** — *shipped (opt-in, macOS):* the frontmost non-terminal app
     (a browser, Slack, a PDF) renders as flavor. Read at prompt-submit, so it
     only speaks when something other than your terminal/IDE is genuinely in
@@ -269,20 +278,19 @@ See [`BACKLOG.md`](BACKLOG.md). Highlights:
     they never steer the work.
   - **deeper Focus** — manual + scheduled Focus detection ship now; geofenced/
     iPhone-synced Focus leaves no local trace and stays undetectable.
-
 - **Calendar density** — intentionally *not* built: Cadence targets solo
   builders deep in a project, not people racing between meetings.
-- **After-the-fact injection** — the first cut ships: a `PostToolUse` hook
-  watches git-ish commands and speaks exactly once when the repo enters or
-  leaves a merge/rebase conflict ("this is debug now" / "conflict resolved").
-  Next material events: failing-test transitions, reset/force-push thrash.
-- **Opt-in flavor providers** — horoscope, moon phase, for those who want them.
+- **After-the-fact injection** — shipped: a `PostToolUse` hook watches git-ish
+  commands and speaks once per transition — entering/leaving a merge/rebase
+  conflict, and destructive-op thrash (reset --hard streaks, force-pushes).
+  Next material event: failing-test transitions.
 
 ## Caveats
 
-- **macOS-only.** The alpha targets the Mac: music, battery, dark mode,
-  displays, wifi, and Focus are all macOS probes. Other platforms get
-  self-report + dials + time/git; everything else degrades silently.
+- **Built for the Mac.** The richest ambient probes (music-via-OS, battery,
+  dark mode, displays, wifi, Focus, focused app) are macOS. Other platforms
+  keep the dial-movers — intent, self-report, git, time/day, typing tempo,
+  linked Spotify — and the rest degrades silently.
 - **Spotify's audio-features API is not used** — Spotify deprecated it for new
   apps (2024) and gated dev-mode behind Premium (2026), so vibe comes from
   MusicBrainz, not Spotify. On macOS, Cadence reads what's playing at the OS
