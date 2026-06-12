@@ -19,7 +19,14 @@ import { exec } from "node:child_process";
 // requires the explicit loopback IP (not "localhost") for native/CLI apps.
 export const REDIRECT_PORT = 8888;
 export const REDIRECT_URI = `http://127.0.0.1:${REDIRECT_PORT}/callback`;
-export const SCOPE = "user-read-currently-playing";
+// Scopes bind to the refresh token at consent time — upgrading (e.g. for DJ
+// playback control) means re-running the browser flow, not editing config.
+export const READ_SCOPES = ["user-read-currently-playing"];
+export const DJ_SCOPES = [
+  ...READ_SCOPES,
+  "user-read-playback-state",
+  "user-modify-playback-state",
+];
 const AUTH_TIMEOUT_MS = 120_000;
 
 export interface Pkce {
@@ -39,12 +46,13 @@ export function buildAuthorizeUrl(opts: {
   clientId: string;
   challenge: string;
   state: string;
+  scopes?: string[];
 }): string {
   const q = new URLSearchParams({
     response_type: "code",
     client_id: opts.clientId,
     redirect_uri: REDIRECT_URI,
-    scope: SCOPE,
+    scope: (opts.scopes ?? READ_SCOPES).join(" "),
     code_challenge_method: "S256",
     code_challenge: opts.challenge,
     state: opts.state,
@@ -142,11 +150,12 @@ async function exchangeCode(clientId: string, code: string, verifier: string): P
  * the CLI owns all stdout. */
 export async function connectSpotify(
   clientId: string,
-  log: (msg: string) => void
+  log: (msg: string) => void,
+  scopes: string[] = READ_SCOPES
 ): Promise<string> {
   const { verifier, challenge } = generatePkce();
   const state = randomBytes(16).toString("hex");
-  const url = buildAuthorizeUrl({ clientId, challenge, state });
+  const url = buildAuthorizeUrl({ clientId, challenge, state, scopes });
 
   log("  Opening Spotify in your browser to authorize…");
   log("  If it doesn't open, paste this:\n");

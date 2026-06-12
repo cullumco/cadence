@@ -25,10 +25,13 @@ const REFRESH_TIMEOUT_MS = 800;
 const NOWPLAYING_TIMEOUT_MS = 800;
 const TOKEN_SKEW_MS = 60_000; // refresh a minute early so a live token can't expire mid-flight
 
-interface SpotifyCreds {
+export interface SpotifyCreds {
   refreshToken: string;
   clientId: string;
   clientSecret?: string;
+  /** Space-separated OAuth scopes recorded at link time; absent = a legacy
+   * read-only link. The DJ checks this and fails closed without it. */
+  scopes?: string;
 }
 
 interface TokenCache {
@@ -54,7 +57,13 @@ export function readCreds(providers: ProviderConfig): SpotifyCreds | null {
   if (typeof refreshToken !== "string" || typeof clientId !== "string") return null;
   if (!refreshToken || !clientId) return null;
   const clientSecret = typeof o["clientSecret"] === "string" ? o["clientSecret"] : undefined;
-  return { refreshToken, clientId, clientSecret };
+  const scopes = typeof o["scopes"] === "string" && o["scopes"] ? o["scopes"] : undefined;
+  return {
+    refreshToken,
+    clientId,
+    ...(clientSecret ? { clientSecret } : {}),
+    ...(scopes ? { scopes } : {}),
+  };
 }
 
 async function loadToken(): Promise<TokenCache | null> {
@@ -116,7 +125,9 @@ async function refreshAccessToken(creds: SpotifyCreds): Promise<string | null> {
   }
 }
 
-async function getAccessToken(creds: SpotifyCreds): Promise<string | null> {
+// Exported for dj-run: DJ and the now-playing provider share one cached
+// token (`~/.cadence/spotify-token.json`), so neither double-refreshes.
+export async function getAccessToken(creds: SpotifyCreds): Promise<string | null> {
   const cached = await loadToken();
   if (cached && cached.expiresAt - TOKEN_SKEW_MS > Date.now()) return cached.accessToken;
   return refreshAccessToken(creds);

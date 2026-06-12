@@ -1308,3 +1308,192 @@ test("hook integration: tuning on logs one derived entry; off leaves no file", {
   assert.equal(r2.code, 0);
   await assert.rejects(fsReadFile(joinPath(home2, ".cadence", "tune.json"), "utf-8"));
 });
+
+// ── dj: reverse-direction actuation (pure policy, src/dj.ts) ────────────────
+test("dj classifyUri: track queues, playlist/album switch context, junk rejected", async () => {
+  const { classifyUri } = await import("../dist/dj.js");
+  assert.equal(classifyUri("spotify:track:4uLU6hMCjMI75M1A2tKUQC"), "queue");
+  assert.equal(classifyUri("spotify:playlist:37i9dQZF1DXcBWIGoYBM5M"), "context");
+  assert.equal(classifyUri("spotify:album:0DiWol3AO6WpqJpWyVko9W"), "context");
+  assert.equal(classifyUri("https://open.spotify.com/track/4uLU6"), null); // share URL ≠ URI
+  assert.equal(classifyUri("spotify:episode:abc123"), null); // podcasts aren't music
+  assert.equal(classifyUri("spotify:track:"), null);
+  assert.equal(classifyUri(""), null);
+});
+
+test("dj readDjMappings: tri-state honesty — absent/false/empty all read as off", async () => {
+  const { readDjMappings } = await import("../dist/dj.js");
+  assert.deepEqual(readDjMappings({}), {});
+  assert.deepEqual(readDjMappings({ dj: false }), {});
+  assert.deepEqual(readDjMappings({ dj: {} }), {});
+  assert.deepEqual(readDjMappings({ dj: { mappings: {} } }), {});
+  assert.deepEqual(readDjMappings({ dj: "yes" }), {}); // a bare flag maps nothing
+});
+
+test("dj readDjMappings: only spotify track/playlist/album URIs survive validation", async () => {
+  const { readDjMappings } = await import("../dist/dj.js");
+  const out = readDjMappings({
+    dj: {
+      mappings: {
+        ship: "spotify:playlist:37i9dQZF1DXcBWIGoYBM5M",
+        testsGreen: "spotify:track:0DiWol3AO6WpqJpWyVko9W",
+        conflict: "https://open.spotify.com/track/junk", // rejected: not a URI
+        thrash: 42, // rejected: not a string
+        notAnEvent: "spotify:track:0DiWol3AO6WpqJpWyVko9W", // rejected: unknown event
+      },
+    },
+  });
+  assert.deepEqual(out, {
+    ship: "spotify:playlist:37i9dQZF1DXcBWIGoYBM5M",
+    testsGreen: "spotify:track:0DiWol3AO6WpqJpWyVko9W",
+  });
+});
+
+test("dj decideDjAction: unmapped event → skip, never acts", async () => {
+  const { decideDjAction } = await import("../dist/dj.js");
+  const out = decideDjAction({
+    event: "conflict",
+    mappings: { ship: "spotify:track:0DiWol3AO6WpqJpWyVko9W" },
+    player: { isPlaying: true },
+    last: {},
+    now: 1_000_000,
+  });
+  assert.deepEqual(out, { act: false, reason: "unmapped" });
+});
+
+test("dj decideDjAction: nothing playing → skip — never starts audio", async () => {
+  const { decideDjAction } = await import("../dist/dj.js");
+  const mappings = { ship: "spotify:track:0DiWol3AO6WpqJpWyVko9W" };
+  // 204 / no active device
+  assert.deepEqual(
+    decideDjAction({ event: "ship", mappings, player: null, last: {}, now: 0 }),
+    { act: false, reason: "nothing-playing" }
+  );
+  // device exists but paused
+  assert.deepEqual(
+    decideDjAction({ event: "ship", mappings, player: { isPlaying: false }, last: {}, now: 0 }),
+    { act: false, reason: "nothing-playing" }
+  );
+});
+
+test("dj decideDjAction: cooldown gates with injected clock, acts past it", async () => {
+  const { decideDjAction, DJ_COOLDOWN_MS } = await import("../dist/dj.js");
+  const mappings = { testsGreen: "spotify:track:0DiWol3AO6WpqJpWyVko9W" };
+  const player = { isPlaying: true };
+  const last = { lastActedAt: 1_000_000, lastEvent: "conflict", lastUri: "spotify:track:x" };
+  const within = decideDjAction({
+    event: "testsGreen", mappings, player, last, now: 1_000_000 + DJ_COOLDOWN_MS - 1,
+  });
+  assert.deepEqual(within, { act: false, reason: "cooldown" }); // global across events
+  const past = decideDjAction({
+    event: "testsGreen", mappings, player, last, now: 1_000_000 + DJ_COOLDOWN_MS + 1_000,
+  });
+  assert.deepEqual(past, { act: true, kind: "queue", uri: "spotify:track:0DiWol3AO6WpqJpWyVko9W" });
+  // custom cooldown is honored
+  const custom = decideDjAction({
+    event: "testsGreen", mappings, player, last, now: 1_000_000 + 60_001, cooldownMs: 60_000,
+  });
+  assert.equal(custom.act, true);
+});
+
+test("dj decideDjAction: mapped context already playing → skip; different context acts", async () => {
+  const { decideDjAction } = await import("../dist/dj.js");
+  const uri = "spotify:playlist:37i9dQZF1DXcBWIGoYBM5M";
+  const mappings = { ship: uri };
+  assert.deepEqual(
+    decideDjAction({
+      event: "ship", mappings, last: {}, now: 0,
+      player: { isPlaying: true, contextUri: uri },
+    }),
+    { act: false, reason: "already-playing" }
+  );
+  assert.deepEqual(
+    decideDjAction({
+      event: "ship", mappings, last: {}, now: 0,
+      player: { isPlaying: true, contextUri: "spotify:playlist:other" },
+    }),
+    { act: true, kind: "context", uri }
+  );
+  // track mapping compares against the playing TRACK, not the context
+  const track = "spotify:track:0DiWol3AO6WpqJpWyVko9W";
+  assert.deepEqual(
+    decideDjAction({
+      event: "ship", mappings: { ship: track }, last: {}, now: 0,
+      player: { isPlaying: true, trackUri: track, contextUri: "spotify:playlist:x" },
+    }),
+    { act: false, reason: "already-playing" }
+  );
+});
+
+test("dj djEventForTransitions: conflict beats tests beats thrash, edges map by direction", async () => {
+  const { djEventForTransitions } = await import("../dist/dj.js");
+  const none = { conflictEdge: false, conflicted: false, testsEdge: false, testsFailing: false, thrashEdge: false };
+  assert.equal(djEventForTransitions(none), null);
+  assert.equal(djEventForTransitions({ ...none, conflictEdge: true, conflicted: true }), "conflict");
+  assert.equal(djEventForTransitions({ ...none, conflictEdge: true, conflicted: false }), "conflictResolved");
+  assert.equal(djEventForTransitions({ ...none, testsEdge: true, testsFailing: true }), "testsRed");
+  assert.equal(djEventForTransitions({ ...none, testsEdge: true, testsFailing: false }), "testsGreen");
+  assert.equal(djEventForTransitions({ ...none, thrashEdge: true }), "thrash");
+  // same priority as posttool's message selection: conflict > tests > thrash
+  assert.equal(
+    djEventForTransitions({ conflictEdge: true, conflicted: true, testsEdge: true, testsFailing: true, thrashEdge: true }),
+    "conflict"
+  );
+  assert.equal(
+    djEventForTransitions({ ...none, testsEdge: true, testsFailing: true, thrashEdge: true }),
+    "testsRed"
+  );
+});
+
+test("dj ship trigger: SHIP_PATTERN matches the same strings stop.ts blocked on (regression lock)", async () => {
+  const { SHIP_PATTERN } = await import("../dist/dj.js");
+  // the exact vocabulary stop.ts's inline regex accepted before the refactor
+  for (const s of ["ship it", "shipping", "jamming", "locked in", "locked-in", "sending", "grind", "send it"]) {
+    assert.match(s, SHIP_PATTERN, `expected shipping read: "${s}"`);
+  }
+  for (const s of ["thinking through the design", "debugging a flaky test", "tired"]) {
+    assert.doesNotMatch(s, SHIP_PATTERN, `expected non-shipping read: "${s}"`);
+  }
+  // and decideStop still blocks on a ship self-report through the shared pattern
+  const signals = [{ source: "self_report", text: "two beers, ship mode", setAt: Date.now() }];
+  const cadence = { pace: "high", tone: "medium", posture: "high", proactivity: "high" };
+  const d = decideStop(
+    { stop_hook_active: false, last_assistant_message: "Want me to keep going?" },
+    signals, cadence, []
+  );
+  assert.equal(d?.decision, "block");
+});
+
+test("dj scopes: readCreds passes scopes through; hasDjScopes fails closed", async () => {
+  const { hasDjScopes } = await import("../dist/dj.js");
+  const full = "user-read-currently-playing user-read-playback-state user-modify-playback-state";
+  const creds = readCreds({ spotify: { clientId: "c", refreshToken: "r", scopes: full } });
+  assert.equal(creds.scopes, full);
+  assert.equal(hasDjScopes(creds.scopes), true);
+  // legacy read-only link has no scopes field → closed
+  const legacy = readCreds({ spotify: { clientId: "c", refreshToken: "r" } });
+  assert.equal(legacy.scopes, undefined);
+  assert.equal(hasDjScopes(legacy.scopes), false);
+  assert.equal(hasDjScopes("user-read-playback-state"), false); // read without modify
+  assert.equal(hasDjScopes(""), false);
+});
+
+test("dj buildAuthorizeUrl: scope carries DJ_SCOPES when passed, READ_SCOPES by default", async () => {
+  const { DJ_SCOPES, READ_SCOPES } = await import("../dist/spotify-auth.js");
+  const dj = new URL(buildAuthorizeUrl({ clientId: "c", challenge: "ch", state: "s", scopes: DJ_SCOPES }));
+  assert.equal(dj.searchParams.get("scope"), DJ_SCOPES.join(" "));
+  assert.ok(DJ_SCOPES.includes("user-modify-playback-state"));
+  const plain = new URL(buildAuthorizeUrl({ clientId: "c", challenge: "ch", state: "s" }));
+  assert.equal(plain.searchParams.get("scope"), READ_SCOPES.join(" ")); // existing links unchanged
+});
+
+test("dj playerStateFrom: shapes /me/player JSON, missing fields degrade", async () => {
+  const { playerStateFrom } = await import("../dist/dj-run.js");
+  assert.deepEqual(
+    playerStateFrom({ is_playing: true, context: { uri: "spotify:playlist:p" }, item: { uri: "spotify:track:t" } }),
+    { isPlaying: true, contextUri: "spotify:playlist:p", trackUri: "spotify:track:t" }
+  );
+  assert.deepEqual(playerStateFrom({ is_playing: false }), { isPlaying: false });
+  assert.deepEqual(playerStateFrom(null), { isPlaying: false });
+  assert.deepEqual(playerStateFrom({}), { isPlaying: false });
+});

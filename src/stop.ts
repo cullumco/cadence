@@ -5,6 +5,7 @@ import { getSelfReportSignal } from "./providers/selfreport.js";
 import { getEnvironmentSignal } from "./providers/environment.js";
 import { getGitSignal } from "./providers/git.js";
 import { deriveCadence, loadOverrides, applyOverrides } from "./cadence.js";
+import { SHIP_PATTERN } from "./dj.js";
 import { isPaused } from "./config.js";
 import type { Cadence, Signal, UserState } from "./types.js";
 
@@ -55,7 +56,9 @@ async function collectSignals(cwd: string): Promise<Signal[]> {
 function selfReportIsShipping(signals: Signal[]): boolean {
   const report = signals.find((s) => s.source === "self_report");
   if (!report) return false;
-  return /\b(ship|shipping|jamming|locked.?in|sending|grind|just|send it)\b/i.test(report.text);
+  // single source shared with the DJ ship trigger (src/dj.ts) — Stop
+  // authority and DJ actuation must never drift apart on what "shipping" is
+  return SHIP_PATTERN.test(report.text);
 }
 
 function pinnedActFreely(cadence: Cadence, pinned: (keyof Cadence)[]): boolean {

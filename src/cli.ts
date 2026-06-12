@@ -22,6 +22,8 @@ import { runInstrument } from "./tui.js";
 import { loadProviders, providerEnabled, isPaused, OPT_IN_PROVIDERS } from "./config.js";
 import { readTuneLog, renderTuneReport, tuneLogPath } from "./learn.js";
 import { connectSpotify, REDIRECT_URI } from "./spotify-auth.js";
+import { SHIP_PATTERN, maybeSpawnDj } from "./dj.js";
+import { cmdDj } from "./dj-cli.js";
 import type {
   Signal,
   UserState,
@@ -63,6 +65,9 @@ async function cmdReport(args: string[]) {
   await mkdir(CADENCE_DIR, { recursive: true });
   await writeFile(STATE_FILE, text, "utf-8");
   console.log(`  self-report set: "${text}"`);
+  // DJ ship trigger — only from this explicit report path (the prompt-intent
+  // trigger is deliberately deferred, see src/dj.ts); no-op unless mapped.
+  if (SHIP_PATTERN.test(text)) await maybeSpawnDj("ship");
 }
 
 async function cmdClear() {
@@ -205,6 +210,7 @@ async function cmdEnable(args: string[]) {
   if (!knownProvider(name)) {
     console.error(`  unknown signal "${name}".`);
     if (name === "spotify") console.error("  spotify takes credentials — run: cadence spotify");
+    if (name === "dj") console.error("  dj takes setup — run: cadence dj setup");
     listProviders();
     process.exit(1);
   }
@@ -606,6 +612,13 @@ const HELP = `
     cadence spotify connect <id>      link Spotify (cross-platform, opens browser)
     cadence spotify off               unlink it
 
+  dj (reverse direction — work transitions steer Spotify; needs Premium):
+    cadence dj                        status: link, mappings, last action
+    cadence dj setup                  link with playback control + map events
+    cadence dj map <event> <uri>      map an event to a track/playlist URI
+    cadence dj test <event>           run an event now, errors visible
+    cadence dj off                    turn dj off
+
   other surfaces:
     cadence mcp                 stdio MCP server — same room in Claude Desktop etc.
                                 (don't add it inside Claude Code: hooks already inject)
@@ -647,6 +660,8 @@ async function main() {
       return cmdTune(rest);
     case "spotify":
       return cmdSpotify(rest);
+    case "dj":
+      return cmdDj(rest);
     case "mcp":
       // stdio MCP server: from here on stdout is the JSON-RPC channel — print
       // nothing else. Runs until the client closes stdin.

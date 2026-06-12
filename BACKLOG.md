@@ -258,3 +258,17 @@ section). Remaining candidate: ambient-light sensor.
   path (mirror, not nanny). Rule ids (`env.late`, `report.ship`, …) are part of
   the log format — keep them stable across retunes; renames orphan history and
   the report degrades to grouping by source. Pinned dials are never graded.
+- **DJ = hooks trigger, a detached child acts** (decided 2026-06-11). DJ is the
+  one exception to "influence = prompt only," and it's doubly opt-in: every
+  event must be explicitly mapped (`cadence dj map`), unmapped events never
+  act. Hooks never wait on Spotify — posttool spawns `dist/dj-run.js <event>`
+  detached/unref'd after its output is written; all playback judgment lives in
+  pure functions in `src/dj.ts`. Invariants: never START audio (nothing
+  playing → skip), track URI = gentle queue / playlist|album URI = context
+  switch (the URI type IS the gentleness setting), 10-min global cooldown on
+  top of the hooks' edge-triggering. Ship fires ONLY from `cadence report`
+  text matching the shared `SHIP_PATTERN` (same authority stop.ts requires);
+  the prompt-intent ship trigger in hook.ts is deliberately deferred until
+  intent-regex precision is observed in the wild. Playback control needs
+  Spotify Premium and a scope re-link (`cadence dj setup`); legacy read-only
+  links fail closed. `cadence dj test <event>` is the visible-errors path.

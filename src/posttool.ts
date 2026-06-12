@@ -5,6 +5,7 @@ import { homedir } from "node:os";
 import { join } from "node:path";
 import { getGitSignal } from "./providers/git.js";
 import { isPaused } from "./config.js";
+import { djEventForTransitions, maybeSpawnDj } from "./dj.js";
 
 /* ─────────────────────────────────────────────────────────────────────────
  * PostToolUse adapter — V2 "after-the-fact" refinement, conservative cut.
@@ -271,6 +272,19 @@ async function main() {
       })
     );
   }
+
+  // DJ (reverse direction): same edges, same priority, but the hook is only
+  // a trigger — it spawns the detached helper and never waits on Spotify.
+  // maybeSpawnDj is one config read, after the output is already written,
+  // and skips the spawn entirely unless the user mapped this exact event.
+  const djEvent = djEventForTransitions({
+    conflictEdge: conflictMsg != null,
+    conflicted: git.conflicted,
+    testsEdge: testsMsg != null,
+    testsFailing: failed === true,
+    thrashEdge: thrash.message != null,
+  });
+  if (djEvent) await maybeSpawnDj(djEvent);
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
