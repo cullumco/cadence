@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-import { writeFile, mkdir, readFile } from "node:fs/promises";
+import { writeFile, mkdir, readFile, rm } from "node:fs/promises";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { getMusicSignal } from "./providers/music.js";
@@ -20,6 +20,7 @@ import { render } from "./inject.js";
 import { renderSignalsTable, type RawSignals } from "./signals-view.js";
 import { runInstrument } from "./tui.js";
 import { loadProviders, providerEnabled, isPaused, OPT_IN_PROVIDERS } from "./config.js";
+import { readTuneLog, renderTuneReport, tuneLogPath } from "./learn.js";
 import { connectSpotify, REDIRECT_URI } from "./spotify-auth.js";
 import type {
   Signal,
@@ -244,6 +245,29 @@ async function cmdDisable(args: string[]) {
   cfg["providers"] = providers;
   await saveCfg(cfg);
   console.log(`  disabled ${name}`);
+}
+
+// The learning-loop readout: where your next words pulled against the lens.
+// Report-only by design — it never re-weights nudges or edits config; the one
+// action it points at is the existing user-authority path (pin a dial).
+async function cmdTune(args: string[]) {
+  if (args[0] === "clear") {
+    await rm(tuneLogPath(), { force: true });
+    console.log("  tune log cleared");
+    return;
+  }
+  const entries = await readTuneLog();
+  if (entries.length === 0) {
+    const providers = await loadProviders();
+    if (!providerEnabled(providers, "tuning")) {
+      console.log("  tuning is off — turn it on: cadence enable tuning");
+      console.log("  (logs derived prompt features only — length/intent/cue classes, never text)");
+    } else {
+      console.log("  no entries yet — the log fills as you prompt with tuning enabled");
+    }
+    return;
+  }
+  console.log("\n" + renderTuneReport(entries) + "\n");
 }
 
 // Spotify is the cross-platform music source — opt-in, browser-authorized via
@@ -575,6 +599,8 @@ const HELP = `
     cadence enable <signal> [value]   turn an opt-in signal on (e.g. typingTempo)
     cadence disable <signal>          turn it back off
                                       see them all: cadence signals
+    cadence tune                      where your next words pulled against the lens
+    cadence tune clear                delete the tune log (enable: cadence enable tuning)
 
   music (macOS reads Spotify.app / Music.app automatically):
     cadence spotify connect <id>      link Spotify (cross-platform, opens browser)
@@ -617,6 +643,8 @@ async function main() {
       return cmdEnable(rest);
     case "disable":
       return cmdDisable(rest);
+    case "tune":
+      return cmdTune(rest);
     case "spotify":
       return cmdSpotify(rest);
     case "mcp":

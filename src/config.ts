@@ -32,6 +32,7 @@ export const OPT_IN_PROVIDERS: Record<string, string> = {
   wifi: "wifi network name (macOS) → place context, home vs. office vs. café",
   moon: "current moon phase (offline) → esoteric flavor",
   horoscope: "daily horoscope for your sign, e.g. `cadence enable horoscope leo`",
+  tuning: "local learning log — derived prompt features (length/intent/cue classes, never text) → cadence tune",
 };
 
 export async function loadConfig(): Promise<Record<string, unknown>> {

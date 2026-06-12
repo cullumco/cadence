@@ -5,6 +5,7 @@ import type {
   UserState,
   Cadence,
   DialLevel,
+  Signal,
   MusicSignal,
   SelfReportSignal,
   GitSignal,
@@ -47,7 +48,26 @@ export const DIAL_WORDS: Record<keyof Cadence, Record<DialLevel, string>> = {
   proactivity: { low: "ask-first", medium: "balanced", high: "act-freely" },
 };
 
+/* One dial movement with its provenance — which rule, fed by which signal,
+ * set which dial. The opt-in tune log stores these so `cadence tune` can
+ * attribute next-prompt pushback to the exact nudge that fired. Rule ids are
+ * part of the log format: keep them stable across retunes where possible
+ * (renamed ids orphan historical entries; the report degrades to source). */
+export interface NudgeFired {
+  dial: keyof Cadence;
+  level: DialLevel;
+  source: Signal["source"];
+  rule: string;
+}
+
 export function deriveCadence(state: UserState): Cadence {
+  return deriveCadenceTraced(state).cadence;
+}
+
+export function deriveCadenceTraced(state: UserState): {
+  cadence: Cadence;
+  nudges: NudgeFired[];
+} {
   const music = state.signals.find((s): s is MusicSignal => s.source === "music");
   const report = state.signals.find(
     (s): s is SelfReportSignal => s.source === "self_report"
@@ -71,17 +91,33 @@ export function deriveCadence(state: UserState): Cadence {
     proactivity: "medium",
   };
 
+  // Sets the dial AND records provenance. Application order below is
+  // unchanged, so the EFFECTIVE nudge for a dial is simply the last trace
+  // entry for that dial — last-write-wins stays the collision rule.
+  const nudges: NudgeFired[] = [];
+  const nudge = (
+    dial: keyof Cadence,
+    level: DialLevel,
+    source: Signal["source"],
+    rule: string
+  ) => {
+    c[dial] = level;
+    nudges.push({ dial, level, source, rule });
+  };
+
   // ── environment → soft nudges FIRST (weakest), so stronger signals below win ──
   // Atmosphere, not orders: it colors the default, then music/self-report/git
   // can override. "It's late" shouldn't beat "I'm shipping."
   if (environment) {
-    if (environment.hour >= 22 || environment.hour < 6) c.pace = "low"; // late → gentler
-    if (environment.partOfDay === "early morning") c.pace = "low"; // easing in
-    if (environment.isWeekend) c.tone = "low"; // looser on weekends
+    if (environment.hour >= 22 || environment.hour < 6)
+      nudge("pace", "low", "environment", "env.late"); // late → gentler
+    if (environment.partOfDay === "early morning")
+      nudge("pace", "low", "environment", "env.early-morning"); // easing in
+    if (environment.isWeekend) nudge("tone", "low", "environment", "env.weekend"); // looser on weekends
     if (environment.weather && /rain|snow|fog|storm|cloud/.test(environment.weather)) {
-      c.tone = "low"; // gloomy out → warmer in
+      nudge("tone", "low", "environment", "env.gloomy"); // gloomy out → warmer in
     }
-    if (environment.onBattery) c.pace = "high"; // mobile/untethered → quick hits
+    if (environment.onBattery) nudge("pace", "high", "environment", "env.battery"); // mobile/untethered → quick hits
   }
 
   // ── music → pace + posture + tone (move WITH the music) ───────────────────
@@ -90,17 +126,17 @@ export function deriveCadence(state: UserState): Cadence {
   // leaves PROACTIVITY alone — whether to act without checking in is the user's
   // call (self-report/intent/git), never the soundtrack's. See CLAUDE.md.
   if (music?.energy != null) {
-    if (music.energy >= 0.7) c.pace = "high"; // driving → fast
-    else if (music.energy <= 0.4) c.pace = "low"; // mellow → deliberate
-    if (music.energy >= 0.75) c.posture = "high"; // high intensity → decisive momentum
-    else if (music.energy <= 0.35) c.posture = "low"; // ambient → spacious, exploratory
+    if (music.energy >= 0.7) nudge("pace", "high", "music", "music.energy-high"); // driving → fast
+    else if (music.energy <= 0.4) nudge("pace", "low", "music", "music.energy-low"); // mellow → deliberate
+    if (music.energy >= 0.75) nudge("posture", "high", "music", "music.intense"); // high intensity → decisive momentum
+    else if (music.energy <= 0.35) nudge("posture", "low", "music", "music.ambient"); // ambient → spacious, exploratory
   }
   // organic/acoustic texture, or mellow vibe words, warm the tone
   if (
     (music?.acoustic != null && music.acoustic >= 0.5) ||
     (music?.vibe && /\b(calm|chilled|ethereal|romantic|warm|sexy)\b/.test(music.vibe))
   ) {
-    c.tone = "low";
+    nudge("tone", "low", "music", "music.warm");
   }
 
   // ── git → pace / proactivity (what you're DOING, not what you said) ───────
@@ -108,8 +144,8 @@ export function deriveCadence(state: UserState): Cadence {
   // Applied below self-report on purpose: "I'm shipping" beats a mid-conflict
   // read — the user's explicit word stays the higher authority.
   if (git) {
-    if (git.commitsLastHour >= 3) c.pace = "high"; // flow state
-    if (git.conflicted) c.proactivity = "low"; // verify, don't barrel
+    if (git.commitsLastHour >= 3) nudge("pace", "high", "git", "git.streak"); // flow state
+    if (git.conflicted) nudge("proactivity", "low", "git", "git.conflict"); // verify, don't barrel
   }
 
   // ── prompt intent → posture / proactivity / tone (what you JUST typed) ────
@@ -119,17 +155,17 @@ export function deriveCadence(state: UserState): Cadence {
   // an explicit `cadence report "thinking"` still beats a stray "ship it".
   if (intent?.kind) {
     if (intent.kind === "ship") {
-      c.posture = "high";
-      c.proactivity = "high";
-      c.pace = "high";
+      nudge("posture", "high", "intent", "intent.ship");
+      nudge("proactivity", "high", "intent", "intent.ship");
+      nudge("pace", "high", "intent", "intent.ship");
     } else if (intent.kind === "think") {
-      c.posture = "low";
-      c.pace = "low";
+      nudge("posture", "low", "intent", "intent.think");
+      nudge("pace", "low", "intent", "intent.think");
     } else if (intent.kind === "debug") {
-      c.posture = "low";
-      c.proactivity = "low";
+      nudge("posture", "low", "intent", "intent.debug");
+      nudge("proactivity", "low", "intent", "intent.debug");
     } else if (intent.kind === "focus") {
-      c.tone = "high";
+      nudge("tone", "high", "intent", "intent.focus");
     }
   }
 
@@ -137,20 +173,20 @@ export function deriveCadence(state: UserState): Cadence {
   if (report) {
     const t = report.text.toLowerCase();
     if (/\b(ship|shipping|jamming|locked.?in|sending|grind|just|send it)\b/.test(t)) {
-      c.posture = "high";
-      c.proactivity = "high";
-      c.pace = "high";
+      nudge("posture", "high", "self_report", "report.ship");
+      nudge("proactivity", "high", "self_report", "report.ship");
+      nudge("pace", "high", "self_report", "report.ship");
     }
     if (/\b(think|thinking|exploring|planning|deciding|tradeoff|figuring|weigh)\b/.test(t)) {
-      c.posture = "low";
-      c.pace = "low";
+      nudge("posture", "low", "self_report", "report.think");
+      nudge("pace", "low", "self_report", "report.think");
     }
     if (/\b(stuck|broken|confused|debug|wtf|borked|why)\b/.test(t)) {
-      c.posture = "low"; // lead with hypotheses, don't take framing at face value
-      c.proactivity = "low"; // verify before acting
+      nudge("posture", "low", "self_report", "report.debug"); // lead with hypotheses, don't take framing at face value
+      nudge("proactivity", "low", "self_report", "report.debug"); // verify before acting
     }
-    if (/\b(beers?|tired|late|chill|relaxed|cozy)\b/.test(t)) c.tone = "low";
-    if (/\b(focused|formal|work|serious|crunch)\b/.test(t)) c.tone = "high";
+    if (/\b(beers?|tired|late|chill|relaxed|cozy)\b/.test(t)) nudge("tone", "low", "self_report", "report.chill");
+    if (/\b(focused|formal|work|serious|crunch)\b/.test(t)) nudge("tone", "high", "self_report", "report.formal");
   }
 
   // Still-dormant candidate nudges (see BACKLOG):
@@ -159,14 +195,14 @@ export function deriveCadence(state: UserState): Cadence {
   // ── activity → pace (motor tempo + return-from-break) ─────────────────────
   // typing tempo (opt-in): rapid-fire short prompts read as fast; one long
   // considered prompt reads as deliberate. Only set when the user opted in.
-  if (activity?.tempo === "rapid") c.pace = "high";
-  else if (activity?.tempo === "considered") c.pace = "low";
+  if (activity?.tempo === "rapid") nudge("pace", "high", "activity", "activity.rapid");
+  else if (activity?.tempo === "considered") nudge("pace", "low", "activity", "activity.considered");
   // a long gap since the last prompt = returning from a break = slow back down.
   if (activity?.minSinceLastPrompt != null && activity.minSinceLastPrompt > 30) {
-    c.pace = "low";
+    nudge("pace", "low", "activity", "activity.break");
   }
 
-  return c;
+  return { cadence: c, nudges };
 }
 
 /* Compose the interpretation lens from the dials. Reads as second-person

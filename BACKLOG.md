@@ -248,3 +248,13 @@ section). Remaining candidate: ambient-light sensor.
   un-pinned stay inferred. Pinned dials render with `*` so the model knows they
   carry explicit user authority. `set` accepts words ("fast") or levels ("high").
   CLI: `cadence dials | set | unset`.
+- **Learning loop v1 = report-only, opt-in, no auto-adjustment** (2026-06-11).
+  `cadence enable tuning` turns on a per-prompt log (`~/.cadence/tune.json`,
+  500-entry prune) of DERIVED features only — dial levels, the nudge trace from
+  `deriveCadenceTraced()`, prompt length/intent/cue classes, never raw text.
+  Silent hook exits log too (`injected:false`) so next-prompt pairing holds.
+  `cadence tune` pairs same-sitting entries offline and reports per-rule
+  agree/disagree; it never re-weights nudges and points only at the generic pin
+  path (mirror, not nanny). Rule ids (`env.late`, `report.ship`, …) are part of
+  the log format — keep them stable across retunes; renames orphan history and
+  the report degrades to grouping by source. Pinned dials are never graded.

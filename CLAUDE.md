@@ -76,6 +76,12 @@ product. Changes to which signal moves which dial belong there; adding new
 A working baseline ships so the plugin runs end-to-end out of the box, but the
 mapping is meant to be evolved.
 
+`deriveCadenceTraced()` is the attribution source for the learning loop: every
+nudge inside it carries a stable rule id (`env.late`, `report.ship`, …) that
+the opt-in tune log records, so `cadence tune` can attribute next-prompt
+pushback to the exact rule. Keep rule ids stable across retunes where possible
+— renames orphan historical entries (the report degrades to grouping by source).
+
 ### Independence of the four dials
 
 The dials are deliberately orthogonal. The invariant is **no single signal
@@ -194,4 +200,5 @@ flag. Any new hook must add the same first-line check.
   `activity.json` (last prompt timestamp + tempo window), `vibe-cache.json`
   (MusicBrainz tag cache), `weather-cache.json` (30-min weather word),
   `spotify-token.json` (cached access token), `workstate.json` (PostToolUse
-  conflict/thrash/tests state).
+  conflict/thrash/tests state), `tune.json` (opt-in learning log — derived
+  prompt features only, never text; pruned to 500 entries on every write).

@@ -12,8 +12,10 @@ const WINDOW_MAX = 10;
 const WINDOW_AGE_MS = 10 * 60_000; // 10 min — older prompts are a different sitting
 const BURST_WINDOW_MS = 5 * 60_000; // ≥3 prompts inside 5 min = a burst
 const BURST_MIN_PROMPTS = 3;
-const SHORT_PROMPT = 80; // median chars under this, in a burst → "rapid"
-const LONG_PROMPT = 280; // one prompt over this → "considered"
+// Exported: learn.ts buckets logged prompt lengths with the SAME thresholds,
+// so the tune log and the tempo read never disagree about what "short" means.
+export const SHORT_PROMPT = 80; // median chars under this, in a burst → "rapid"
+export const LONG_PROMPT = 280; // one prompt over this → "considered"
 
 interface PromptMark {
   at: number;

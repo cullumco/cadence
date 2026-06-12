@@ -1102,3 +1102,209 @@ test("bare cadence piped (non-TTY): static output, no alt-screen escapes", async
   assert.ok(!stdout.includes("\x1b[?1049"), "no alt-screen byte ever hits a pipe");
   assert.ok(!stdout.includes("\x1b[?25l"), "no hide-cursor byte either");
 });
+
+// ── learning loop: tune log + agreement scoring (src/learn.ts) ──────────────
+// Imports live here (top-level is legal anywhere in a module) so this whole
+// section stays append-only — easier to merge against parallel edits.
+import { deriveCadenceTraced } from "../dist/cadence.js";
+import {
+  detectCues,
+  promptFeatures,
+  buildTuneEntry,
+  pruneEntries,
+  pairEntries,
+  scorePair,
+  aggregateByRule,
+  renderTuneReport,
+  MAX_TUNE_ENTRIES,
+} from "../dist/learn.js";
+import { spawn } from "node:child_process";
+import { mkdtemp, readFile as fsReadFile, writeFile as fsWriteFile, mkdir as fsMkdir } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join as joinPath } from "node:path";
+
+test("deriveCadenceTraced: parity — traced cadence equals deriveCadence", () => {
+  const s = stateWith([
+    { source: "environment", partOfDay: "late night", dayOfWeek: "saturday", isWeekend: true, hour: 23 },
+    { source: "music", track: "x", energy: 0.9, acoustic: 0.6, vibe: "chilled" },
+    { source: "git", commitsLastHour: 4, filesDirty: 5, conflicted: true },
+    { source: "intent", kind: "ship" },
+    { source: "self_report", text: "thinking through tradeoffs", setAt: 0 },
+    { source: "activity", minSinceLastPrompt: 2, promptLength: 40 },
+  ]);
+  assert.deepEqual(deriveCadenceTraced(s).cadence, deriveCadence(s));
+});
+
+test("deriveCadenceTraced: attribution — last trace entry per dial is the effective nudge", () => {
+  const s = stateWith([
+    { source: "intent", kind: "ship" },
+    { source: "self_report", text: "thinking it through", setAt: 0 },
+  ]);
+  const { nudges } = deriveCadenceTraced(s);
+  const last = (dial) => [...nudges].reverse().find((n) => n.dial === dial);
+  // intent.ship fired on posture/proactivity/pace, then report.think overrode
+  // posture + pace — self-report stays the higher authority, and the trace
+  // shows exactly that ordering.
+  assert.ok(nudges.some((n) => n.rule === "intent.ship" && n.dial === "posture"));
+  assert.equal(last("posture").rule, "report.think");
+  assert.equal(last("pace").rule, "report.think");
+  assert.equal(last("proactivity").rule, "intent.ship"); // think never touches proactivity
+});
+
+test("detectCues: phrase cues fire, incidental words don't", () => {
+  assert.deepEqual(detectCues("just do it"), ["just-do-it"]);
+  assert.ok(detectCues("stop asking, ship it").includes("just-do-it"));
+  // bare-word traps — same conservatism discipline as intent.ts
+  assert.deepEqual(detectCues("can you just check the logs"), []);
+  assert.deepEqual(detectCues("why is this slow"), []);
+});
+
+test("detectCues: brevity and expansion cues", () => {
+  assert.deepEqual(detectCues("too long, be brief"), ["be-brief"]);
+  assert.deepEqual(detectCues("walk me through it step by step"), ["expand"]);
+});
+
+test("promptFeatures: bucket boundaries mirror activity's SHORT/LONG thresholds", () => {
+  assert.equal(promptFeatures("a".repeat(79)).bucket, "short");
+  assert.equal(promptFeatures("a".repeat(80)).bucket, "medium");
+  assert.equal(promptFeatures("a".repeat(280)).bucket, "medium");
+  assert.equal(promptFeatures("a".repeat(281)).bucket, "long");
+});
+
+test("promptFeatures: intent passthrough, derived only — never the words", () => {
+  const f = promptFeatures("ok let's ship it, the retry logic is done", 3);
+  assert.equal(f.intent, "ship");
+  assert.equal(f.gapMin, 3);
+  assert.ok(!JSON.stringify(f).includes("retry"), "features must not carry prompt text");
+});
+
+// shared fixture: a logged entry with overridable fields
+const tuneEntryWith = (over = {}) => ({
+  at: 0,
+  session: "s1",
+  feat: promptFeatures("x"),
+  emitted: { pace: "medium", tone: "medium", posture: "medium", proactivity: "medium" },
+  pinned: [],
+  nudges: [],
+  injected: true,
+  ...over,
+});
+const ENV_LATE = { dial: "pace", level: "low", source: "environment", rule: "env.late" };
+
+test("scorePair: lens said slow, next words said hurry → disagree; long follow-up → agree", () => {
+  const entry = tuneEntryWith({
+    emitted: { pace: "low", tone: "medium", posture: "medium", proactivity: "medium" },
+    nudges: [ENV_LATE],
+  });
+  assert.equal(scorePair(entry, promptFeatures("too long, be brief")).verdicts.pace, "disagree");
+  assert.equal(scorePair(entry, promptFeatures("a".repeat(300))).verdicts.pace, "agree");
+});
+
+test("scorePair: pinned dials are never graded — pins are user authority", () => {
+  const entry = tuneEntryWith({
+    emitted: { pace: "low", tone: "medium", posture: "medium", proactivity: "medium" },
+    pinned: ["pace"],
+    nudges: [ENV_LATE],
+  });
+  assert.equal(scorePair(entry, promptFeatures("too long, be brief")).verdicts.pace, "no-evidence");
+});
+
+test("scorePair: cue against a medium dial is an uncaptured pull, not a disagreement", () => {
+  const score = scorePair(tuneEntryWith(), promptFeatures("just do it"));
+  assert.equal(score.verdicts.proactivity, "no-evidence");
+  assert.equal(score.verdicts.pace, "no-evidence");
+  assert.deepEqual(score.uncaptured, ["proactivity"]);
+});
+
+test("pairEntries: same sitting only — session match and ≤30 min gap", () => {
+  const a = tuneEntryWith({ at: 0 });
+  const b = tuneEntryWith({ at: 29 * 60_000 }); // 29 min later, same session → pair
+  const c = tuneEntryWith({ at: (29 + 31) * 60_000 }); // 31 min after b → too far
+  const d = tuneEntryWith({ at: (29 + 31 + 1) * 60_000, session: "s2" }); // new session
+  const pairs = pairEntries([a, b, c, d]);
+  assert.equal(pairs.length, 1);
+  assert.equal(pairs[0].entry, a);
+});
+
+test("aggregateByRule: disagreement lands on the effective nudge", () => {
+  const e1 = tuneEntryWith({
+    emitted: { pace: "low", tone: "medium", posture: "medium", proactivity: "medium" },
+    nudges: [ENV_LATE],
+  });
+  const e2 = tuneEntryWith({ at: 60_000, feat: promptFeatures("too long, be brief", 1) });
+  const agg = aggregateByRule([e1, e2]);
+  const row = agg.stats.find((r) => r.rule === "env.late");
+  assert.ok(row, "env.late row should exist");
+  assert.equal(row.fired, 1);
+  assert.equal(row.disagree, 1);
+  assert.equal(agg.pairs, 1);
+  assert.equal(agg.withEvidence, 1);
+});
+
+test("pruneEntries: 600 in → exactly the newest 500 out, order preserved", () => {
+  const entries = Array.from({ length: 600 }, (_, i) => tuneEntryWith({ at: i }));
+  const pruned = pruneEntries(entries, MAX_TUNE_ENTRIES);
+  assert.equal(pruned.length, 500);
+  assert.equal(pruned[0].at, 100);
+  assert.equal(pruned[499].at, 599);
+});
+
+test("renderTuneReport: headline counts, contested rule, and the honesty footer", () => {
+  const e1 = tuneEntryWith({
+    emitted: { pace: "low", tone: "medium", posture: "medium", proactivity: "medium" },
+    nudges: [ENV_LATE],
+  });
+  const e2 = tuneEntryWith({ at: 60_000, feat: promptFeatures("too long, be brief", 1) });
+  const report = renderTuneReport([e1, e2]);
+  assert.match(report, /2 prompts logged · 1 same-sitting pairs · 1 with evidence/);
+  assert.match(report, /env\.late\s+environment\s+1\s+0\s+1/);
+  assert.match(report, /most contested: env\.late/);
+  assert.match(report, /can mean the read was wrong/);
+  assert.match(report, /cadence set <dial> <level>/); // only the generic pin pointer
+});
+
+// run the compiled hook with an isolated HOME so ~/.cadence lands in a tmp dir
+function runHook(home, payload) {
+  const env = { ...process.env, HOME: home };
+  for (const k of Object.keys(env)) if (k.startsWith("CADENCE_")) delete env[k];
+  const hookPath = new URL("../dist/hook.js", import.meta.url).pathname;
+  return new Promise((resolve, reject) => {
+    const p = spawn(process.execPath, [hookPath], { env });
+    let out = "";
+    p.stdout.on("data", (d) => (out += d));
+    p.on("close", (code) => resolve({ code, out }));
+    p.on("error", reject);
+    p.stdin.write(JSON.stringify(payload));
+    p.stdin.end();
+  });
+}
+
+test("hook integration: tuning on logs one derived entry; off leaves no file", { timeout: 30_000 }, async () => {
+  const prompt = "ok let's ship it, the retry logic is done";
+
+  const home1 = await mkdtemp(joinPath(tmpdir(), "cadence-tune-"));
+  await fsMkdir(joinPath(home1, ".cadence"), { recursive: true });
+  await fsWriteFile(
+    joinPath(home1, ".cadence", "config.json"),
+    JSON.stringify({ providers: { tuning: true } })
+  );
+  const r1 = await runHook(home1, { cwd: home1, prompt, session_id: "sess-1" });
+  assert.equal(r1.code, 0);
+  // hook output is unaffected by tuning: still a valid UserPromptSubmit payload
+  const parsed = JSON.parse(r1.out);
+  assert.equal(parsed.hookSpecificOutput.hookEventName, "UserPromptSubmit");
+  const entries = JSON.parse(await fsReadFile(joinPath(home1, ".cadence", "tune.json"), "utf-8"));
+  assert.equal(entries.length, 1);
+  assert.equal(entries[0].injected, true);
+  assert.equal(entries[0].session, "sess-1");
+  assert.equal(entries[0].feat.len, prompt.length);
+  assert.equal(entries[0].feat.intent, "ship");
+  assert.ok(!JSON.stringify(entries[0]).includes("retry"), "log must never carry prompt text");
+  assert.ok(entries[0].nudges.some((n) => n.rule === "intent.ship"));
+
+  // tuning off (fresh config, nothing opted in) → file never created
+  const home2 = await mkdtemp(joinPath(tmpdir(), "cadence-tune-"));
+  const r2 = await runHook(home2, { cwd: home2, prompt, session_id: "sess-1" });
+  assert.equal(r2.code, 0);
+  await assert.rejects(fsReadFile(joinPath(home2, ".cadence", "tune.json"), "utf-8"));
+});
