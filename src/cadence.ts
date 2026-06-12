@@ -170,14 +170,17 @@ export function deriveCadence(state: UserState): Cadence {
 }
 
 /* Compose the interpretation lens from the dials. Reads as second-person
- * "how to read my prompt", and always defers to the literal words — because
+ * "how to read my prompt" AND licenses answering in the room's register
+ * ("answer in kind") — a warm slow room should get a warm unhurried reply,
+ * not default assistant prose. Still always defers to the literal words —
  * the cadence is inferred and fires on every prompt, so a wrong guess must
  * be cheap. */
 export function buildReframe(c: Cadence): string {
   const parts: string[] = [];
 
   if (c.pace === "high") parts.push("keep it fast and tight — answer first, trim the preamble");
-  else if (c.pace === "low") parts.push("take it slow and expansive — room to lay things out");
+  else if (c.pace === "low")
+    parts.push("take it slow and expansive — room to lay things out, let the answer breathe");
 
   if (c.posture === "high") parts.push("make the call rather than offering a menu of options");
   else if (c.posture === "low") parts.push("surface the tradeoffs and options behind what I asked");
@@ -185,15 +188,17 @@ export function buildReframe(c: Cadence): string {
   if (c.proactivity === "high") parts.push("act without stopping to check in");
   else if (c.proactivity === "low") parts.push("verify assumptions and lead with hypotheses before acting");
 
-  if (c.tone === "low") parts.push("keep the tone warm and casual");
-  else if (c.tone === "high") parts.push("keep the tone crisp and professional");
+  if (c.tone === "low")
+    parts.push("keep the tone warm and casual — drop the formality and write like a sharp friend, not a memo");
+  else if (c.tone === "high")
+    parts.push("keep the tone crisp and professional — tight, structured, no banter");
 
   const body =
     parts.length === 0
       ? "read my prompt at face value"
-      : "read my prompt as someone in this cadence meant it: " + parts.join("; ");
+      : "read my prompt as someone in this cadence meant it, and answer in kind: " + parts.join("; ");
 
-  return body + ". If my words clearly mean otherwise, follow my words.";
+  return body + ". If my words clearly mean otherwise — in what I ask or how I sound — follow my words.";
 }
 
 /* ─────────────────────────────────────────────────────────────────────────

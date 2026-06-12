@@ -220,11 +220,20 @@ section). Remaining candidate: ambient-light sensor.
   output style, or generation params; `additionalContext` is the only lever.
 - **Style = interpretation lens** ("read my prompt as someone in X cadence meant
   it"), not behavioral commands (caveman) and not prompt rewriting (impossible
-  automatically). Always defers to the user's literal words.
+  automatically). Always defers to the user's literal words. Amended 2026-06-12:
+  the lens also licenses answering in the room's register ("answer in kind" —
+  warm room, warm reply), still advisory, defer clause still final and now
+  covering register ("in what I ask or how I sound").
 - **No single mode label** — Cadence drives FOUR independent dials (pace, tone,
   posture, proactivity), each low/medium/high, instead of collapsing to
   ship/think/debug. `mode.ts` deleted; `cadence.ts` is the brain. Deliberate move
   off the 3-way switch so signals pull dials orthogonally and nothing is lost.
+- **Mirror, not nanny (anti-goal, settled 2026-06-12).** Cadence reflects the
+  room; it never manages the person in it. The signals could trivially power
+  wellness nudges ("you've been up 200h, maybe rest") — don't build them, on
+  any surface. A nudge that judges the user's state breaks the trust that
+  makes them willing to share signals at all. Same line for the agent-facing
+  text: the reframe describes the room, it never editorializes about it.
 - **Manual override = "user's determination, rest auto."** Any dial can be pinned
   via `~/.cadence/config.json` or env (`CADENCE_PACE=fast`); pinned dials win,
   un-pinned stay inferred. Pinned dials render with `*` so the model knows they

@@ -7,3 +7,6 @@ dist/
 .env.local
 .claude/settings.json
 .vercel
+
+# agent worktrees (Workflow tool isolation)
+.claude/worktrees/

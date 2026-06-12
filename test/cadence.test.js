@@ -785,3 +785,31 @@ test("renderSignalsTable: wifi row is opt-in tri-state on darwin", () => {
   const linux = renderSignalsTable({ music: null, report: null, environment: env, git: null, now: 0, platform: "linux" });
   assert.match(linux, /wifi\s+— macOS only/);
 });
+
+// ── answer in kind (the lens licenses the reply's register) ─────────────────
+test("buildReframe: lit boards license answering in kind", () => {
+  const warmSlow = buildReframe({ pace: "low", tone: "low", posture: "medium", proactivity: "medium" });
+  assert.match(warmSlow, /and answer in kind:/);
+  assert.match(warmSlow, /let the answer breathe/);
+  assert.match(warmSlow, /sharp friend, not a memo/);
+  const crispFast = buildReframe({ pace: "high", tone: "high", posture: "medium", proactivity: "medium" });
+  assert.match(crispFast, /answer first, trim the preamble/);
+  assert.match(crispFast, /tight, structured, no banter/);
+});
+
+test("buildReframe: neutral board stays near-silent, no register instruction", () => {
+  const neutral = buildReframe({ pace: "medium", tone: "medium", posture: "medium", proactivity: "medium" });
+  assert.match(neutral, /read my prompt at face value/);
+  assert.doesNotMatch(neutral, /answer in kind/);
+});
+
+test("buildReframe: defer clause is final and covers register too", () => {
+  for (const c of [
+    { pace: "low", tone: "low", posture: "low", proactivity: "low" },
+    { pace: "high", tone: "high", posture: "high", proactivity: "high" },
+    { pace: "medium", tone: "medium", posture: "medium", proactivity: "medium" },
+  ]) {
+    const lens = buildReframe(c);
+    assert.match(lens, /in what I ask or how I sound — follow my words\.$/);
+  }
+});
