@@ -27,7 +27,7 @@ export interface RawSignals {
   providers?: ProviderConfig; // the opt-in registry, for "on/off" on opt-in signals
 }
 
-const LABEL_W = 12; // sub-row label column
+export const LABEL_W = 12; // sub-row label column (the TUI aligns to it too)
 const VALUE_W = 18; // value column, before a "(hidden: …)" note
 
 function row(label: string, value: string, note?: string): string {
@@ -39,11 +39,34 @@ function top(label: string, value: string): string {
   return `  ${label.padEnd(LABEL_W + 2)}${value}`;
 }
 
-function ttlLeft(setAt: number, now: number): string {
+export function ttlLeft(setAt: number, now: number): string {
   const rem = Math.max(0, STALE_AFTER_MS - (now - setAt));
   const h = Math.floor(rem / 3_600_000);
   const m = Math.floor((rem % 3_600_000) / 60_000);
   return h > 0 ? `${h}h${String(m).padStart(2, "0")}m left` : `${m}m left`;
+}
+
+/* Value formatters shared with the TUI meters (src/tui.ts) — one source of
+ * truth so the board and `cadence signals` can never drift apart. */
+export function musicValue(m: MusicSignal): string {
+  return `${JSON.stringify(m.track)}${m.artist ? ` — ${m.artist}` : ""}${m.player ? ` (${m.player})` : ""}`;
+}
+
+export function reportValue(r: SelfReportSignal, now: number): string {
+  const text = r.text.length > 44 ? `${r.text.slice(0, 43)}…` : r.text;
+  return `${JSON.stringify(text)} (${ttlLeft(r.setAt, now)})`;
+}
+
+export function gitValue(g: GitSignal): string {
+  const parts = [
+    g.commitsLastHour > 0
+      ? `${g.commitsLastHour} commit${g.commitsLastHour === 1 ? "" : "s"}/hr`
+      : null,
+    g.filesDirty > 0 ? `${g.filesDirty} dirty` : "clean tree",
+    g.minSinceLastCommit != null ? `last commit ${g.minSinceLastCommit}m ago` : null,
+    g.conflicted ? "mid-conflict" : null,
+  ].filter(Boolean);
+  return parts.join(", ");
 }
 
 function environmentRows(
@@ -130,12 +153,7 @@ function musicRows(m: MusicSignal | null, providers: ProviderConfig): string[] {
     : row("source", "macOS apps only", "(cross-platform: cadence spotify)");
   if (!m?.track) return [top("music", "— nothing playing"), spotify];
   const lines = ["  music"];
-  lines.push(
-    row(
-      "track",
-      `${JSON.stringify(m.track)}${m.artist ? ` — ${m.artist}` : ""}${m.player ? ` (${m.player})` : ""}`
-    )
-  );
+  lines.push(row("track", musicValue(m)));
   lines.push(m.vibe ? row("vibe", m.vibe) : row("vibe", "— no tags yet (looked up once per artist)"));
   lines.push(spotify);
   return lines;
@@ -143,21 +161,12 @@ function musicRows(m: MusicSignal | null, providers: ProviderConfig): string[] {
 
 function reportRow(r: SelfReportSignal | null, now: number): string {
   if (!r) return top("self_report", '— none set (run: cadence report "...")');
-  const text = r.text.length > 44 ? `${r.text.slice(0, 43)}…` : r.text;
-  return top("self_report", `${JSON.stringify(text)} (${ttlLeft(r.setAt, now)})`);
+  return top("self_report", reportValue(r, now));
 }
 
 function gitRow(g: GitSignal | null): string {
   if (!g) return top("git", "— not a git repo (signal is per-directory)");
-  const parts = [
-    g.commitsLastHour > 0
-      ? `${g.commitsLastHour} commit${g.commitsLastHour === 1 ? "" : "s"}/hr`
-      : null,
-    g.filesDirty > 0 ? `${g.filesDirty} dirty` : "clean tree",
-    g.minSinceLastCommit != null ? `last commit ${g.minSinceLastCommit}m ago` : null,
-    g.conflicted ? "mid-conflict" : null,
-  ].filter(Boolean);
-  return top("git", parts.join(", "));
+  return top("git", gitValue(g));
 }
 
 function intentRow(): string {

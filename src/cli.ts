@@ -6,12 +6,29 @@ import { getMusicSignal } from "./providers/music.js";
 import { getSelfReportSignal, STALE_AFTER_MS } from "./providers/selfreport.js";
 import { getEnvironmentSignal } from "./providers/environment.js";
 import { getGitSignal } from "./providers/git.js";
-import { loadOverrides, resolveDialLevel, DIALS, DIAL_WORDS } from "./cadence.js";
-import { buildEnvelope } from "./envelope.js";
-import { renderSignalsTable } from "./signals-view.js";
+import { getEsotericSignal } from "./providers/esoteric.js";
+import {
+  deriveCadence,
+  buildReframe,
+  loadOverrides,
+  applyOverrides,
+  resolveDialLevel,
+  DIALS,
+  DIAL_WORDS,
+} from "./cadence.js";
+import { render } from "./inject.js";
+import { renderSignalsTable, type RawSignals } from "./signals-view.js";
+import { runInstrument } from "./tui.js";
 import { loadProviders, providerEnabled, isPaused, OPT_IN_PROVIDERS } from "./config.js";
 import { connectSpotify, REDIRECT_URI } from "./spotify-auth.js";
-import type { Cadence, DialLevel } from "./types.js";
+import type {
+  Signal,
+  UserState,
+  StateWithCadence,
+  EsotericSignal,
+  Cadence,
+  DialLevel,
+} from "./types.js";
 
 const CADENCE_DIR = join(homedir(), ".cadence");
 const STATE_FILE = join(CADENCE_DIR, "state.txt");
@@ -53,13 +70,60 @@ async function cmdClear() {
   console.log("  self-report cleared");
 }
 
-// Renders the exact block the hook would inject, or null when there's nothing
-// to say. Shared by `test` and the bare command; the collection itself lives
-// in envelope.ts (the seam the hook and MCP server read through too). The
-// budget is generous — interactive preview, not the prompt critical path.
+// One provider sweep → the structured envelope shared by `test`, the static
+// bare command, and the live instrument. `state` is null when the hook would
+// stay silent; `raw`/dials are always populated so the board never goes blank.
+interface Envelope {
+  state: StateWithCadence | null;
+  raw: RawSignals;
+  esoteric: EsotericSignal | null;
+  cadence: Cadence;
+  pinned: (keyof Cadence)[];
+  reframe: string;
+  paused: boolean;
+}
+
+async function collectEnvelope(now = Date.now()): Promise<Envelope> {
+  const signals: Signal[] = [];
+  const providers = await loadProviders();
+  const [music, report, environment, git, esoteric, overrides, paused] = await Promise.all([
+    getMusicSignal(providers).catch(() => null),
+    getSelfReportSignal().catch(() => null),
+    getEnvironmentSignal(new Date(now), {
+      focusedAppEnabled: providerEnabled(providers, "focusedApp"),
+      wifiEnabled: providerEnabled(providers, "wifi"),
+    }).catch(() => null),
+    getGitSignal(process.cwd()).catch(() => null),
+    getEsotericSignal(providers).catch(() => null),
+    loadOverrides(),
+    isPaused(),
+  ]);
+  if (music) signals.push(music);
+  if (report) signals.push(report);
+  if (environment) signals.push(environment);
+  if (git) signals.push(git);
+  if (esoteric) signals.push(esoteric);
+
+  const state: UserState = { signals, capturedAt: now };
+  const { cadence, pinned } = applyOverrides(deriveCadence(state), overrides);
+  const reframe = buildReframe(cadence);
+  const silent = signals.length === 0 && Object.keys(overrides).length === 0;
+  return {
+    state: silent ? null : { ...state, cadence, pinned, reframe },
+    raw: { music, report, environment, git, providers, now, platform: process.platform },
+    esoteric,
+    cadence,
+    pinned,
+    reframe,
+    paused,
+  };
+}
+
+// Renders the exact block the hook would inject, or null when there's
+// nothing to say. Shared by `test` and the static bare command.
 async function buildPreview(): Promise<string | null> {
-  const envelope = await buildEnvelope({ cwd: process.cwd(), budgetMs: 10_000 });
-  return envelope?.block ?? null;
+  const e = await collectEnvelope();
+  return e.state ? render(e.state) : null;
 }
 
 async function cmdTest() {
@@ -371,8 +435,9 @@ const INPUTS_FOOTER = `  where you can input:
     cadence start                    interactive setup
     cadence help                     everything else`;
 
-// Bare \`cadence\`: live status + where to input — not a help dump.
-async function cmdRoot() {
+// Bare \`cadence\`: the live instrument in a real terminal; the same static
+// status everywhere else (pipes, CI, TERM=dumb, --plain) — not a help dump.
+async function cmdRoot(rest: string[] = []) {
   if (await isPaused()) {
     console.log("\n  cadence is paused — prompts go through untouched.");
     console.log("  resume: cadence resume\n");
@@ -383,6 +448,30 @@ async function cmdRoot() {
     console.log("  It hasn't heard from you yet. Fastest start:\n");
     console.log('    cadence start              guided setup (~30s)');
     console.log('    cadence report "ship mode"  or just say how you are\n');
+    return;
+  }
+  // The board needs a real terminal on BOTH ends — anything piped or dumb
+  // keeps today's static output byte-for-byte.
+  const interactive =
+    process.stdout.isTTY === true &&
+    process.stdin.isTTY === true &&
+    process.env["TERM"] !== "dumb" &&
+    !rest.includes("--plain");
+  if (interactive) {
+    await runInstrument(async () => {
+      const e = await collectEnvelope();
+      return {
+        cadence: e.cadence,
+        pinned: e.pinned,
+        reframe: e.reframe,
+        raw: e.raw,
+        esoteric: e.esoteric,
+        now: e.raw.now,
+        paused: e.paused,
+      };
+    });
+    // Land back on the primary screen with the affordances visible.
+    console.log("\n" + INPUTS_FOOTER + "\n");
     return;
   }
   const block = await buildPreview();
@@ -460,7 +549,8 @@ const HELP = `
   cadence — agents that read the room
 
   daily:
-    cadence                     live status + where to input
+    cadence                     the live instrument (q quits; static when piped)
+    cadence --plain             force the static status in a terminal
     cadence start               guided setup (self-report, dials, weather — all skippable)
     cadence report "..."        set your self-report (e.g. "two beers, ship mode")
     cadence report              print current self-report
@@ -534,7 +624,9 @@ async function main() {
       // nothing else. Runs until the client closes stdin.
       return (await import("./mcp.js")).runMcpServer();
     case undefined:
-      return cmdRoot(); // live status + inputs, not the help dump
+      return cmdRoot(); // the live instrument (static when piped)
+    case "--plain":
+      return cmdRoot(["--plain"]); // force the static status in a TTY
     case "help":
     case "--help":
     case "-h":

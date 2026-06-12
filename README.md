@@ -166,6 +166,7 @@ MusicBrainz, no audio-features.
 ## Daily use
 
 ```bash
+cadence                                # the live instrument: dials, meters, readout (q quits)
 cadence report "two beers, shipping"   # set self-reported state (expires in 2h)
 cadence report                         # print current self-report
 cadence clear                         # clear it
@@ -174,6 +175,11 @@ cadence signals                       # every signal — live value, or why it's
 cadence pause                         # silence all hooks (state survives untouched)
 cadence resume                        # start reading the room again
 ```
+
+Bare `cadence` in a terminal opens the live instrument — four dial faders,
+signal meters, and the reframe readout, refreshed every 2s. Piped or in CI it
+prints the same static status it always has; `cadence --plain` forces the
+static view in a terminal.
 
 `cadence signals` is the legibility view: it never goes silent. Every signal
 Cadence knows how to read is listed with its live value, or the exact reason

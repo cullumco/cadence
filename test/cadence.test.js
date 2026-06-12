@@ -989,3 +989,116 @@ test("mcp e2e: spawned server speaks pure JSON-RPC and exits 0 on stdin close", 
     `expected a room or an honest fallback, got: ${text}`
   );
 });
+
+// ── the instrument (TUI) — pure frame renderer ──────────────────────────────
+// Frames are rendered with color:false and an injected clock, so every
+// assertion below is plain text — no ANSI, no real time, no terminal.
+import { fader, renderInstrument } from "../dist/tui.js";
+import { musicValue, reportValue, gitValue } from "../dist/signals-view.js";
+
+const NOW = Date.UTC(2026, 5, 10, 21, 42, 8);
+const NEUTRAL = { pace: "medium", tone: "medium", posture: "medium", proactivity: "medium" };
+const EMPTY_RAW = { music: null, report: null, environment: null, git: null, now: NOW, platform: "darwin" };
+function makeFrame(over = {}) {
+  return {
+    cadence: NEUTRAL,
+    pinned: [],
+    reframe: buildReframe(over.cadence ?? NEUTRAL),
+    raw: EMPTY_RAW,
+    esoteric: null,
+    now: NOW,
+    paused: false,
+    ...over,
+  };
+}
+
+test("fader: thumbs land at deterministic indices; pinned uses ◆", () => {
+  assert.equal(fader("low", 21, false), "──◉" + "─".repeat(18));
+  assert.equal(fader("medium", 21, false).indexOf("◉"), 10); // floor(21/2)
+  assert.equal(fader("high", 21, false).indexOf("◉"), 18); // 21-3
+  for (const lvl of ["low", "medium", "high"]) {
+    assert.equal([...fader(lvl, 21, false)].length, 21, "track keeps its width");
+  }
+  const pinned = fader("high", 21, true);
+  assert.ok(pinned.includes("◆") && !pinned.includes("◉"));
+});
+
+test("renderInstrument: pinned dial shows word* + ◆, unpinned stay inferred (inject.ts convention)", () => {
+  const out = renderInstrument(
+    makeFrame({ cadence: { ...NEUTRAL, posture: "high" }, pinned: ["posture"] }),
+    { width: 78, color: false }
+  );
+  assert.match(out, /posture.*◆.*decisive\*/s);
+  assert.match(out, /pace.*◉.*steady/);
+  assert.ok(!out.includes("steady*"), "unpinned dials never get the star");
+  assert.ok(!out.includes("\x1b["), "color:false means zero ANSI bytes");
+});
+
+test("renderInstrument: live meters use shared formatters; absent show dormant glyph + reason", () => {
+  const report = { source: "self_report", text: "two beers, ship mode", setAt: NOW - 48 * 60_000 };
+  const git = { source: "git", commitsLastHour: 3, filesDirty: 5, minSinceLastCommit: 9, conflicted: false };
+  const out = renderInstrument(
+    makeFrame({ raw: { ...EMPTY_RAW, report, git } }),
+    { width: 78, color: false }
+  );
+  // 2h TTL − 48m elapsed = 1h12m — straight from the injected clock
+  assert.match(out, /self_report\s+▮▮ "two beers, ship mode" \(1h12m left\)/);
+  assert.ok(out.includes(`▮▮ ${gitValue(git)}`), "git meter is gitValue verbatim");
+  assert.match(out, /music\s+░░ nothing playing/);
+  assert.match(out, /environment\s+░░ unavailable/);
+  assert.match(out, /intent\s+░░ reads your prompt/);
+  assert.match(out, /activity\s+░░ session-only/);
+});
+
+test("renderInstrument: reframe wraps to width and keeps the literal-words deferral", () => {
+  const cadence = { pace: "high", tone: "low", posture: "high", proactivity: "high" };
+  const width = 64;
+  const out = renderInstrument(makeFrame({ cadence, reframe: buildReframe(cadence) }), { width, color: false });
+  const lines = out.split("\n");
+  const start = lines.indexOf("  readout") + 1;
+  const readout = lines.slice(start, lines.indexOf("", start));
+  assert.ok(readout.length > 1, "a four-part reframe wraps past one line at 64 cols");
+  for (const line of readout) {
+    assert.ok(line.length <= width, `readout line overflows ${width}: ${JSON.stringify(line)}`);
+  }
+  const flat = readout.map((l) => l.trim()).join(" ");
+  assert.match(flat, /If my words clearly mean otherwise — in what I ask or how I sound — follow my words\.$/);
+});
+
+test("renderInstrument: paused frame swaps the dials for the banner", () => {
+  const out = renderInstrument(makeFrame({ paused: true }), { width: 78, color: false });
+  assert.match(out, /paused — prompts go through untouched \(cadence resume\)/);
+  assert.ok(!out.includes("◉") && !out.includes("◆"), "no faders while paused");
+  assert.match(out, /meters/, "meters stay visible — pause silences hooks, not legibility");
+});
+
+test("shared formatters: signals table renders musicValue/reportValue/gitValue verbatim", () => {
+  const music = { source: "music", track: "Halcyon + On + On", artist: "Orbital", player: "Spotify", vibe: "driving, hypnotic" };
+  const report = { source: "self_report", text: "two beers, ship mode", setAt: NOW - 48 * 60_000 };
+  const git = { source: "git", commitsLastHour: 1, filesDirty: 0, minSinceLastCommit: 9, conflicted: true };
+  const table = renderSignalsTable({ music, report, environment: null, git, now: NOW, platform: "darwin" });
+  assert.ok(table.includes(musicValue(music)));
+  assert.ok(table.includes(reportValue(report, NOW)));
+  assert.ok(table.includes(gitValue(git)));
+  assert.equal(gitValue(git), "1 commit/hr, clean tree, last commit 9m ago, mid-conflict");
+});
+
+test("bare cadence piped (non-TTY): static output, no alt-screen escapes", async () => {
+  const { execFile } = await import("node:child_process");
+  const { mkdtemp } = await import("node:fs/promises");
+  const { tmpdir } = await import("node:os");
+  const { join: pjoin } = await import("node:path");
+  const home = await mkdtemp(pjoin(tmpdir(), "cadence-tui-test-"));
+  const stdout = await new Promise((resolve, reject) => {
+    execFile(
+      process.execPath,
+      [pjoin(import.meta.dirname, "..", "dist", "cli.js")],
+      { env: { ...process.env, HOME: home }, timeout: 15_000 },
+      (err, out) => (err ? reject(err) : resolve(out))
+    );
+  });
+  // Fresh HOME = onboarding path; piped stdio = never the instrument.
+  assert.match(stdout, /hasn't heard from you yet/);
+  assert.ok(!stdout.includes("\x1b[?1049"), "no alt-screen byte ever hits a pipe");
+  assert.ok(!stdout.includes("\x1b[?25l"), "no hide-cursor byte either");
+});

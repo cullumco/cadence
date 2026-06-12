@@ -66,10 +66,12 @@ function renderPlace(p: PlaceSignal): string {
   return `    place: { ${parts.join(" ")} }`;
 }
 
-function renderEnvironment(a: EnvironmentSignal): string {
-  // Human-readable atmosphere line, e.g.
-  //   "friday late night, rainy, unplugged 8%, dark mode, on Home-wifi, up 14h"
-  const parts = [
+// Human-readable atmosphere parts, e.g.
+//   ["friday late night", "rainy", "unplugged 8%", "dark mode", "up 14h"]
+// Exported so the TUI environment meter (src/tui.ts) shows the same condensed
+// line the hook injects — one threshold source, never two.
+export function environmentParts(a: EnvironmentSignal): string[] {
+  return [
     a.isWeekend ? `${a.dayOfWeek} ${a.partOfDay}` : a.partOfDay,
     a.weather ?? null,
     a.onBattery === true
@@ -82,8 +84,11 @@ function renderEnvironment(a: EnvironmentSignal): string {
     a.network ? `on ${quote(a.network)}` : null,
     a.loadHigh ? "machine busy" : null,
     a.uptimeHours != null && a.uptimeHours >= 12 ? `up ${a.uptimeHours}h` : null,
-  ].filter(Boolean);
-  return `    context: ${parts.join(", ")}`;
+  ].filter(Boolean) as string[];
+}
+
+function renderEnvironment(a: EnvironmentSignal): string {
+  return `    context: ${environmentParts(a).join(", ")}`;
 }
 
 function renderEsoteric(e: EsotericSignal): string[] {
