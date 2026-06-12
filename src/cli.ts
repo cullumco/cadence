@@ -6,21 +6,12 @@ import { getMusicSignal } from "./providers/music.js";
 import { getSelfReportSignal, STALE_AFTER_MS } from "./providers/selfreport.js";
 import { getEnvironmentSignal } from "./providers/environment.js";
 import { getGitSignal } from "./providers/git.js";
-import { getEsotericSignal } from "./providers/esoteric.js";
-import {
-  deriveCadence,
-  buildReframe,
-  loadOverrides,
-  applyOverrides,
-  resolveDialLevel,
-  DIALS,
-  DIAL_WORDS,
-} from "./cadence.js";
-import { render } from "./inject.js";
+import { loadOverrides, resolveDialLevel, DIALS, DIAL_WORDS } from "./cadence.js";
+import { buildEnvelope } from "./envelope.js";
 import { renderSignalsTable } from "./signals-view.js";
 import { loadProviders, providerEnabled, isPaused, OPT_IN_PROVIDERS } from "./config.js";
 import { connectSpotify, REDIRECT_URI } from "./spotify-auth.js";
-import type { Signal, UserState, Cadence, DialLevel } from "./types.js";
+import type { Cadence, DialLevel } from "./types.js";
 
 const CADENCE_DIR = join(homedir(), ".cadence");
 const STATE_FILE = join(CADENCE_DIR, "state.txt");
@@ -62,34 +53,13 @@ async function cmdClear() {
   console.log("  self-report cleared");
 }
 
-// Collects live signals and renders the exact block the hook would inject,
-// or null when there's nothing to say. Shared by `test` and the bare command.
+// Renders the exact block the hook would inject, or null when there's nothing
+// to say. Shared by `test` and the bare command; the collection itself lives
+// in envelope.ts (the seam the hook and MCP server read through too). The
+// budget is generous — interactive preview, not the prompt critical path.
 async function buildPreview(): Promise<string | null> {
-  const signals: Signal[] = [];
-  const providers = await loadProviders();
-  const [music, report, environment, git, esoteric, overrides] = await Promise.all([
-    getMusicSignal(providers).catch(() => null),
-    getSelfReportSignal().catch(() => null),
-    getEnvironmentSignal(new Date(), {
-      focusedAppEnabled: providerEnabled(providers, "focusedApp"),
-      wifiEnabled: providerEnabled(providers, "wifi"),
-    }).catch(() => null),
-    getGitSignal(process.cwd()).catch(() => null),
-    getEsotericSignal(providers).catch(() => null),
-    loadOverrides(),
-  ]);
-  if (music) signals.push(music);
-  if (report) signals.push(report);
-  if (environment) signals.push(environment);
-  if (git) signals.push(git);
-  if (esoteric) signals.push(esoteric);
-
-  if (signals.length === 0 && Object.keys(overrides).length === 0) return null;
-
-  const state: UserState = { signals, capturedAt: Date.now() };
-  const { cadence, pinned } = applyOverrides(deriveCadence(state), overrides);
-  const reframe = buildReframe(cadence);
-  return render({ ...state, cadence, pinned, reframe });
+  const envelope = await buildEnvelope({ cwd: process.cwd(), budgetMs: 10_000 });
+  return envelope?.block ?? null;
 }
 
 async function cmdTest() {
@@ -519,6 +489,10 @@ const HELP = `
   music (macOS reads Spotify.app / Music.app automatically):
     cadence spotify connect <id>      link Spotify (cross-platform, opens browser)
     cadence spotify off               unlink it
+
+  other surfaces:
+    cadence mcp                 stdio MCP server — same room in Claude Desktop etc.
+                                (don't add it inside Claude Code: hooks already inject)
 `;
 
 async function main() {
@@ -555,6 +529,10 @@ async function main() {
       return cmdDisable(rest);
     case "spotify":
       return cmdSpotify(rest);
+    case "mcp":
+      // stdio MCP server: from here on stdout is the JSON-RPC channel — print
+      // nothing else. Runs until the client closes stdin.
+      return (await import("./mcp.js")).runMcpServer();
     case undefined:
       return cmdRoot(); // live status + inputs, not the help dump
     case "help":

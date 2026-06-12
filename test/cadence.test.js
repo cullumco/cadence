@@ -813,3 +813,179 @@ test("buildReframe: defer clause is final and covers register too", () => {
     assert.match(lens, /in what I ask or how I sound — follow my words\.$/);
   }
 });
+
+// ── MCP server (handleMessage is a pure dispatcher — deps injected) ─────────
+import { handleMessage, handleLine, USER_STATE_URI, ENVELOPE_URI } from "../dist/mcp.js";
+
+const MCP_BLOCK = "<user_state>\n  signals:\n    self_report: \"ship mode\"\n</user_state>";
+const MCP_STATE = {
+  signals: [{ source: "self_report", text: "ship mode", setAt: 0 }],
+  capturedAt: 0,
+  cadence: { pace: "high", tone: "medium", posture: "high", proactivity: "high" },
+  pinned: [],
+  reframe: "x",
+};
+const mcpDeps = (over = {}) => ({
+  buildEnvelope: async () => ({ block: MCP_BLOCK, state: MCP_STATE }),
+  isPaused: async () => false,
+  cwd: () => "/tmp/mcp-test",
+  version: "0.0.0-test",
+  ...over,
+});
+const rpc = (id, method, params) => ({ jsonrpc: "2.0", id, method, ...(params ? { params } : {}) });
+
+test("mcp initialize: echoes a supported protocolVersion, falls back on unknown", async () => {
+  const deps = mcpDeps();
+  const res = await handleMessage(
+    rpc(1, "initialize", { protocolVersion: "2025-03-26", capabilities: {}, clientInfo: { name: "t", version: "0" } }),
+    deps
+  );
+  assert.equal(res.result.protocolVersion, "2025-03-26");
+  assert.equal(res.result.serverInfo.name, "cadence");
+  assert.equal(res.result.serverInfo.version, "0.0.0-test");
+  assert.ok(res.result.instructions.includes("get_user_state"));
+
+  const future = await handleMessage(rpc(2, "initialize", { protocolVersion: "2099-01-01" }), deps);
+  assert.equal(future.result.protocolVersion, "2025-06-18");
+});
+
+test("mcp resources/list: user-state (text) and envelope (json), nothing else", async () => {
+  const res = await handleMessage(rpc(1, "resources/list"), mcpDeps());
+  const resources = res.result.resources;
+  assert.equal(resources.length, 2);
+  assert.equal(resources[0].uri, USER_STATE_URI);
+  assert.equal(resources[0].mimeType, "text/plain");
+  assert.equal(resources[1].uri, ENVELOPE_URI);
+  assert.equal(resources[1].mimeType, "application/json");
+});
+
+test("mcp resources/read: returns the rendered block; envelope is parseable JSON; unknown URI is -32002", async () => {
+  const calls = [];
+  const deps = mcpDeps({
+    buildEnvelope: async (opts) => {
+      calls.push(opts);
+      return { block: MCP_BLOCK, state: MCP_STATE };
+    },
+  });
+  const text = await handleMessage(rpc(1, "resources/read", { uri: USER_STATE_URI }), deps);
+  assert.equal(text.result.contents[0].text, MCP_BLOCK);
+  assert.equal(text.result.contents[0].uri, USER_STATE_URI);
+  // the server's own cwd, never a model-supplied path (no cwd argument exists)
+  assert.equal(calls[0].cwd, "/tmp/mcp-test");
+
+  const json = await handleMessage(rpc(2, "resources/read", { uri: ENVELOPE_URI }), deps);
+  assert.deepEqual(JSON.parse(json.result.contents[0].text), MCP_STATE);
+  assert.equal(json.result.contents[0].mimeType, "application/json");
+
+  const missing = await handleMessage(rpc(3, "resources/read", { uri: "cadence://nope" }), deps);
+  assert.equal(missing.error.code, -32002);
+});
+
+test("mcp tools: get_user_state takes no arguments and returns the block as text", async () => {
+  const deps = mcpDeps();
+  const list = await handleMessage(rpc(1, "tools/list"), deps);
+  const tool = list.result.tools[0];
+  assert.equal(list.result.tools.length, 1);
+  assert.equal(tool.name, "get_user_state");
+  assert.equal(tool.inputSchema.type, "object");
+  assert.deepEqual(tool.inputSchema.properties, {}); // no cwd by design
+
+  const call = await handleMessage(rpc(2, "tools/call", { name: "get_user_state", arguments: {} }), deps);
+  assert.equal(call.result.content[0].type, "text");
+  assert.equal(call.result.content[0].text, MCP_BLOCK);
+
+  const unknown = await handleMessage(rpc(3, "tools/call", { name: "rm_rf" }), deps);
+  assert.equal(unknown.error.code, -32602);
+});
+
+test("mcp paused: honest paused text on both surfaces, no collection at all", async () => {
+  let collected = 0;
+  const deps = mcpDeps({
+    isPaused: async () => true,
+    buildEnvelope: async () => {
+      collected += 1;
+      return null;
+    },
+  });
+  const read = await handleMessage(rpc(1, "resources/read", { uri: USER_STATE_URI }), deps);
+  assert.match(read.result.contents[0].text, /paused/);
+  const call = await handleMessage(rpc(2, "tools/call", { name: "get_user_state" }), deps);
+  assert.match(call.result.content[0].text, /paused/);
+  assert.equal(collected, 0);
+});
+
+test("mcp empty room: a requested read answers honestly, never with empty contents", async () => {
+  const deps = mcpDeps({ buildEnvelope: async () => null });
+  const call = await handleMessage(rpc(1, "tools/call", { name: "get_user_state" }), deps);
+  assert.match(call.result.content[0].text, /no signals right now and no pinned dials/);
+  const json = await handleMessage(rpc(2, "resources/read", { uri: ENVELOPE_URI }), deps);
+  assert.deepEqual(JSON.parse(json.result.contents[0].text).signals, []);
+});
+
+test("mcp protocol edges: notifications stay silent, unknown method -32601, parse error -32700", async () => {
+  const deps = mcpDeps();
+  assert.equal(await handleMessage({ jsonrpc: "2.0", method: "notifications/initialized" }, deps), null);
+  assert.equal(await handleMessage({ jsonrpc: "2.0", method: "notifications/cancelled" }, deps), null);
+  assert.equal(await handleLine("   ", deps), null);
+
+  const unknown = await handleMessage(rpc(1, "resources/subscribe", { uri: USER_STATE_URI }), deps);
+  assert.equal(unknown.error.code, -32601);
+
+  const bad = JSON.parse(await handleLine("{not json", deps));
+  assert.equal(bad.error.code, -32700);
+  assert.equal(bad.id, null);
+
+  const pong = await handleMessage(rpc(7, "ping"), deps);
+  assert.deepEqual(pong.result, {});
+});
+
+test("mcp batch: legacy JSON-RPC batch arrays unwrap to per-message responses", async () => {
+  const res = await handleMessage(
+    [rpc(1, "ping"), { jsonrpc: "2.0", method: "notifications/initialized" }, rpc(2, "tools/list")],
+    mcpDeps()
+  );
+  assert.equal(res.length, 2); // the notification got no entry
+  assert.equal(res[0].id, 1);
+  assert.equal(res[1].result.tools[0].name, "get_user_state");
+});
+
+test("mcp fail-silent: a throwing collection still answers the request", async () => {
+  const deps = mcpDeps({
+    buildEnvelope: async () => {
+      throw new Error("provider exploded");
+    },
+  });
+  const call = await handleMessage(rpc(1, "tools/call", { name: "get_user_state" }), deps);
+  assert.equal(call.error, undefined); // a normal result, not a dead request
+  assert.match(call.result.content[0].text, /could not read the room/);
+});
+
+test("mcp e2e: spawned server speaks pure JSON-RPC and exits 0 on stdin close", async () => {
+  const { spawn } = await import("node:child_process");
+  const { once } = await import("node:events");
+  const { fileURLToPath } = await import("node:url");
+  const root = fileURLToPath(new URL("..", import.meta.url));
+  const proc = spawn(process.execPath, ["dist/cli.js", "mcp"], { cwd: root });
+  proc.stdin.write(
+    [
+      JSON.stringify(rpc(1, "initialize", { protocolVersion: "2025-06-18", capabilities: {}, clientInfo: { name: "t", version: "0" } })),
+      JSON.stringify({ jsonrpc: "2.0", method: "notifications/initialized" }),
+      JSON.stringify(rpc(2, "tools/call", { name: "get_user_state", arguments: {} })),
+    ].join("\n") + "\n"
+  );
+  proc.stdin.end();
+  let out = "";
+  let err = "";
+  proc.stdout.on("data", (d) => (out += d));
+  proc.stderr.on("data", (d) => (err += d));
+  const [code] = await once(proc, "close");
+  assert.equal(code, 0, `stderr: ${err}`);
+  const lines = out.trim().split("\n").map((l) => JSON.parse(l)); // any stray stdout fails the parse
+  assert.equal(lines.length, 2); // initialize + tools/call; the notification stayed silent
+  assert.equal(lines[0].result.serverInfo.name, "cadence");
+  const text = lines[1].result.content[0].text;
+  assert.ok(
+    text.includes("<user_state>") || text.startsWith("("),
+    `expected a room or an honest fallback, got: ${text}`
+  );
+});

@@ -235,6 +235,39 @@ Today the adapter-specific delivery is Claude Code's `UserPromptSubmit` and
 rendering are kept separate so future adapters can deliver the same cadence
 state through other agent surfaces.
 
+## Same room in Claude Desktop (MCP)
+
+`cadence mcp` runs a zero-dependency MCP stdio server exposing the same
+`<user_state>` block as a `cadence://user-state` resource (plus a JSON twin,
+`cadence://envelope`) and a `get_user_state` tool. Claude Desktop
+(Settings → Developer → Edit Config, `claude_desktop_config.json`):
+
+```json
+{
+  "mcpServers": {
+    "cadence": {
+      "command": "npx",
+      "args": ["-y", "@cullumco/cadence", "mcp"]
+    }
+  }
+}
+```
+
+(If you installed globally, `"command": "cadence", "args": ["mcp"]` skips the
+npx cold start. Cursor and other stdio MCP clients take the same command.)
+
+Every read collects fresh signals — no cache, bounded at 2s. Notes:
+
+- **Don't add it inside Claude Code** — the hooks already inject the room
+  there; the MCP server would double it.
+- The desktop room is shallower than the Claude Code one: no live prompt means
+  no intent signal, and a desktop-launched server usually has a non-repo cwd,
+  so git is typically absent.
+- claude.ai *web* can't connect: web only speaks remote servers, and your
+  signals live on your machine.
+- `cadence pause` silences this surface too (reads answer with an honest
+  "paused" text rather than a stale room).
+
 ## Alpha release checklist
 
 `@cullumco/cadence` is live on npm; each release is the same gated flow:

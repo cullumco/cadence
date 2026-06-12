@@ -92,9 +92,18 @@ complexity. Only worth it once V2/V3 each prove their gating keeps noise down.
 Keep the core reusable before adding more surfaces. Claude Code-specific pieces
 should stay in hook/adapter files; providers, dial derivation, stop decisions,
 and renderers should remain portable. Candidate future surfaces:
-- a JSON context CLI for any agent shell
-- MCP/resource-style context exposure
-- Codex/Cursor-style adapters if their hooks/context APIs support it
+- a JSON context CLI for any agent shell (partly covered: the MCP
+  `cadence://envelope` resource serves the structured JSON; a `cadence test
+  --json` flag is now a ~20-line follow-up on `buildEnvelope`)
+- MCP/resource-style context exposure — SHIPPED 2026-06: `cadence mcp`
+  (`src/mcp.ts`, hand-rolled stdio JSON-RPC, zero deps) serves
+  `cadence://user-state` + `cadence://envelope` + a `get_user_state` tool;
+  the collection seam moved to `src/envelope.ts` so hook/CLI/MCP share one
+  pipeline. Desktop-docs-only: NOT declared in `.claude-plugin` (hooks would
+  double-inject inside Claude Code). SDK tripwire: adopt
+  `@modelcontextprotocol/sdk` the day we want `resources/subscribe` or >3 tools.
+- Codex/Cursor-style adapters if their hooks/context APIs support it (any
+  stdio MCP client can already point at `cadence mcp`)
 - a thin Claude Code plugin wrapper once the hook shape settles
 
 ---

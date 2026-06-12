@@ -1,14 +1,7 @@
 #!/usr/bin/env node
-import { getMusicSignal } from "./providers/music.js";
-import { getSelfReportSignal } from "./providers/selfreport.js";
-import { getEnvironmentSignal } from "./providers/environment.js";
-import { getGitSignal } from "./providers/git.js";
-import { getActivitySignal } from "./providers/activity.js";
-import { getIntentSignal } from "./providers/intent.js";
-import { getEsotericSignal } from "./providers/esoteric.js";
 import { deriveCadence, buildReframe, loadOverrides, applyOverrides } from "./cadence.js";
-import { loadProviders, providerEnabled, isPaused } from "./config.js";
-import type { ProviderConfig } from "./config.js";
+import { loadProviders, isPaused } from "./config.js";
+import { collectSignals } from "./envelope.js";
 import { render } from "./inject.js";
 import { debug } from "./debug.js";
 import type { Signal, UserState, StateWithCadence } from "./types.js";
@@ -33,34 +26,8 @@ async function readStdin(): Promise<{ cwd?: string; prompt?: string }> {
   }
 }
 
-async function collectSignals(
-  cwd: string,
-  prompt: string | undefined,
-  providers: ProviderConfig
-): Promise<Signal[]> {
-  const tempoEnabled = providerEnabled(providers, "typingTempo");
-  const [music, report, environment, git, activity, intent, esoteric] = await Promise.allSettled([
-    getMusicSignal(providers),
-    getSelfReportSignal(),
-    getEnvironmentSignal(new Date(), {
-      focusedAppEnabled: providerEnabled(providers, "focusedApp"),
-      wifiEnabled: providerEnabled(providers, "wifi"),
-    }),
-    getGitSignal(cwd),
-    getActivitySignal(prompt, Date.now(), { tempoEnabled }),
-    getIntentSignal(prompt),
-    getEsotericSignal(providers),
-  ]);
-  const signals: Signal[] = [];
-  if (music.status === "fulfilled" && music.value) signals.push(music.value);
-  if (report.status === "fulfilled" && report.value) signals.push(report.value);
-  if (environment.status === "fulfilled" && environment.value) signals.push(environment.value);
-  if (git.status === "fulfilled" && git.value) signals.push(git.value);
-  if (activity.status === "fulfilled" && activity.value) signals.push(activity.value);
-  if (intent.status === "fulfilled" && intent.value) signals.push(intent.value);
-  if (esoteric.status === "fulfilled" && esoteric.value) signals.push(esoteric.value);
-  return signals;
-}
+// Signal collection lives in envelope.ts — the shared seam every surface
+// (hook, CLI preview, MCP server) reads through, so they can't drift apart.
 
 async function main() {
   // Paused = the user asked for silence. Check FIRST: no signals read, no
