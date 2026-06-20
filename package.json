@@ -24,7 +24,8 @@
     "dist",
     "bin",
     "README.md",
-    "ALPHA.md"
+    "ALPHA.md",
+    "LICENSE"
   ],
   "scripts": {
     "build": "tsc",
