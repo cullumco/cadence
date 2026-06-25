@@ -1497,3 +1497,175 @@ test("dj playerStateFrom: shapes /me/player JSON, missing fields degrade", async
   assert.deepEqual(playerStateFrom(null), { isPlaying: false });
   assert.deepEqual(playerStateFrom({}), { isPlaying: false });
 });
+
+// ── config.ts: the opt-in registry read helpers (pure, FS-free) ─────────────
+import { readProviders, providerSetting } from "../dist/config.js";
+
+test("readProviders: pulls the providers block, missing/garbled reads as empty", () => {
+  assert.deepEqual(readProviders({}), {}); // nothing opted in
+  assert.deepEqual(readProviders({ providers: { typingTempo: true } }), { typingTempo: true });
+  assert.deepEqual(readProviders({ providers: "nope" }), {}); // non-object ⇒ empty, not throw
+  assert.deepEqual(readProviders({ providers: null }), {});
+});
+
+test("providerSetting: raw setting when on, undefined when off (tri-state honesty)", () => {
+  assert.equal(providerSetting({ horoscope: "leo" }, "horoscope"), "leo"); // string setting
+  assert.deepEqual(providerSetting({ calendar: { ics: "u" } }, "calendar"), { ics: "u" }); // object setting
+  assert.equal(providerSetting({ horoscope: "" }, "horoscope"), undefined); // empty string ≠ consent
+  assert.equal(providerSetting({ focusedApp: false }, "focusedApp"), undefined);
+  assert.equal(providerSetting({}, "horoscope"), undefined); // never set
+});
+
+// ── cli.ts: the command surface that owns every ~/.cadence write ─────────────
+// cli.ts isn't importable (main() runs on load and the handlers aren't exported),
+// so we drive the SHIPPED binary with an isolated HOME — the same shape as the
+// hook integration and mcp e2e tests above. This is the source-of-truth layer
+// the skills orchestrate, so a config-mutation regression must not be silent.
+const CLI_PATH = new URL("../dist/cli.js", import.meta.url).pathname;
+function runCli(home, args) {
+  const env = { ...process.env, HOME: home };
+  for (const k of Object.keys(env)) if (k.startsWith("CADENCE_")) delete env[k];
+  return new Promise((resolve, reject) => {
+    const p = spawn(process.execPath, [CLI_PATH, ...args], { env, cwd: home });
+    let out = "";
+    let err = "";
+    p.stdout.on("data", (d) => (out += d));
+    p.stderr.on("data", (d) => (err += d));
+    p.on("close", (code) => resolve({ code, out, err }));
+    p.on("error", reject);
+  });
+}
+async function freshHome() {
+  return mkdtemp(joinPath(tmpdir(), "cadence-cli-"));
+}
+async function readCfg(home) {
+  return JSON.parse(await fsReadFile(joinPath(home, ".cadence", "config.json"), "utf-8"));
+}
+
+test("cli report: writes the self-report, prints it back with TTL, clears it", { timeout: 30_000 }, async () => {
+  const home = await freshHome();
+
+  const set = await runCli(home, ["report", "thinking through the design"]);
+  assert.equal(set.code, 0);
+  assert.match(set.out, /self-report set/);
+  assert.equal(
+    (await fsReadFile(joinPath(home, ".cadence", "state.txt"), "utf-8")),
+    "thinking through the design"
+  );
+
+  // bare `report` echoes the live value with a remaining-TTL tail
+  const show = await runCli(home, ["report"]);
+  assert.match(show.out, /thinking through the design/);
+  assert.match(show.out, /left\)/); // "(1h59m left)" — the same TTL the hook honors
+
+  const cleared = await runCli(home, ["clear"]);
+  assert.match(cleared.out, /self-report cleared/);
+  assert.equal((await fsReadFile(joinPath(home, ".cadence", "state.txt"), "utf-8")), "");
+
+  // an empty state reads honestly as "none", not as a blank report
+  const empty = await runCli(home, ["report"]);
+  assert.match(empty.out, /no self-report set/);
+});
+
+test("cli set/unset: pins persist to config.json; bad input exits non-zero", { timeout: 30_000 }, async () => {
+  const home = await freshHome();
+
+  const pin = await runCli(home, ["set", "pace", "high"]);
+  assert.equal(pin.code, 0);
+  assert.match(pin.out, /pinned pace/);
+  assert.equal((await readCfg(home)).pace, "high");
+
+  // dial WORDS resolve too, not just low|medium|high ("fast" ⇒ pace high)
+  const word = await runCli(home, ["set", "pace", "fast"]);
+  assert.equal(word.code, 0);
+  assert.equal((await readCfg(home)).pace, "high");
+
+  const badDial = await runCli(home, ["set", "bogus", "high"]);
+  assert.equal(badDial.code, 1);
+  assert.match(badDial.err, /unknown dial/);
+
+  const badLevel = await runCli(home, ["set", "pace", "sideways"]);
+  assert.equal(badLevel.code, 1);
+  assert.match(badLevel.err, /isn't valid/);
+
+  // a second pin coexists; unsetting one leaves the other
+  await runCli(home, ["set", "tone", "low"]);
+  assert.equal((await readCfg(home)).tone, "low");
+  await runCli(home, ["unset", "pace"]);
+  const afterUnset = await readCfg(home);
+  assert.equal(afterUnset.pace, undefined);
+  assert.equal(afterUnset.tone, "low");
+
+  // `unset all` wipes the board back to fully inferred
+  const all = await runCli(home, ["unset", "all"]);
+  assert.match(all.out, /unpinned all/);
+  assert.deepEqual(await readCfg(home), {});
+});
+
+test("cli enable/disable: opt-in registry round-trips; unknown signal exits 1", { timeout: 30_000 }, async () => {
+  const home = await freshHome();
+
+  const on = await runCli(home, ["enable", "typingTempo"]);
+  assert.equal(on.code, 0);
+  assert.match(on.out, /enabled typingTempo/);
+  assert.equal((await readCfg(home)).providers.typingTempo, true);
+
+  // a valued opt-in stores its setting (horoscope sign), not just `true`
+  await runCli(home, ["enable", "horoscope", "leo"]);
+  assert.equal((await readCfg(home)).providers.horoscope, "leo");
+
+  const unknown = await runCli(home, ["enable", "definitelyNotASignal"]);
+  assert.equal(unknown.code, 1);
+  assert.match(unknown.err, /unknown signal/);
+
+  const off = await runCli(home, ["disable", "typingTempo"]);
+  assert.match(off.out, /disabled typingTempo/);
+  assert.equal((await readCfg(home)).providers.typingTempo, undefined);
+  assert.equal((await readCfg(home)).providers.horoscope, "leo"); // untouched
+});
+
+test("cli pause/resume: the kill switch toggles the flag and the bare readout", { timeout: 30_000 }, async () => {
+  const home = await freshHome();
+
+  const paused = await runCli(home, ["pause"]);
+  assert.match(paused.out, /paused/);
+  assert.equal((await readCfg(home)).paused, true);
+
+  // bare `cadence` (non-TTY) reports the paused state instead of a board
+  const bare = await runCli(home, []);
+  assert.match(bare.out, /paused/);
+
+  const resumed = await runCli(home, ["resume"]);
+  assert.match(resumed.out, /resumed/);
+  assert.equal((await readCfg(home)).paused, undefined); // flag deleted, not set false
+});
+
+test("cli set-location: opts into weather, rejects non-numeric coordinates", { timeout: 30_000 }, async () => {
+  const home = await freshHome();
+
+  const ok = await runCli(home, ["set-location", "40.71", "-74.01", "NYC"]);
+  assert.equal(ok.code, 0);
+  assert.match(ok.out, /weather is now on/);
+  assert.deepEqual((await readCfg(home)).location, { lat: 40.71, lon: -74.01, name: "NYC" });
+
+  const bad = await runCli(home, ["set-location", "abc", "def"]);
+  assert.equal(bad.code, 1);
+  assert.match(bad.err, /must be numbers/);
+});
+
+test("cli test: renders the exact injected block end-to-end (envelope → render)", { timeout: 30_000 }, async () => {
+  const home = await freshHome();
+  await runCli(home, ["report", "reviewing the parser"]); // guarantee at least one signal
+
+  const preview = await runCli(home, ["test"]);
+  assert.equal(preview.code, 0);
+  assert.match(preview.out, /<user_state>/); // the block the hook injects
+  assert.match(preview.out, /reviewing the parser/); // the self-report surfaces in it
+});
+
+test("cli unknown command: exits 1 and points at help", { timeout: 30_000 }, async () => {
+  const home = await freshHome();
+  const r = await runCli(home, ["definitely-not-a-command"]);
+  assert.equal(r.code, 1);
+  assert.match(r.err, /unknown command/);
+});
