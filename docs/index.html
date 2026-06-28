@@ -4,33 +4,33 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Cadence — agents that read the room</title>
-<meta name="description" content="An ambient context layer for Claude Code. Cadence gives agents the room around the prompt — signals, four dials, and a lens for reading what you meant.">
+<meta name="description" content="An ambient context layer for Claude Code and Codex. Cadence gives agents the room around the prompt — signals, four dials, and a lens for reading what you meant.">
 <meta name="theme-color" content="#100e0c">
 <meta property="og:title" content="Cadence — agents that read the room">
-<meta property="og:description" content="An ambient context layer for Claude Code. Cadence gives agents the room around the prompt.">
+<meta property="og:description" content="An ambient context layer for Claude Code and Codex. Cadence gives agents the room around the prompt.">
 <meta property="og:type" content="website">
 <meta property="og:url" content="https://cadence.cullum.co/">
 <meta property="og:site_name" content="Cadence">
 <meta property="og:image" content="https://cadence.cullum.co/og.png">
 <meta property="og:image:width" content="1200">
 <meta property="og:image:height" content="630">
-<meta property="og:image:alt" content="Cadence — agents that read the room. An ambient context layer for Claude Code.">
+<meta property="og:image:alt" content="Cadence — agents that read the room. An ambient context layer for Claude Code and Codex.">
 <meta name="twitter:card" content="summary_large_image">
 <meta name="twitter:image" content="https://cadence.cullum.co/og.png">
 <meta name="twitter:title" content="Cadence — agents that read the room">
-<meta name="twitter:description" content="An ambient context layer for Claude Code. Cadence gives agents the room around the prompt.">
+<meta name="twitter:description" content="An ambient context layer for Claude Code and Codex. Cadence gives agents the room around the prompt.">
 <link rel="canonical" href="https://cadence.cullum.co/">
 <script type="application/ld+json">
 {
   "@context": "https://schema.org",
   "@type": "SoftwareApplication",
   "name": "Cadence",
-  "description": "An ambient context layer for Claude Code. Cadence reads the room — music, time, self-report, git state — and injects that state into every prompt.",
+  "description": "An ambient context layer for Claude Code and Codex. Cadence reads the room — music, time, self-report, git state — and injects that state into every prompt.",
   "url": "https://cadence.cullum.co/",
   "applicationCategory": "DeveloperApplication",
   "operatingSystem": "macOS",
   "offers": { "@type": "Offer", "price": "0", "priceCurrency": "USD" },
-  "softwareVersion": "0.1.4",
+  "softwareVersion": "0.2.0",
   "author": {
     "@type": "Organization",
     "name": "Cullum & Co",
@@ -510,6 +510,9 @@
 
   /* ── install ──────────────────────────────────────────────────── */
   .install-panel { margin-top: 1.75rem; }
+  .install-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1.25rem; margin-top: 1.75rem; }
+  .install-grid .install-panel { margin-top: 0; }
+  @media (max-width: 700px) { .install-grid { grid-template-columns: 1fr; } }
   .install-panel pre {
     border-radius: 0 0 10px 10px;
     color: var(--ink);
@@ -684,7 +687,7 @@
   <!-- ── hero ────────────────────────────────────────────────── -->
   <header class="hero">
     <div>
-      <span class="kicker load d1">Ambient context layer · Claude Code</span>
+      <span class="kicker load d1">Ambient context layer · Claude Code &amp; Codex</span>
       <h1 class="load d2">Agents that<br><em>read the room.</em></h1>
       <p class="lede load d3">The missing input is not another instruction. It is the room around the prompt.</p>
       <div class="cta-row load d4">
@@ -714,8 +717,8 @@
     <div class="eyebrow">The premise</div>
     <h2>Your prompt is not the whole ask.</h2>
     <p>It doesn't say you are tired but still shipping. It doesn't say you just came back from a long break, or that the repo is clean, or that you want the agent to stop asking permission and make the call.</p>
-    <p>Cadence gives Claude Code that missing layer: ambient signals, a self-reported state, four simple dials, and a lens for reading what you meant.</p>
-    <p><strong>Claude Code is the alpha surface. The product is the context layer underneath it.</strong></p>
+    <p>Cadence gives your agent that missing layer: ambient signals, a self-reported state, four simple dials, and a lens for reading what you meant.</p>
+    <p><strong>Claude Code and Codex are the alpha surfaces. The product is the context layer underneath them.</strong></p>
   </section>
 
   <!-- ── same prompt, different room ──────────────────────────── -->
@@ -825,18 +828,29 @@
   <section class="reveal" id="install">
     <div class="eyebrow">Get started</div>
     <h2>Try it.</h2>
-    <p>Cadence ships as a Claude Code plugin. Four commands to install, then one skill to see what Cadence sees.</p>
-    <div class="panel install-panel">
-      <div class="panel-bar">
-        <span class="dots"><i></i><i></i><i></i></span>
-        <span class="title">claude code</span>
-      </div>
+    <p>Cadence ships as a plugin for Claude Code and Codex. A few commands to install, then one skill to see what Cadence sees.</p>
+    <div class="install-grid">
+      <div class="panel install-panel">
+        <div class="panel-bar">
+          <span class="dots"><i></i><i></i><i></i></span>
+          <span class="title">claude code</span>
+        </div>
 <pre><span class="prompt">&gt;</span> /plugin marketplace add cullumco/cadence
 <span class="prompt">&gt;</span> /plugin install cadence@cadence
 <span class="prompt">&gt;</span> /reload-plugins
 <span class="prompt">&gt;</span> /cadence:setup</pre>
+      </div>
+      <div class="panel install-panel">
+        <div class="panel-bar">
+          <span class="dots"><i></i><i></i><i></i></span>
+          <span class="title">codex</span>
+        </div>
+<pre><span class="prompt">$</span> npm install -g @cullumco/cadence
+
+<span class="prompt">&gt;</span> use cadence — read the room</pre>
+      </div>
     </div>
-    <p class="small">Built for the Mac (alpha) — the richest signals read the Mac around you; other platforms keep the dial-movers. <code>/cadence:setup</code> is a short conversation, not a wizard. <code>/cadence:pause</code> is instant silence. Everything else — every signal, every convention, every line — is in <a href="https://github.com/cullumco/cadence" class="inline">the README</a>.</p>
+    <p class="small">Built for the Mac (alpha) — the richest signals read the Mac around you; other platforms keep the dial-movers. Claude Code injects context ahead of every prompt; Codex picks it up on request via the <code>cadence</code> skill. <code>/cadence:setup</code> is a short conversation, not a wizard. <code>/cadence:pause</code> is instant silence. Everything else is in <a href="https://github.com/cullumco/cadence" class="inline">the README</a>.</p>
   </section>
 
   <!-- ── sibling ─────────────────────────────────────────────── -->
