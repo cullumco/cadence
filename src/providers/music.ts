@@ -4,6 +4,8 @@ import { homedir } from "node:os";
 import { join } from "node:path";
 import type { MusicSignal } from "../types.js";
 import { tagsToVibe } from "../vibe.js";
+import { getSpotifyNowPlaying } from "./spotify.js";
+import { loadProviders, type ProviderConfig } from "../config.js";
 import { debug } from "../debug.js";
 
 /* ─────────────────────────────────────────────────────────────────────────
@@ -83,7 +85,10 @@ export function osascript(script: string): Promise<string> {
   });
 }
 
-async function getNowPlaying(): Promise<NowPlaying | null> {
+// macOS now-playing via the desktop apps' scripting interface. Darwin-only —
+// osascript doesn't exist elsewhere, so non-Mac falls through to Spotify.
+async function getLocalNowPlaying(): Promise<NowPlaying | null> {
+  if (process.platform !== "darwin") return null;
   for (const player of PLAYERS) {
     if (!(await isRunning(player))) {
       debug("music", `${player} not running`);
@@ -96,6 +101,12 @@ async function getNowPlaying(): Promise<NowPlaying | null> {
     return { track, artist, player };
   }
   return null;
+}
+
+// Local desktop apps first (zero-setup on Mac); the opt-in Spotify token path
+// second, so a Linux/Windows user who supplied creds still gets music.
+async function getNowPlaying(providers: ProviderConfig): Promise<NowPlaying | null> {
+  return (await getLocalNowPlaying()) ?? (await getSpotifyNowPlaying(providers));
 }
 
 async function loadCache(): Promise<Record<string, string>> {
@@ -189,8 +200,10 @@ async function getTags(artist: string): Promise<string[]> {
   return tags ?? [];
 }
 
-export async function getMusicSignal(): Promise<MusicSignal | null> {
-  const np = await getNowPlaying();
+export async function getMusicSignal(
+  providers?: ProviderConfig
+): Promise<MusicSignal | null> {
+  const np = await getNowPlaying(providers ?? (await loadProviders()));
   if (!np) return null;
 
   const tags = await getTags(np.artist);
@@ -203,5 +216,6 @@ export async function getMusicSignal(): Promise<MusicSignal | null> {
     player: np.player || undefined,
     vibe: vibe && vibe.moods.length ? vibe.moods.join(", ") : undefined,
     energy: vibe?.energy,
+    acoustic: vibe?.acoustic,
   };
 }

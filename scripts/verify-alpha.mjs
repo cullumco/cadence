@@ -60,12 +60,23 @@ const required = [
   "skills/cadence/SKILL.md",
   "skills/try/SKILL.md",
   "skills/state/SKILL.md",
+  "skills/setup/SKILL.md",
+  "skills/pause/SKILL.md",
+  "skills/resume/SKILL.md",
   "bin/cadence",
   "dist/hook.js",
   "dist/stop.js",
+  "dist/posttool.js",
   "dist/session-start.js",
   "dist/cli.js",
+  "dist/config.js",
+  "dist/envelope.js",
+  "dist/mcp.js",
+  "dist/spotify-auth.js",
   "dist/providers/activity.js",
+  "dist/providers/intent.js",
+  "dist/providers/esoteric.js",
+  "dist/providers/spotify.js",
   "README.md",
   "ALPHA.md",
 ];
@@ -92,6 +103,12 @@ if (installSmoke) {
     await mkdir(consumerDir);
     run("npm", ["init", "-y"], { cwd: consumerDir, capture: true });
     run("npm", ["install", tarball], { cwd: consumerDir, capture: true });
+    // Exercise the canonical command AND the deprecated alias — the skill
+    // shells out to `report`, older muscle memory still types `state`.
+    run(join(consumerDir, "node_modules", ".bin", "cadence"), ["report"], {
+      cwd: consumerDir,
+      capture: true,
+    });
     run(join(consumerDir, "node_modules", ".bin", "cadence"), ["state"], {
       cwd: consumerDir,
       capture: true,
@@ -140,6 +157,43 @@ if (installSmoke) {
         capture: true,
       }
     );
+
+    // MCP surface from the installed package: an initialize → tools/call
+    // round-trip, with every stdout line required to be well-formed JSON-RPC
+    // (one stray console.log anywhere in the import graph breaks MCP clients).
+    const mcpOut = run(join(consumerDir, "node_modules", ".bin", "cadence"), ["mcp"], {
+      cwd: consumerDir,
+      capture: true,
+      input:
+        JSON.stringify({
+          jsonrpc: "2.0",
+          id: 1,
+          method: "initialize",
+          params: { protocolVersion: "2025-06-18", capabilities: {}, clientInfo: { name: "verify-alpha", version: "0" } },
+        }) +
+        "\n" +
+        JSON.stringify({ jsonrpc: "2.0", method: "notifications/initialized" }) +
+        "\n" +
+        JSON.stringify({ jsonrpc: "2.0", id: 2, method: "tools/call", params: { name: "get_user_state", arguments: {} } }) +
+        "\n",
+    });
+    let mcpLines;
+    try {
+      mcpLines = mcpOut.trim().split("\n").map((line) => JSON.parse(line));
+    } catch {
+      console.error(`mcp stdout is not pure JSON-RPC lines:\n${mcpOut}`);
+      process.exit(1);
+    }
+    const [mcpInit, mcpCall] = mcpLines;
+    if (
+      mcpLines.length !== 2 ||
+      mcpInit?.result?.serverInfo?.name !== "cadence" ||
+      mcpInit?.result?.serverInfo?.version !== expectedVersion ||
+      typeof mcpCall?.result?.content?.[0]?.text !== "string"
+    ) {
+      console.error(`unexpected mcp round-trip output:\n${mcpOut}`);
+      process.exit(1);
+    }
   } finally {
     await rm(tempRoot, { recursive: true, force: true });
   }

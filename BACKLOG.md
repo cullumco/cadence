@@ -2,8 +2,8 @@
 
 Future versions and capabilities, captured during the Spotify→embodied-state pivot.
 Claude Code is the alpha surface; the product is the ambient context layer
-underneath it. V1 scope is deliberately small: **before-only** injection (a
-`UserPromptSubmit` reframe lens). Everything below is intentionally deferred.
+underneath it. The alpha has grown past the original before-only scope: sections
+marked SHIPPED are done; everything else is intentionally deferred.
 
 ---
 
@@ -27,7 +27,7 @@ grow Cadence from a prompt-prefix into a loop around the whole turn:
 
 ```
 UserPromptSubmit  → set the reading lens   (predictive, ambient)   ← V1, done
-PostToolUse       → refine / course-correct (observed work)         ← V2
+PostToolUse       → refine / course-correct (observed work)         ← V2, first cuts done
 Stop              → conservative finish-line guard                   ← V1.1, done
 ```
 
@@ -47,9 +47,17 @@ Answers to the open questions, as built:
 - **Tool output parsing:** sidestepped — we don't parse `tool_response` at
   all; we re-observe the repo with the existing git provider instead.
 
+**Second cut SHIPPED (v0.1.5):** destructive-git thrash — a streak of
+`reset --hard` / true force-pushes (not `--force-with-lease`) read off the
+command string, same once-per-transition discipline, threshold 2 in the window.
+
+**Third cut SHIPPED:** failing-test transitions — test-runner commands
+(`isTestCommand`) get their output read for failure counts/markers
+(`testsFailedFrom`, tri-state honest: an unreadable run keeps the previous
+observation, never clears it), edge-triggered both directions like conflicts.
+Priority when several fire at once: conflict > tests > thrash.
+
 **Next material events to consider** (same transition discipline):
-- failing-test transitions (needs a cheap, tool-agnostic "tests failed" read)
-- `git reset --hard` streaks / force-pushes → thrash signal
 - dirty-file count exploding mid-task
 
 ## V3 — Finish-line enforcement (Stop)
@@ -84,35 +92,53 @@ complexity. Only worth it once V2/V3 each prove their gating keeps noise down.
 Keep the core reusable before adding more surfaces. Claude Code-specific pieces
 should stay in hook/adapter files; providers, dial derivation, stop decisions,
 and renderers should remain portable. Candidate future surfaces:
-- a JSON context CLI for any agent shell
-- MCP/resource-style context exposure
-- Codex/Cursor-style adapters if their hooks/context APIs support it
+- a JSON context CLI for any agent shell (partly covered: the MCP
+  `cadence://envelope` resource serves the structured JSON; a `cadence test
+  --json` flag is now a ~20-line follow-up on `buildEnvelope`)
+- MCP/resource-style context exposure — SHIPPED 2026-06: `cadence mcp`
+  (`src/mcp.ts`, hand-rolled stdio JSON-RPC, zero deps) serves
+  `cadence://user-state` + `cadence://envelope` + a `get_user_state` tool;
+  the collection seam moved to `src/envelope.ts` so hook/CLI/MCP share one
+  pipeline. Desktop-docs-only: NOT declared in `.claude-plugin` (hooks would
+  double-inject inside Claude Code). SDK tripwire: adopt
+  `@modelcontextprotocol/sdk` the day we want `resources/subscribe` or >3 tools.
+- Codex/Cursor-style adapters if their hooks/context APIs support it (any
+  stdio MCP client can already point at `cadence mcp`)
 - a thin Claude Code plugin wrapper once the hook shape settles
 
 ---
 
-## Esoteric / opt-in signal providers (V2+)
+## Esoteric / opt-in signal providers — SHIPPED (flavor-only)
 
-User idea: let people opt into playful, non-work signal sources that feed the
-dials (or just color the vibe) — **only if the user indicates them as an input.**
+`src/providers/esoteric.ts` ships both, render-only (they never move a dial,
+per the lean below):
+- **Moon phase** — computed offline from the date, no API, gated on
+  `providers.moon`.
+- **Horoscope** — `providers.horoscope = "<sign>"`; daily text via a keyless
+  API, opt-in and fail-silent exactly like the weather probe.
 
-- **Horoscope provider** — user sets their sign; fetch a daily horoscope, let its
-  tone nudge dials (or just surface as flavor). Opt-in, off by default.
-- **Moon phase provider** — current lunar phase as ambient context. Computable
-  offline, no API.
-- Slot in as ordinary `Signal` providers behind an opt-in flag in
-  `~/.cadence/config.json` (e.g. `"providers": { "horoscope": "leo" }`). No
-  rework needed — the provider/signal architecture already supports it.
-- Open Q: do esoteric signals move dials, or only render as `vibe`/flavor so they
-  never override real work signals? (Lean: flavor-only unless the user maps them.)
+Resolved open Q: esoteric signals are **flavor-only** — they color the block,
+never override real work signals. Revisit only if a user explicitly wants to
+map one to a dial.
+
+**Focused app** also shipped here (opt-in `providers.focusedApp`, macOS): the
+frontmost non-terminal app as flavor on the ambient context line. Caveat baked
+in — it's read at UserPromptSubmit, when your terminal/IDE is usually frontmost,
+so it filters known shells/editors and speaks only when something else is in
+front. Flavor for now; `focused app → posture/proactivity` stays a candidate
+nudge once real output shows it's worth steering on.
+
+**Calendar density: cut.** The audience is solo builders in a long project, not
+people racing between meetings — so meeting-proximity isn't a fit. Removed from
+the roadmap above.
 
 ## Known nuance: intra-tier nudge collisions
 
-When two *ambient* nudges touch the same dial, the later one silently wins (e.g.
-late-night says low-pace, unplugged says high-pace → unplugged wins by source
-order). Across tiers this is intentional (self-report > ambient), but *within*
-ambient the ordering is arbitrary. Fine for now; if it bites, move to a
-weighted/voting model per dial instead of last-write-wins.
+When two *environment* nudges touch the same dial, the later one silently wins
+(e.g. late-night says low-pace, unplugged says high-pace → unplugged wins by
+source order). Across tiers this is intentional (self-report > environment), but
+*within* the environment tier the ordering is arbitrary. Fine for now; if it
+bites, move to a weighted/voting model per dial instead of last-write-wins.
 
 ## Git nudges — SHIPPED (2026-06-05)
 
@@ -123,14 +149,38 @@ Applied below self-report in the hierarchy, so "I'm shipping" beats a
 mid-conflict read. Watch for false positives (e.g. rebase-heavy workflows
 reading as flow state) before adding more git nudges.
 
+## Prompt intent — SHIPPED
+
+`src/providers/intent.ts` reads ship/think/debug/focus cues from the live
+prompt and drives the same dials as a self-report, applied *between* git and
+self-report (a deliberate `cadence report` still wins). This is what makes the
+"same prompt, different room" demo true without a separate CLI step. Patterns
+are deliberately phrase-based, not bare-word, so ordinary prompts ("can you
+just check…", "why is this slow?") don't misfire — and the reframe still
+defers to the literal words, so a miss stays cheap.
+
+## Opt-in provider registry — SHIPPED
+
+`src/config.ts` adds a `providers` block to `~/.cadence/config.json` — the
+consent layer for "as many signals as the user is willing to give." Anything
+privacy-adjacent stays off until `cadence enable <signal>`. `OPT_IN_PROVIDERS`
+is the single source of truth (CLI + signals view + providers). First opt-in
+signal on it: **typing tempo** — a rolling prompt-rhythm window in
+`activity.ts` (`computeTempo`), where rapid-fire short prompts → pace high and
+one long considered prompt → pace low. Focused app and esoteric (horoscope/
+moon) have since slotted in; calendar density was cut (see the esoteric
+section). Remaining candidate: ambient-light sensor.
+
 ## Other deferred provider/feature ideas
 
 - **`activity.ts` provider** — first cut shipped: prompt length plus minutes
   since the last prompt from the `UserPromptSubmit` payload. Future refinement:
   use prompt length itself as a nudge once real output shows the boundary.
-- **wifi SSID fragility** — `ipconfig getsummary` needs Location Services
-  permission on recent macOS, so SSID is often empty for downloaders. Degrades to
-  absent (not a bug). If we want it reliable, prompt for the permission or drop it.
+- **wifi SSID — moved behind opt-in (2026-06-11)**: it names your location, so
+  it now sits in `OPT_IN_PROVIDERS` (`cadence enable wifi`) like everything
+  privacy-adjacent; the probe doesn't even spawn when off. Fragility note still
+  applies when enabled: `ipconfig getsummary` needs Location Services on recent
+  macOS, so SSID can read absent — degrades cleanly, the signals view says why.
 - **macOS Focus / DND** — manual AND scheduled detection ship: `getFocus()`
   reads `Assertions.json` (manual toggles) and falls back to
   `ModeConfigurations.json` schedule math (`scheduleActive()`, fixture-tested,
@@ -138,11 +188,11 @@ reading as flow state) before adding more git nudges.
   to absent without it. Remaining gap: geofenced/iPhone-synced Focus writes
   neither file — undetectable from this Mac. Render-only flavor;
   `focus on → proactivity high` is a dormant candidate nudge.
-- **More ambient nudges** — calendar density (next-meeting proximity), ambient
-  light, active-app focus. All cheap, all backlogged.
-- **`energyToMode` boundary** — the sad-slowcore think-vs-debug call in `vibe.ts`
-  is still a placeholder; decide whether music should ever lean `debug` at all,
-  or leave `debug` entirely to the git provider.
+- **More environment nudges** — ambient-light sensor is the one cheap candidate
+  left (calendar density cut, focused app shipped opt-in).
+- **Valence boundary** — music energy/acoustic now move pace/posture/tone, but
+  valence (happy ↔ sad) moves NO dial (see the note in `vibe.ts` tagsToVibe);
+  decide whether it ever should, or stays mood-words-only forever.
 - **`reframe` tone reconciliation** — the reframe lenses now defer to the user's
   words; make sure no other rendered line contradicts that humility.
 - **Tests** — baseline smoke coverage exists for `tagsToVibe`, `deriveCadence`,
@@ -159,22 +209,66 @@ reading as flow state) before adding more git nudges.
 ## Settled decisions (context for the above)
 
 - **Music = identity + vibe**, not numeric affect (Spotify audio-features
-  deprecated 2024-11-27 for new apps; dev-mode Premium-gated 2026-02).
+  deprecated 2024-11-27 for new apps; dev-mode Premium-gated 2026-02). Music
+  now moves THREE dials (energy → pace + posture, acoustic → warm tone), never
+  proactivity — "move with the music," see `deriveCadence`.
 - **Now-playing via AppleScript** (Spotify/Music) — survives the macOS 15.4
-  MediaRemote lockdown that killed system-wide taps like `nowplaying-cli`.
+  MediaRemote lockdown that killed system-wide taps like `nowplaying-cli`. The
+  cross-platform path (opt-in `src/providers/spotify.ts`) uses only the live
+  `currently-playing` endpoint — identity only, no audio-features. Linking is a
+  PKCE browser flow in the *interactive CLI* (`cadence spotify connect`,
+  `src/spotify-auth.ts`): a one-shot loopback server catches the redirect and
+  exchanges the code for a refresh token. OAuth NEVER runs in the hook — the
+  hook only reads the cached token. To ship zero-config, register a "Cadence"
+  Spotify app and set `DEFAULT_SPOTIFY_CLIENT_ID` (or `CADENCE_SPOTIFY_CLIENT_ID`)
+  with `http://127.0.0.1:8888/callback` as a redirect URI. Manual
+  `cadence spotify <clientId> <refreshToken>` remains for the browser-less.
 - **Vibe via MusicBrainz** — keyless, no auth, cached per-artist forever.
 - **Mood vocabulary = Cyanite's 13** (research-verified controlled set).
 - **Influence = prompt only** — a hook cannot change the model, system prompt,
   output style, or generation params; `additionalContext` is the only lever.
 - **Style = interpretation lens** ("read my prompt as someone in X cadence meant
   it"), not behavioral commands (caveman) and not prompt rewriting (impossible
-  automatically). Always defers to the user's literal words.
+  automatically). Always defers to the user's literal words. Amended 2026-06-12:
+  the lens also licenses answering in the room's register ("answer in kind" —
+  warm room, warm reply), still advisory, defer clause still final and now
+  covering register ("in what I ask or how I sound").
 - **No single mode label** — Cadence drives FOUR independent dials (pace, tone,
   posture, proactivity), each low/medium/high, instead of collapsing to
   ship/think/debug. `mode.ts` deleted; `cadence.ts` is the brain. Deliberate move
   off the 3-way switch so signals pull dials orthogonally and nothing is lost.
+- **Mirror, not nanny (anti-goal, settled 2026-06-12).** Cadence reflects the
+  room; it never manages the person in it. The signals could trivially power
+  wellness nudges ("you've been up 200h, maybe rest") — don't build them, on
+  any surface. A nudge that judges the user's state breaks the trust that
+  makes them willing to share signals at all. Same line for the agent-facing
+  text: the reframe describes the room, it never editorializes about it.
 - **Manual override = "user's determination, rest auto."** Any dial can be pinned
   via `~/.cadence/config.json` or env (`CADENCE_PACE=fast`); pinned dials win,
   un-pinned stay inferred. Pinned dials render with `*` so the model knows they
   carry explicit user authority. `set` accepts words ("fast") or levels ("high").
   CLI: `cadence dials | set | unset`.
+- **Learning loop v1 = report-only, opt-in, no auto-adjustment** (2026-06-11).
+  `cadence enable tuning` turns on a per-prompt log (`~/.cadence/tune.json`,
+  500-entry prune) of DERIVED features only — dial levels, the nudge trace from
+  `deriveCadenceTraced()`, prompt length/intent/cue classes, never raw text.
+  Silent hook exits log too (`injected:false`) so next-prompt pairing holds.
+  `cadence tune` pairs same-sitting entries offline and reports per-rule
+  agree/disagree; it never re-weights nudges and points only at the generic pin
+  path (mirror, not nanny). Rule ids (`env.late`, `report.ship`, …) are part of
+  the log format — keep them stable across retunes; renames orphan history and
+  the report degrades to grouping by source. Pinned dials are never graded.
+- **DJ = hooks trigger, a detached child acts** (decided 2026-06-11). DJ is the
+  one exception to "influence = prompt only," and it's doubly opt-in: every
+  event must be explicitly mapped (`cadence dj map`), unmapped events never
+  act. Hooks never wait on Spotify — posttool spawns `dist/dj-run.js <event>`
+  detached/unref'd after its output is written; all playback judgment lives in
+  pure functions in `src/dj.ts`. Invariants: never START audio (nothing
+  playing → skip), track URI = gentle queue / playlist|album URI = context
+  switch (the URI type IS the gentleness setting), 10-min global cooldown on
+  top of the hooks' edge-triggering. Ship fires ONLY from `cadence report`
+  text matching the shared `SHIP_PATTERN` (same authority stop.ts requires);
+  the prompt-intent ship trigger in hook.ts is deliberately deferred until
+  intent-regex precision is observed in the wild. Playback control needs
+  Spotify Premium and a scope re-link (`cadence dj setup`); legacy read-only
+  links fail closed. `cadence dj test <event>` is the visible-errors path.

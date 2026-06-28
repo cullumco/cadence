@@ -1,6 +1,6 @@
 {
   "name": "@cullumco/cadence",
-  "version": "0.1.4",
+  "version": "0.2.0",
   "description": "Agents that read the room. Ambient context, cadence dials, and finish-line guardrails for Claude Code. macOS-only alpha.",
   "type": "module",
   "bin": {
@@ -25,12 +25,14 @@
     "dist",
     "bin",
     "README.md",
-    "ALPHA.md"
+    "ALPHA.md",
+    "LICENSE"
   ],
   "scripts": {
     "build": "tsc",
     "dev": "tsc --watch",
     "test": "node --test test/cadence.test.js",
+    "test:coverage": "c8 --include 'dist/**/*.js' --exclude 'dist/**/*.d.ts' --reporter=text --reporter=html node --test test/cadence.test.js",
     "prepack": "npm run build",
     "prepublishOnly": "node scripts/verify-alpha.mjs --no-install-smoke",
     "release:alpha": "node scripts/release-alpha.mjs",
@@ -44,6 +46,7 @@
   },
   "devDependencies": {
     "@types/node": "^20.11.0",
+    "c8": "^10.1.3",
     "typescript": "^5.4.0"
   },
   "keywords": [

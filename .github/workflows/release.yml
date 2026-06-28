@@ -1,0 +1,75 @@
+# Mirrors a release into GitHub: creates the vX.Y.Z tag (if needed) and a
+# GitHub Release whose body comes from the committed notes file
+# `.github/releases/vX.Y.Z.md` — so release notes live in git and the
+# Release just reflects them.
+#
+# Two triggers:
+#   - workflow_dispatch (tag + optional target): the canonical path, used by
+#     the release skill. Works from remote sessions, where the git proxy
+#     rejects tag pushes — GitHub creates the tag at `target` server-side.
+#   - tag push: convenience for locally-pushed annotated tags. Only fires for
+#     tags whose commit contains this file (GitHub runs the workflow version
+#     AT the tagged commit).
+#
+# Notes resolution order: committed notes file → annotated tag message →
+# GitHub auto-generated notes. Idempotent: an existing Release is a no-op.
+
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Release tag (e.g. v0.1.5)"
+        required: true
+        type: string
+      target:
+        description: "Commit SHA (or branch) to tag if the tag doesn't exist yet"
+        required: false
+        default: "main"
+        type: string
+
+permissions:
+  contents: write
+
+jobs:
+  github-release:
+    name: Create GitHub Release
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository (with tags)
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Create tag (if needed) and Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ inputs.tag || github.ref_name }}
+          TARGET: ${{ inputs.target || 'main' }}
+        run: |
+          if gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            echo "release $TAG already exists — nothing to do"
+            exit 0
+          fi
+
+          args=(--repo "$GITHUB_REPOSITORY" --title "$TAG")
+
+          notes_file=".github/releases/${TAG}.md"
+          if [ -f "$notes_file" ]; then
+            args+=(--notes-file "$notes_file")
+          elif git rev-parse -q --verify "refs/tags/$TAG" >/dev/null; then
+            args+=(--notes-from-tag)
+          else
+            args+=(--generate-notes)
+          fi
+
+          if git rev-parse -q --verify "refs/tags/$TAG" >/dev/null; then
+            args+=(--verify-tag)
+          else
+            args+=(--target "$TARGET")  # GitHub creates the tag here
+          fi
+
+          gh release create "$TAG" "${args[@]}"

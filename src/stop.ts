@@ -2,9 +2,11 @@
 import { pathToFileURL } from "node:url";
 import { getMusicSignal } from "./providers/music.js";
 import { getSelfReportSignal } from "./providers/selfreport.js";
-import { getAmbientSignal } from "./providers/ambient.js";
+import { getEnvironmentSignal } from "./providers/environment.js";
 import { getGitSignal } from "./providers/git.js";
 import { deriveCadence, loadOverrides, applyOverrides } from "./cadence.js";
+import { SHIP_PATTERN } from "./dj.js";
+import { isPaused } from "./config.js";
 import type { Cadence, Signal, UserState } from "./types.js";
 
 const TOTAL_BUDGET_MS = 1500;
@@ -37,16 +39,16 @@ async function readStdin(): Promise<StopInput> {
 }
 
 async function collectSignals(cwd: string): Promise<Signal[]> {
-  const [music, report, ambient, git] = await Promise.allSettled([
+  const [music, report, environment, git] = await Promise.allSettled([
     getMusicSignal(),
     getSelfReportSignal(),
-    getAmbientSignal(new Date()),
+    getEnvironmentSignal(new Date()),
     getGitSignal(cwd),
   ]);
   const signals: Signal[] = [];
   if (music.status === "fulfilled" && music.value) signals.push(music.value);
   if (report.status === "fulfilled" && report.value) signals.push(report.value);
-  if (ambient.status === "fulfilled" && ambient.value) signals.push(ambient.value);
+  if (environment.status === "fulfilled" && environment.value) signals.push(environment.value);
   if (git.status === "fulfilled" && git.value) signals.push(git.value);
   return signals;
 }
@@ -54,7 +56,9 @@ async function collectSignals(cwd: string): Promise<Signal[]> {
 function selfReportIsShipping(signals: Signal[]): boolean {
   const report = signals.find((s) => s.source === "self_report");
   if (!report) return false;
-  return /\b(ship|shipping|jamming|locked.?in|sending|grind|just|send it)\b/i.test(report.text);
+  // single source shared with the DJ ship trigger (src/dj.ts) — Stop
+  // authority and DJ actuation must never drift apart on what "shipping" is
+  return SHIP_PATTERN.test(report.text);
 }
 
 function pinnedActFreely(cadence: Cadence, pinned: (keyof Cadence)[]): boolean {
@@ -111,12 +115,13 @@ export function decideStop(
 }
 
 async function main() {
+  if (await isPaused()) return; // user asked for silence — never block while paused
   const input = await readStdin();
   const projectDir = input.cwd ?? process.cwd();
   const [signals, overrides] = await Promise.all([
     Promise.race<Signal[]>([
       collectSignals(projectDir),
-      new Promise<Signal[]>((resolve) => setTimeout(() => resolve([]), TOTAL_BUDGET_MS)),
+      new Promise<Signal[]>((resolve) => setTimeout(() => resolve([]), TOTAL_BUDGET_MS).unref()),
     ]),
     loadOverrides(),
   ]);

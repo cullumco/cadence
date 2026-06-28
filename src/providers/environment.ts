@@ -1,8 +1,8 @@
 import { exec } from "node:child_process";
-import { readFile } from "node:fs/promises";
+import { readFile, writeFile, mkdir } from "node:fs/promises";
 import { homedir, uptime, loadavg, cpus } from "node:os";
 import { join } from "node:path";
-import type { AmbientSignal } from "../types.js";
+import type { EnvironmentSignal } from "../types.js";
 
 // One-liner shell helper for the best-effort macOS probes. Always resolves
 // (never throws) so a missing command can't break the hook.
@@ -34,7 +34,7 @@ const DND_MODE_CONFIGS = join(DND_DIR, "ModeConfigurations.json");
 const WEATHER_TIMEOUT_MS = 900;
 const DAYS = ["sunday", "monday", "tuesday", "wednesday", "thursday", "friday", "saturday"];
 
-function partOfDay(hour: number): AmbientSignal["partOfDay"] {
+function partOfDay(hour: number): EnvironmentSignal["partOfDay"] {
   if (hour < 5) return "late night";
   if (hour < 9) return "early morning";
   if (hour < 12) return "morning";
@@ -142,23 +142,49 @@ export async function getFocus(now: Date = new Date()): Promise<boolean | undefi
   return manual;
 }
 
+// Frontmost app — opt-in, macOS, flavor only. Read at UserPromptSubmit, so the
+// terminal/IDE you typed into is usually frontmost; we filter known shells and
+// editors out, so this speaks only when a genuinely different app (a browser,
+// Slack, a PDF) is in front. Flavor for now; a dial nudge stays a candidate.
+const TERMINAL_APPS =
+  /^(Terminal|iTerm2?|Alacritty|kitty|WezTerm|Warp|Hyper|Code|Code - Insiders|Cursor|Windsurf|Electron|Ghostty|Tabby|rio)$/i;
+
+export async function getFocusedApp(now: boolean): Promise<string | undefined> {
+  if (!now || process.platform !== "darwin") return undefined;
+  const app = await sh(
+    `osascript -e 'tell application "System Events" to name of first application process whose frontmost is true'`,
+    700
+  );
+  if (!app) return undefined;
+  const name = app.split("\n")[0]?.trim();
+  if (!name || TERMINAL_APPS.test(name)) return undefined; // you're in your terminal — no news
+  return name;
+}
+
 // ── mac context: best-effort shell-outs, all flavor (no dial nudges) ─────────
-async function getMacContext(): Promise<{
+async function getMacContext(focusedAppEnabled: boolean, wifiEnabled: boolean): Promise<{
   focus?: boolean;
   displays?: number;
   network?: string;
   darkMode?: boolean;
+  focusedApp?: string;
 }> {
   if (process.platform !== "darwin") return {};
-  const [dark, ssid, displays, focus] = await Promise.all([
+  const [dark, ssid, displays, focus, focusedApp] = await Promise.all([
     sh("defaults read -g AppleInterfaceStyle"), // "Dark", or error (=light)
-    sh("ipconfig getsummary en0 | awk -F ' SSID : ' '/ SSID : / {print $2}'", 700),
+    // SSID names your location — opt-in (2026-06-11), like everything
+    // privacy-adjacent. Off → don't even spawn the probe.
+    wifiEnabled
+      ? sh("ipconfig getsummary en0 | awk -F ' SSID : ' '/ SSID : / {print $2}'", 700)
+      : Promise.resolve(null),
     // fast display count via AppleScript (~100ms) — NOT system_profiler (1-3s)
     sh(`osascript -e 'tell application "System Events" to count of desktops'`, 700),
     getFocus(),
+    getFocusedApp(focusedAppEnabled),
   ]);
 
-  const ctx: { focus?: boolean; displays?: number; network?: string; darkMode?: boolean } = {};
+  const ctx: { focus?: boolean; displays?: number; network?: string; darkMode?: boolean; focusedApp?: string } = {};
+  if (focusedApp) ctx.focusedApp = focusedApp;
   // `defaults read` exits non-zero when the key is unset — which is exactly
   // what light mode looks like. So error/null ⇒ light, not unknown.
   ctx.darkMode = dark != null && /dark/i.test(dark);
@@ -185,6 +211,36 @@ function weatherWord(code: number): string {
   return "stormy";
 }
 
+const WEATHER_CACHE_FILE = join(homedir(), ".cadence", "weather-cache.json");
+// Weather barely moves in half an hour, and the hook + stop hook both ask —
+// without a cache that's two Open-Meteo round-trips per turn for one word.
+const WEATHER_CACHE_MS = 30 * 60_000;
+
+interface WeatherCache {
+  word: string;
+  at: number;
+  lat: number;
+  lon: number;
+}
+
+// Pure freshness check, exported for tests: same location, younger than TTL.
+export function weatherCacheFresh(
+  c: unknown,
+  lat: number,
+  lon: number,
+  now: number
+): c is WeatherCache {
+  if (!c || typeof c !== "object") return false;
+  const w = c as Partial<WeatherCache>;
+  return (
+    typeof w.word === "string" &&
+    typeof w.at === "number" &&
+    w.lat === lat &&
+    w.lon === lon &&
+    now - w.at <= WEATHER_CACHE_MS
+  );
+}
+
 async function getWeather(): Promise<string | undefined> {
   let cfg: CadenceConfig;
   try {
@@ -194,6 +250,13 @@ async function getWeather(): Promise<string | undefined> {
   }
   const loc = cfg.location;
   if (!loc || typeof loc.lat !== "number" || typeof loc.lon !== "number") return undefined;
+
+  try {
+    const cached: unknown = JSON.parse(await readFile(WEATHER_CACHE_FILE, "utf-8"));
+    if (weatherCacheFresh(cached, loc.lat, loc.lon, Date.now())) return cached.word;
+  } catch {
+    // no cache yet → fetch below
+  }
 
   const ctrl = new AbortController();
   const timer = setTimeout(() => ctrl.abort(), WEATHER_TIMEOUT_MS);
@@ -205,7 +268,17 @@ async function getWeather(): Promise<string | undefined> {
     if (!res.ok) return undefined;
     const data = (await res.json()) as { current?: { weather_code?: number } };
     const code = data.current?.weather_code;
-    return typeof code === "number" ? weatherWord(code) : undefined;
+    if (typeof code !== "number") return undefined;
+    const word = weatherWord(code);
+    try {
+      // best-effort cache write; a miss just means we fetch again next prompt
+      await mkdir(join(homedir(), ".cadence"), { recursive: true });
+      const cache: WeatherCache = { word, at: Date.now(), lat: loc.lat, lon: loc.lon };
+      await writeFile(WEATHER_CACHE_FILE, JSON.stringify(cache), "utf-8");
+    } catch {
+      // ignore
+    }
+    return word;
   } catch {
     return undefined;
   } finally {
@@ -213,18 +286,21 @@ async function getWeather(): Promise<string | undefined> {
   }
 }
 
-export async function getAmbientSignal(now: Date): Promise<AmbientSignal> {
+export async function getEnvironmentSignal(
+  now: Date,
+  opts: { focusedAppEnabled?: boolean; wifiEnabled?: boolean } = {}
+): Promise<EnvironmentSignal> {
   const hour = now.getHours();
   const vitals = getVitals(); // sync, free
   // all probes run in parallel; each resolves to a safe default on failure.
   const [weather, battery, mac] = await Promise.all([
     getWeather(),
     getBattery(),
-    getMacContext(),
+    getMacContext(opts.focusedAppEnabled ?? false, opts.wifiEnabled ?? false),
   ]);
 
   return {
-    source: "ambient",
+    source: "environment",
     partOfDay: partOfDay(hour),
     dayOfWeek: DAYS[now.getDay()] ?? "",
     isWeekend: now.getDay() === 0 || now.getDay() === 6,
@@ -238,5 +314,6 @@ export async function getAmbientSignal(now: Date): Promise<AmbientSignal> {
     displays: mac.displays,
     network: mac.network,
     darkMode: mac.darkMode,
+    focusedApp: mac.focusedApp,
   };
 }

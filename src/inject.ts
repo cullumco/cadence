@@ -3,9 +3,11 @@ import type {
   MusicSignal,
   SelfReportSignal,
   ActivitySignal,
+  IntentSignal,
   GitSignal,
   PlaceSignal,
-  AmbientSignal,
+  EnvironmentSignal,
+  EsotericSignal,
 } from "./types.js";
 import { DIAL_WORDS } from "./cadence.js";
 
@@ -42,10 +44,16 @@ function renderGit(g: GitSignal): string {
   return `    git: ${parts.join(", ")}`;
 }
 
+function renderIntent(i: IntentSignal): string[] {
+  if (!i.kind) return [];
+  return [`    intent: ${i.kind} (read from your prompt)`];
+}
+
 function renderActivity(a: ActivitySignal): string {
   const parts = [
     a.minSinceLastPrompt != null ? `min_since_prompt=${a.minSinceLastPrompt}` : null,
     a.promptLength != null ? `prompt_len=${a.promptLength}` : null,
+    a.tempo ? `tempo=${a.tempo}` : null,
   ].filter(Boolean);
   return `    activity: { ${parts.join(" ")} }`;
 }
@@ -58,23 +66,37 @@ function renderPlace(p: PlaceSignal): string {
   return `    place: { ${parts.join(" ")} }`;
 }
 
-function renderAmbient(a: AmbientSignal): string {
-  // Human-readable atmosphere line, e.g.
-  //   "friday late night, rainy, unplugged 8%, dark mode, on Home-wifi, up 14h"
-  const parts = [
+// Human-readable atmosphere parts, e.g.
+//   ["friday late night", "rainy", "unplugged 8%", "dark mode", "up 14h"]
+// Exported so the TUI environment meter (src/tui.ts) shows the same condensed
+// line the hook injects — one threshold source, never two.
+export function environmentParts(a: EnvironmentSignal): string[] {
+  return [
     a.isWeekend ? `${a.dayOfWeek} ${a.partOfDay}` : a.partOfDay,
     a.weather ?? null,
     a.onBattery === true
       ? `unplugged${a.batteryPct != null ? ` ${a.batteryPct}%` : ""}`
       : null,
     a.focus === true ? "focus on" : null,
+    a.focusedApp ? `in ${quote(a.focusedApp)}` : null,
     a.darkMode === true ? "dark mode" : null,
     a.displays != null && a.displays > 1 ? `${a.displays} displays` : null,
     a.network ? `on ${quote(a.network)}` : null,
     a.loadHigh ? "machine busy" : null,
     a.uptimeHours != null && a.uptimeHours >= 12 ? `up ${a.uptimeHours}h` : null,
+  ].filter(Boolean) as string[];
+}
+
+function renderEnvironment(a: EnvironmentSignal): string {
+  return `    context: ${environmentParts(a).join(", ")}`;
+}
+
+function renderEsoteric(e: EsotericSignal): string[] {
+  const parts = [
+    e.moonPhase ? `moon ${e.moonPhase}` : null,
+    e.horoscope ? `${e.sign ?? "horoscope"}: ${quote(e.horoscope)}` : null,
   ].filter(Boolean);
-  return `    context: ${parts.join(", ")}`;
+  return parts.length ? [`    esoteric: ${parts.join(" · ")}`] : [];
 }
 
 function renderCadence(
@@ -96,9 +118,11 @@ export function render(state: StateWithCadence): string {
     if (sig.source === "music") lines.push(...renderMusic(sig));
     else if (sig.source === "self_report") lines.push(renderReport(sig));
     else if (sig.source === "git") lines.push(renderGit(sig));
+    else if (sig.source === "intent") lines.push(...renderIntent(sig));
     else if (sig.source === "activity") lines.push(renderActivity(sig));
     else if (sig.source === "place") lines.push(renderPlace(sig));
-    else if (sig.source === "ambient") lines.push(renderAmbient(sig));
+    else if (sig.source === "environment") lines.push(renderEnvironment(sig));
+    else if (sig.source === "esoteric") lines.push(...renderEsoteric(sig));
   }
   // Render even with zero signals if the user pinned dials — a hand-set board
   // is itself a signal worth injecting.

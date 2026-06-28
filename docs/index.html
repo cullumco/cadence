@@ -675,7 +675,7 @@
         <button class="ambient-ctx" id="ambient-ctx" aria-expanded="false" aria-haspopup="true" aria-label="Current ambient period — click to explore alternates"></button>
         <div class="period-panel" id="period-panel" role="listbox" aria-label="Time periods"></div>
       </div>
-      <a href="#install" data-goatcounter-click="install-nav">install</a>
+      <a href="#install" data-evt="install-nav">install</a>
       <a href="https://github.com/cullumco/cadence">github</a>
       <span class="proj">a <a href="https://cullum.co">Cullum&amp;Co</a> project</span>
     </div>
@@ -688,7 +688,7 @@
       <h1 class="load d2">Agents that<br><em>read the room.</em></h1>
       <p class="lede load d3">The missing input is not another instruction. It is the room around the prompt.</p>
       <div class="cta-row load d4">
-        <a href="#install" class="btn btn-primary" data-goatcounter-click="install-hero">Install the plugin →</a>
+        <a href="#install" class="btn btn-primary" data-evt="install-hero">Install the plugin →</a>
         <a href="https://github.com/cullumco/cadence" class="btn btn-ghost">View source</a>
       </div>
     </div>
@@ -732,15 +732,15 @@
       <div class="card">
         <span class="tab">Shipping cadence</span>
         <h3>The call, made.</h3>
-        <p>Hardcore at 3 commits/hr, state: <code>"ship mode"</code>. Exponential backoff with jitter, three attempts, here's the diff, tests pass.</p>
+        <p>Hardcore at 3 commits/hr, a <em>"let's ship it"</em> in your own words. Exponential backoff with jitter, three attempts, here's the diff, tests pass.</p>
       </div>
       <div class="card">
         <span class="tab">Thinking cadence</span>
         <h3>Room to explore.</h3>
-        <p>Ambient music, state: <code>"thinking through tradeoffs"</code>. Options laid out patiently, trade-offs actually explored, no pressure to pick yet.</p>
+        <p>Ambient music, <em>"thinking through tradeoffs"</em> — said to it, or just visible in how you're working. Options laid out patiently, no pressure to pick yet.</p>
       </div>
     </div>
-    <p class="small">Same words. The room around them changed, and the agent finally saw it. <a href="#install" class="inline" data-goatcounter-click="install-impact">Install it</a> and feel the difference in two minutes.</p>
+    <p class="small">Same words. The room around them changed, and the agent finally saw it. No setup — your prompt, your music, and your repo are already signals. <a href="#install" class="inline" data-evt="install-impact">Install it</a> and feel the difference in two minutes.</p>
   </section>
 
   <!-- ── how it works ────────────────────────────────────────── -->
@@ -751,7 +751,7 @@
       <div class="stage">
         <span class="num">01 — Signals</span>
         <h3>Read the room.</h3>
-        <p>Time, weather, battery, Focus mode, git state, prompt rhythm, music, and self-report become visible context. The <code>/cadence:state</code> skill lets you say what you already know: <em>"two beers, shipping."</em></p>
+        <p>Your prompt's own intent, music, git state, time, prompt rhythm — and whatever you tell it: <em>"two beers, shipping."</em> Anything privacy-adjacent stays off until you opt in. Pause it all with one command.</p>
       </div>
       <div class="stage">
         <span class="num">02 — Dials</span>
@@ -809,6 +809,7 @@
     context: saturday afternoon, rainy, focus on
     git: clean tree
     activity: { prompt_len=47 }
+    intent: ship (read from your prompt)
   <span class="key">cadence:</span>  <span class="com"># inferred from signals, advisory</span>
     { pace=fast tone=warm posture=decisive proactivity=act-freely }
   <span class="key">reframe:</span> read my prompt as someone in this cadence meant it: keep
@@ -833,9 +834,9 @@
 <pre><span class="prompt">&gt;</span> /plugin marketplace add cullumco/cadence
 <span class="prompt">&gt;</span> /plugin install cadence@cadence
 <span class="prompt">&gt;</span> /reload-plugins
-<span class="prompt">&gt;</span> /cadence:try</pre>
+<span class="prompt">&gt;</span> /cadence:setup</pre>
     </div>
-    <p class="small">macOS only for the alpha — the signals read the Mac around you. Then set a self-report: <code>/cadence:state shipping, locked in</code>. No Spotify login, no API key — music is read at the OS level when available.</p>
+    <p class="small">Built for the Mac (alpha) — the richest signals read the Mac around you; other platforms keep the dial-movers. <code>/cadence:setup</code> is a short conversation, not a wizard. <code>/cadence:pause</code> is instant silence. Everything else — every signal, every convention, every line — is in <a href="https://github.com/cullumco/cadence" class="inline">the README</a>.</p>
   </section>
 
   <!-- ── sibling ─────────────────────────────────────────────── -->
@@ -843,6 +844,7 @@
     <div class="eyebrow">The larger bet</div>
     <h2>One channel of many.</h2>
     <p>Cadence is part of a larger bet: <strong>context surface area is the bottleneck for agentic engineering, not model capability.</strong> The prompt is a sliver of what the agent should see.</p>
+    <p>And an ambient layer only works in the open. Something that reads your room and whispers to your agent on every prompt earns trust one way: <strong>you can read every line of it.</strong> MIT, one small codebase, signals off until you opt in, one command to silence it all — and a <a href="https://github.com/cullumco/cadence" class="inline">README</a> that is the actual manual, not the brochure. The repo is the spec.</p>
     <p><a href="https://kettel.vercel.app" class="inline">Kettel</a> argues the same claim from a different angle — structured, multi-author context, ratified by teams before agents execute.</p>
     <p class="pair"><span class="a">Kettel</span> makes the room. <span class="a">Cadence</span> reads it.</p>
   </section>
@@ -1136,14 +1138,17 @@
 })();
 </script>
 
-<!-- GoatCounter: privacy-friendly page analytics (no cookies, no PII).
-     Dashboard: https://cullumco.goatcounter.com -->
-<script data-goatcounter="https://cullumco.goatcounter.com/count"
-        async src="//gc.zgo.at/count.js"></script>
-
-<!-- Vercel Analytics: enable in project dashboard to activate.
-     Script is served by Vercel infrastructure; no-ops locally. -->
+<!-- Vercel Analytics: page views + the install-CTA custom events
+     (install-nav / install-hero / install-impact — the conversion read).
+     Enable Web Analytics in the Vercel project dashboard to activate;
+     the script is served by Vercel infrastructure and no-ops locally. -->
 <script>window.va=window.va||function(){(window.vaq=window.vaq||[]).push(arguments);};</script>
+<script>
+document.addEventListener('click', function (e) {
+  var el = e.target && e.target.closest && e.target.closest('[data-evt]');
+  if (el) window.va('event', { name: el.getAttribute('data-evt') });
+});
+</script>
 <script defer src="/_vercel/insights/script.js"></script>
 
 </body>

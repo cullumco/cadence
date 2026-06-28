@@ -29,6 +29,21 @@ do not re-ask.
    Bump version to X.Y.Z
    ```
 5. **Confirm**: `npm view @cullumco/cadence version` returns the new version.
+6. **Write the release notes file** — `.github/releases/vX.Y.Z.md`. This is
+   the GitHub Release body verbatim: a short changelog, user-visible changes
+   first. Commit + push it on main.
+7. **Dispatch the `Release` workflow** (`.github/workflows/release.yml`) with
+   the tag and the bump commit. GitHub creates the tag at `target`
+   server-side AND the Release from the notes file — no tag push needed
+   (the remote-session git proxy 403s tag pushes anyway). Idempotent: an
+   existing Release is a no-op.
+   ```bash
+   gh workflow run Release -f tag=vX.Y.Z -f target=<bump-commit-sha>
+   ```
+   (No `gh` in remote sessions — use the GitHub MCP `actions_run_trigger`
+   tool instead.)
+8. **Confirm the Release exists**: `gh release view vX.Y.Z` (or the MCP
+   `get_release_by_tag`).
 
 ## Gotchas learned in real releases
 
@@ -42,3 +57,12 @@ do not re-ask.
 - Plugin installers get the new version through npm (`source: npm`), so
   publishing is what actually ships hook changes to users — pushing main
   alone does not.
+- Tag/Release AFTER the publish succeeds, not before — a public tag/Release
+  pointing at a version npm doesn't serve is the pitch running ahead of
+  reality.
+- Remote sessions cannot push tags (the git proxy 403s `refs/tags/*` while
+  branch pushes succeed, and reports a misleading "Everything up-to-date").
+  That's why the workflow creates the tag server-side via `--target`.
+- `target` must be the FULL 40-char commit SHA (or a branch name) —
+  GitHub's release API rejects abbreviated SHAs with
+  "Release.target_commitish is invalid". Use `git rev-parse <short-sha>`.

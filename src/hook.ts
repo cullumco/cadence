@@ -1,13 +1,11 @@
 #!/usr/bin/env node
-import { getMusicSignal } from "./providers/music.js";
-import { getSelfReportSignal } from "./providers/selfreport.js";
-import { getAmbientSignal } from "./providers/ambient.js";
-import { getGitSignal } from "./providers/git.js";
-import { getActivitySignal } from "./providers/activity.js";
-import { deriveCadence, buildReframe, loadOverrides, applyOverrides } from "./cadence.js";
+import { deriveCadenceTraced, buildReframe, loadOverrides, applyOverrides } from "./cadence.js";
+import { loadProviders, providerEnabled, isPaused } from "./config.js";
+import { collectSignals } from "./envelope.js";
 import { render } from "./inject.js";
+import { buildTuneEntry, appendTuneEntryBounded } from "./learn.js";
 import { debug } from "./debug.js";
-import type { Signal, UserState, StateWithCadence } from "./types.js";
+import type { Signal, UserState, StateWithCadence, ActivitySignal } from "./types.js";
 
 const TOTAL_BUDGET_MS = 1500;
 
@@ -18,69 +16,89 @@ const TOTAL_BUDGET_MS = 1500;
 // Claude Code writes a JSON payload to stdin; it includes `cwd` (the project
 // dir). We read it so the git provider inspects the RIGHT repo, not wherever
 // the hook binary happens to live.
-async function readStdin(): Promise<{ cwd?: string; prompt?: string }> {
+async function readStdin(): Promise<{ cwd?: string; prompt?: string; session_id?: string }> {
   if (process.stdin.isTTY) return {};
   let raw = "";
   for await (const chunk of process.stdin) raw += chunk;
   try {
-    return JSON.parse(raw) as { cwd?: string; prompt?: string };
+    return JSON.parse(raw) as { cwd?: string; prompt?: string; session_id?: string };
   } catch {
     return {};
   }
 }
 
-async function collectSignals(cwd: string, prompt?: string): Promise<Signal[]> {
-  const [music, report, ambient, git, activity] = await Promise.allSettled([
-    getMusicSignal(),
-    getSelfReportSignal(),
-    getAmbientSignal(new Date()),
-    getGitSignal(cwd),
-    getActivitySignal(prompt),
-  ]);
-  const signals: Signal[] = [];
-  if (music.status === "fulfilled" && music.value) signals.push(music.value);
-  if (report.status === "fulfilled" && report.value) signals.push(report.value);
-  if (ambient.status === "fulfilled" && ambient.value) signals.push(ambient.value);
-  if (git.status === "fulfilled" && git.value) signals.push(git.value);
-  if (activity.status === "fulfilled" && activity.value) signals.push(activity.value);
-  return signals;
-}
+// Signal collection lives in envelope.ts — the shared seam every surface
+// (hook, CLI preview, MCP server) reads through, so they can't drift apart.
 
 async function main() {
-  const { cwd, prompt } = await readStdin();
+  // Paused = the user asked for silence. Check FIRST: no signals read, no
+  // subprocesses spawned, nothing injected. `cadence resume` turns it back on.
+  if (await isPaused()) process.exit(0);
+
+  const { cwd, prompt, session_id } = await readStdin();
   const projectDir = cwd ?? process.cwd();
 
-  const [signals, overrides] = await Promise.all([
-    Promise.race<Signal[]>([
-      collectSignals(projectDir, prompt),
-      new Promise<Signal[]>((resolve) =>
-        setTimeout(() => {
-          debug("hook", `signal collection exceeded ${TOTAL_BUDGET_MS}ms budget — injecting without signals`);
-          resolve([]);
-        }, TOTAL_BUDGET_MS)
-      ),
-    ]),
-    loadOverrides(),
+  // Pins + the opt-in registry are tiny local reads; load them first so signal
+  // collection knows which opt-in providers to run, then race only the
+  // subprocess-heavy collection against the budget.
+  const [overrides, providers] = await Promise.all([loadOverrides(), loadProviders()]);
+  const signals = await Promise.race<Signal[]>([
+    collectSignals(projectDir, prompt, providers),
+    // unref: the losing timer must not hold the process open after the
+    // race settles — Claude Code waits on our EXIT, not our output.
+    new Promise<Signal[]>((resolve) =>
+      setTimeout(() => {
+        debug("hook", `signal collection exceeded ${TOTAL_BUDGET_MS}ms budget — injecting without signals`);
+        resolve([]);
+      }, TOTAL_BUDGET_MS).unref()
+    ),
   ]);
 
   // Nothing to say: no signals AND no pinned dials.
-  if (signals.length === 0 && Object.keys(overrides).length === 0) {
-    process.exit(0);
-  }
+  const silent = signals.length === 0 && Object.keys(overrides).length === 0;
 
   const state: UserState = { signals, capturedAt: Date.now() };
-  const { cadence, pinned } = applyOverrides(deriveCadence(state), overrides);
+  const { cadence: inferred, nudges } = deriveCadenceTraced(state);
+  const { cadence, pinned } = applyOverrides(inferred, overrides);
+
+  // Opt-in tune log: one derived-features record per prompt (lengths, intent
+  // enum, cue classes — never text). Silent exits log too (injected:false) so
+  // the NEXT prompt's features can still pair with this one. Bounded by a
+  // 250ms race and fail-silent inside, so output and exit are byte-identical
+  // with tuning on or off.
+  if (prompt != null && providerEnabled(providers, "tuning")) {
+    const activity = signals.find((s): s is ActivitySignal => s.source === "activity");
+    await appendTuneEntryBounded(
+      buildTuneEntry({
+        prompt,
+        ...(session_id != null ? { session: session_id } : {}),
+        emitted: cadence,
+        pinned,
+        nudges,
+        injected: !silent,
+        // from the activity signal, which read lastPromptAt BEFORE updating it
+        // (re-reading activity.json here would just see our own write).
+        ...(activity?.minSinceLastPrompt != null ? { gapMin: activity.minSinceLastPrompt } : {}),
+      })
+    );
+  }
+
+  if (silent) process.exit(0);
+
   const reframe = buildReframe(cadence);
   const stateWithCadence: StateWithCadence = { ...state, cadence, pinned, reframe };
   const block = render(stateWithCadence);
 
+  // Exit in the write callback (stdout to a pipe can flush async): a straggling
+  // provider subprocess must never keep the user's prompt waiting on our exit.
   process.stdout.write(
     JSON.stringify({
       hookSpecificOutput: {
         hookEventName: "UserPromptSubmit",
         additionalContext: block,
       },
-    })
+    }),
+    () => process.exit(0)
   );
 }
 

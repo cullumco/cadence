@@ -7,9 +7,10 @@ import type { GitSignal } from "../types.js";
  * Cross-platform (git is git everywhere). Reads the repo at `cwd` — which,
  * when run from the hook, is the project Claude Code is working in.
  *
- * Rendered as flavor for now: commits this hour, dirty files, and whether
- * you're mid-merge/rebase (the real debug tell). No dial nudges yet — we
- * watch the output first, then decide what should steer.
+ * Collects commits this hour, dirty files, and whether you're mid-merge/rebase
+ * (the real debug tell). LIVE in dial mapping since 2026-06-05: 3+ commits/hr
+ * → fast pace, mid-conflict → verify-first proactivity (see deriveCadence,
+ * applied below self-report so the user's explicit word still wins).
  * ───────────────────────────────────────────────────────────────────────── */
 
 const GIT_TIMEOUT_MS = 700;

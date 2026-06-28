@@ -1,7 +1,7 @@
 # Deploying the Cadence site
 
 The marketing site is a single static file: `docs/index.html` (inline CSS/JS;
-fonts from Google Fonts CDN; analytics via GoatCounter). No build step.
+fonts from Google Fonts CDN; analytics via Vercel Web Analytics). No build step.
 
 Canonical URL: **https://cadence.cullum.co** — served by **Vercel**.
 
@@ -20,11 +20,15 @@ This is the account-side step that has to be done in the Vercel dashboard.
    - `docs/vercel.json` supplies `cleanUrls` + security headers automatically.
 3. **Production branch:** set to whatever you merge the site to (e.g. `main`).
    Every push to it redeploys in ~30–60s.
+4. **Enable Web Analytics:** Project → *Analytics* tab → Enable. The beacon is
+   already in `index.html` and no-ops until this is on. Page views work on
+   every plan; the custom install-CTA events (`install-nav` / `install-hero` /
+   `install-impact`) record on plans with custom-events support.
 
 ### Custom domain
 
-4. Vercel → Project → *Settings → Domains* → add `cadence.cullum.co`.
-5. At your DNS provider for `cullum.co`, add the record Vercel shows — typically:
+5. Vercel → Project → *Settings → Domains* → add `cadence.cullum.co`.
+6. At your DNS provider for `cullum.co`, add the record Vercel shows — typically:
 
    ```
    CNAME   cadence   cname.vercel-dns.com.
@@ -44,7 +48,7 @@ This is the account-side step that has to be done in the Vercel dashboard.
 
 ```bash
 curl -s -o /dev/null -w "%{http_code}" https://cadence.cullum.co/   # expect 200
-curl -s https://cadence.cullum.co/ | grep -c goatcounter            # expect 5
+curl -s https://cadence.cullum.co/ | grep -c "_vercel/insights"     # expect 1
 ```
 
 ## CLI alternative (optional)

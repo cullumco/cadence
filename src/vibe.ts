@@ -34,7 +34,7 @@ interface Affect {
  * (energy: death-metal high → Bach low; valence: euphoric high → depressed low).
  * Order doesn't matter — every matching row is averaged. */
 const GENRE_AFFECT: Record<string, Affect> = {
-  // ── high energy → ship ───────────────────────────────────────────────
+  // ── high energy → pace high ──────────────────────────────────────────
   punk: { energy: 0.9, valence: 0.6, acoustic: 0.05, moods: ["aggressive", "energetic"] },
   metal: { energy: 0.95, valence: 0.4, acoustic: 0.02, moods: ["aggressive", "dark"] },
   hardcore: { energy: 0.95, valence: 0.45, acoustic: 0.02, moods: ["aggressive", "energetic"] },
@@ -82,7 +82,7 @@ const GENRE_AFFECT: Record<string, Affect> = {
   surf: { energy: 0.7, valence: 0.7, acoustic: 0.2, moods: ["happy", "energetic"] },
   "math rock": { energy: 0.75, valence: 0.55, acoustic: 0.2, moods: ["energetic"] },
 
-  // ── mid / groovy → ship-or-think depending on energy ─────────────────
+  // ── mid / groovy → pace dead zone (0.4 < energy < 0.7 = no nudge) ────
   "r&b": { energy: 0.55, valence: 0.6, acoustic: 0.2, moods: ["sexy", "chilled"] },
   soul: { energy: 0.55, valence: 0.65, acoustic: 0.25, moods: ["romantic", "uplifting"] },
   reggae: { energy: 0.6, valence: 0.75, acoustic: 0.2, moods: ["chilled", "happy"] },
@@ -103,7 +103,7 @@ const GENRE_AFFECT: Record<string, Affect> = {
   samba: { energy: 0.7, valence: 0.8, acoustic: 0.5, moods: ["happy"] },
   flamenco: { energy: 0.6, valence: 0.5, acoustic: 0.85, moods: ["romantic", "epic"] },
 
-  // ── low energy, organic → think ──────────────────────────────────────
+  // ── low energy, organic → pace low, tone warm ────────────────────────
   ambient: { energy: 0.2, valence: 0.5, acoustic: 0.6, moods: ["ethereal", "calm"] },
   "lo-fi": { energy: 0.3, valence: 0.5, acoustic: 0.4, moods: ["chilled", "calm"] },
   lofi: { energy: 0.3, valence: 0.5, acoustic: 0.4, moods: ["chilled", "calm"] },
@@ -130,7 +130,8 @@ const GENRE_AFFECT: Record<string, Affect> = {
   opera: { energy: 0.5, valence: 0.45, acoustic: 0.9, moods: ["epic"] },
   choral: { energy: 0.3, valence: 0.5, acoustic: 0.95, moods: ["ethereal", "epic"] },
 
-  // ── low energy, low valence → debug-leaning ──────────────────────────
+  // ── low energy, low valence → pace low; dark moods are render-only ───
+  //    (valence currently moves NO dial — see BACKLOG "Valence boundary")
   blues: { energy: 0.45, valence: 0.35, acoustic: 0.5, moods: ["sad", "dark"] },
   goth: { energy: 0.55, valence: 0.3, acoustic: 0.2, moods: ["dark"] },
   gothic: { energy: 0.55, valence: 0.3, acoustic: 0.2, moods: ["dark"] },
@@ -145,7 +146,9 @@ const GENRE_AFFECT: Record<string, Affect> = {
 
 export interface Vibe {
   moods: Mood[]; // 2–4 clean adjectives, ordered by salience
-  energy: number; // averaged 0–1 — feeds the pace dial in cadence.ts
+  energy: number; // averaged 0–1 — feeds the pace + posture dials in cadence.ts
+  valence: number; // averaged 0–1 — positiveness, colors the mood words
+  acoustic: number; // averaged 0–1 — organic/acoustic-ness → warms the tone dial
 }
 
 // Keys sorted longest-first so the most SPECIFIC row wins per tag: a
@@ -168,8 +171,11 @@ export function tagsToVibe(tags: string[]): Vibe | null {
   }
   if (hits.length === 0) return null;
 
-  const energy =
-    hits.reduce((s, a) => s + a.energy, 0) / hits.length;
+  const avg = (pick: (a: Affect) => number) =>
+    hits.reduce((s, a) => s + pick(a), 0) / hits.length;
+  const energy = avg((a) => a.energy);
+  const valence = avg((a) => a.valence);
+  const acoustic = avg((a) => a.acoustic);
 
   // Mood words: collect from all hits, dedupe, keep most frequent first.
   const moodCounts = new Map<Mood, number>();
@@ -181,5 +187,5 @@ export function tagsToVibe(tags: string[]): Vibe | null {
     .slice(0, 4)
     .map(([m]) => m);
 
-  return { moods, energy };
+  return { moods, energy, valence, acoustic };
 }

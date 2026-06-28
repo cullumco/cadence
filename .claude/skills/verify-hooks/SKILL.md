@@ -22,13 +22,13 @@ touching that path). Budget: must return well under 1500ms.
 
 ```bash
 # should block (shipping self-report + soft handoff):
-cadence state "shipping, locked in"
+cadence report "shipping, locked in"
 echo '{"cwd":"'$PWD'","last_assistant_message":"Want me to do that next?"}' | node dist/stop.js
 # should stay silent (no shipping authority):
 cadence clear
 echo '{"cwd":"'$PWD'","last_assistant_message":"Want me to do that next?"}' | node dist/stop.js
 ```
-Restore the user's real state afterward (`cadence state "..."`).
+Restore the user's real state afterward (`cadence report "..."`).
 
 ## PostToolUse (`dist/posttool.js`)
 
