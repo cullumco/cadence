@@ -108,18 +108,16 @@ async function validateSkills() {
     }
     const frontmatter = parseFrontmatter(contents, entry);
     if (!frontmatter) continue;
+    const disableModelInvocation =
+      frontmatter["disable-model-invocation"] ?? frontmatter.disable_model_invocation;
+    if (disableModelInvocation === "true" || disableModelInvocation === true) {
+      // Claude Code-only skill — not Codex-invocable, skip validation
+      console.log(`  skipped ${entry} (disable-model-invocation=true, Claude Code-only)`);
+      continue;
+    }
     if (!nonEmptyString(frontmatter.name)) fail(`skill ${entry} frontmatter.name is required`);
     if (!nonEmptyString(frontmatter.description)) {
       fail(`skill ${entry} frontmatter.description is required`);
-    }
-    const disableModelInvocation =
-      frontmatter["disable-model-invocation"] ?? frontmatter.disable_model_invocation;
-    if (
-      disableModelInvocation !== undefined &&
-      disableModelInvocation !== "false" &&
-      disableModelInvocation !== false
-    ) {
-      fail(`skill ${entry} disable-model-invocation must be false or omitted for Codex`);
     }
   }
 }
