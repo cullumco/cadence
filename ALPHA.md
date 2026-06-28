@@ -48,6 +48,23 @@ claude --plugin-dir ~/cadence
 
 Inside Claude Code: `/cadence:try`, then `/cadence:state shipping, locked in`.
 
+## Codex Alpha
+
+Cadence also ships a Codex plugin manifest at `.codex-plugin/plugin.json`.
+Unlike the Claude Code alpha, the Codex surface is currently skill-driven: it
+does not auto-inject on every prompt or run the Stop hook. Ask Codex to use
+Cadence and it will run `cadence test`, read the `<user_state>` block, and apply
+the dials as an advisory response lens.
+
+The package includes:
+
+```text
+.codex-plugin/plugin.json
+skills/cadence/SKILL.md
+skills/state/SKILL.md
+skills/try/SKILL.md
+```
+
 ## Release Gate
 
 ```bash

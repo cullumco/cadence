@@ -1,0 +1,34 @@
+{
+  "name": "cadence",
+  "version": "0.1.4",
+  "description": "Ambient context for Codex: embodied signals, cadence dials, and a practical read-the-room lens. macOS-only alpha.",
+  "author": {
+    "name": "Cullum&Co",
+    "url": "https://cullum.co"
+  },
+  "homepage": "https://cadence.cullum.co/",
+  "repository": "https://github.com/cullumco/cadence",
+  "license": "MIT",
+  "keywords": [
+    "context",
+    "cadence",
+    "ambient-context",
+    "codex",
+    "agents"
+  ],
+  "skills": "./skills/",
+  "interface": {
+    "displayName": "Cadence",
+    "shortDescription": "Read the room before responding",
+    "longDescription": "Cadence lets Codex inspect your self-reported state, ambient signals, git rhythm, and pinned response dials, then use that context as an advisory lens for pace, tone, posture, and proactivity.",
+    "developerName": "Cullum&Co",
+    "category": "Productivity",
+    "capabilities": [
+      "Read",
+      "Interactive"
+    ],
+    "websiteURL": "https://cadence.cullum.co/",
+    "defaultPrompt": "Read my current cadence and use it to shape your response.",
+    "brandColor": "#465A4E"
+  }
+}

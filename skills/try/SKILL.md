@@ -1,6 +1,7 @@
 ---
+name: cadence-try
 description: Show what Cadence is doing right now and give the user a quick way to feel the difference.
-disable-model-invocation: true
+disable-model-invocation: false
 ---
 
 # Try Cadence
