@@ -104,6 +104,8 @@ test("detectPromptIntent: phrase cues classify, bare common words don't misfire"
   assert.equal(detectPromptIntent("let's just get this done"), "ship");
   assert.equal(detectPromptIntent("alright, close this out"), "ship");
   assert.equal(detectPromptIntent("help me think through the tradeoffs here"), "think");
+  assert.equal(detectPromptIntent("what's the best way to structure this?"), "think");
+  assert.equal(detectPromptIntent("walk me through how the auth flow works"), "think");
   assert.equal(detectPromptIntent("why is this test failing on CI?"), "debug");
   assert.equal(detectPromptIntent("can we do a code review on this?"), "review");
   assert.equal(detectPromptIntent("reviewing the diff before we merge"), "review");

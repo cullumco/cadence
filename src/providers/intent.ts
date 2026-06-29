@@ -27,7 +27,7 @@ const PATTERNS: { kind: IntentKind; re: RegExp }[] = [
   },
   {
     kind: "think",
-    re: /\b(thinking through|let'?s think|think about|weigh(ing)? (the|our|up)|trade-?offs?|brainstorm|explore (the )?options|pros and cons|not sure (which|whether|if)|help me decide|which approach|architect(ure|ing)?\b.*\b(should|best)|design (the|a) )\b/i,
+    re: /\b(thinking through|let'?s think|think about|weigh(ing)? (the|our|up)|trade-?offs?|brainstorm|explore (the )?options|pros and cons|not sure (which|whether|if)|help me decide|which approach|architect(ure|ing)?\b.*\b(should|best)|design (the|a) |what'?s the (right|best) (way|approach|option|path)|help me understand\b|walk me through\b)\b/i,
   },
   {
     kind: "ship",
