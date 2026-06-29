@@ -355,6 +355,14 @@ test("git nudges: flow-state commits drive pace, conflict lowers proactivity", (
   assert.equal(cadence.tone, "medium");
 });
 
+test("git nudges: flow state (streak + clean) raises proactivity alongside pace", () => {
+  const { cadence } = renderOnly([
+    { source: "git", commitsLastHour: 4, filesDirty: 0, conflicted: false },
+  ]);
+  assert.equal(cadence.pace, "high");
+  assert.equal(cadence.proactivity, "high"); // in the groove → act, don't ask
+});
+
 test("git nudges: quiet clean repo leaves dials neutral", () => {
   const { cadence } = renderOnly([
     { source: "git", commitsLastHour: 0, filesDirty: 0, conflicted: false },

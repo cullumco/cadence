@@ -148,7 +148,10 @@ export function deriveCadenceTraced(state: UserState): {
   // Applied below self-report on purpose: "I'm shipping" beats a mid-conflict
   // read — the user's explicit word stays the higher authority.
   if (git) {
-    if (git.commitsLastHour >= 3) nudge("pace", "high", "git", "git.streak"); // flow state
+    if (git.commitsLastHour >= 3) {
+      nudge("pace", "high", "git", "git.streak"); // flow state
+      nudge("proactivity", "high", "git", "git.streak"); // in the groove → act, don't ask
+    }
     if (git.conflicted) nudge("proactivity", "low", "git", "git.conflict"); // verify, don't barrel
   }
 
