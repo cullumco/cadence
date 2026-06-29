@@ -118,6 +118,10 @@ export function deriveCadenceTraced(state: UserState): {
       nudge("tone", "low", "environment", "env.gloomy"); // gloomy out → warmer in
     }
     if (environment.onBattery) nudge("pace", "high", "environment", "env.battery"); // mobile/untethered → quick hits
+    if (environment.loadHigh) {
+      nudge("pace", "high", "environment", "env.busy"); // something's running → get an answer, get back to it
+      nudge("posture", "high", "environment", "env.busy"); // decisive while waiting — don't want a survey
+    }
   }
 
   // ── music → pace + posture + tone (move WITH the music) ───────────────────

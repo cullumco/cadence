@@ -292,6 +292,25 @@ test("environment is overridden by a stronger signal — 'shipping' beats 'it's 
   assert.equal(c.pace, "high"); // self-report wins over the late-night nudge
 });
 
+test("environment: busy machine raises pace and posture (something's running)", () => {
+  const c = deriveCadence(
+    stateWith([{ source: "environment", partOfDay: "afternoon", dayOfWeek: "tuesday", isWeekend: false, hour: 14, loadHigh: true }])
+  );
+  assert.equal(c.pace, "high");
+  assert.equal(c.posture, "high");
+});
+
+test("environment: busy machine is overridden by a stronger signal — 'thinking' beats load", () => {
+  const c = deriveCadence(
+    stateWith([
+      { source: "environment", partOfDay: "afternoon", dayOfWeek: "tuesday", isWeekend: false, hour: 14, loadHigh: true },
+      { source: "self_report", text: "thinking through the tradeoffs", setAt: 0 },
+    ])
+  );
+  assert.equal(c.pace, "low"); // self-report wins
+  assert.equal(c.posture, "low");
+});
+
 // ── activity signal ─────────────────────────────────────────────────────────
 test("activityFrom: captures prompt length and minutes since prior prompt", () => {
   const signal = activityFrom("keep rolling", 1_000, 181_000);
