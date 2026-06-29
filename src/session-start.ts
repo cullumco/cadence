@@ -85,12 +85,13 @@ async function collectInfo(): Promise<SessionInfo> {
   ]);
   const pinned = Object.keys(overrides);
   const remaining = report ? Math.max(0, STALE_AFTER_MS - (Date.now() - report.setAt)) : null;
+  const nowPlaying = music?.artist ? { artist: music.artist, player: music.player ?? "music" } : null;
   return {
     selfReport: report?.text ?? null,
     selfReportRemainingMs: remaining,
     pinned,
-    nowPlaying: music?.artist ? { artist: music.artist, player: music.player ?? "music" } : null,
-    firstRun: !report && pinned.length === 0,
+    nowPlaying,
+    firstRun: !report && pinned.length === 0 && !nowPlaying,
     paused: false,
   };
 }

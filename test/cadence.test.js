@@ -727,6 +727,17 @@ test("composeHint: paused says so to the user, in one legible line", () => {
 });
 
 // ── session greeting: invite a refresh as state goes stale ──────────────────
+test("composeHint: music alone is a signal — doesn't trigger the firstRun 'hasn't heard' message", () => {
+  // firstRun=false because collectInfo now gates it on !nowPlaying
+  const hint = composeHint({
+    selfReport: null, selfReportRemainingMs: null,
+    pinned: [], nowPlaying: { artist: "Aphex Twin", player: "Apple Music" }, firstRun: false, paused: false,
+  });
+  assert.ok(hint != null);
+  assert.match(hint, /Aphex Twin/);
+  assert.doesNotMatch(hint, /hasn't heard/);
+});
+
 test("composeHint: nudges to refresh when the self-report is about to expire", () => {
   const fresh = composeHint({
     selfReport: "ship mode", selfReportRemainingMs: 90 * 60_000,
