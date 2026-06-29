@@ -101,6 +101,8 @@ test("deriveCadence: no signals → all dials neutral", () => {
 // ── prompt intent ────────────────────────────────────────────────────────────
 test("detectPromptIntent: phrase cues classify, bare common words don't misfire", () => {
   assert.equal(detectPromptIntent("ok let's ship it, the retry logic is done"), "ship");
+  assert.equal(detectPromptIntent("let's just get this done"), "ship");
+  assert.equal(detectPromptIntent("alright, close this out"), "ship");
   assert.equal(detectPromptIntent("help me think through the tradeoffs here"), "think");
   assert.equal(detectPromptIntent("why is this test failing on CI?"), "debug");
   assert.equal(detectPromptIntent("heads down, deep work for the next hour"), "focus");

@@ -31,7 +31,7 @@ const PATTERNS: { kind: IntentKind; re: RegExp }[] = [
   },
   {
     kind: "ship",
-    re: /\b(ship it|let'?s ship|ready to ship|send it|just send|locked in|lock(ing)? in|crank(ing)? (out|through)|grind(ing)? (out|through)|knock (this|these|it) out|let'?s go\b|let'?s finish|wrap (this|it) up|push it through)\b/i,
+    re: /\b(ship it|let'?s ship|ready to ship|send it|just send|locked in|lock(ing)? in|crank(ing)? (out|through)|grind(ing)? (out|through)|knock (this|these|it) out|let'?s go\b|let'?s finish|wrap (this|it) up|push it through|get (this|it) done|close (this|it) out|let'?s just (do|finish|ship|push))\b/i,
   },
   {
     kind: "focus",
