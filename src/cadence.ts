@@ -171,6 +171,10 @@ export function deriveCadenceTraced(state: UserState): {
     } else if (intent.kind === "debug") {
       nudge("posture", "low", "intent", "intent.debug");
       nudge("proactivity", "low", "intent", "intent.debug");
+    } else if (intent.kind === "review") {
+      nudge("pace", "low", "intent", "intent.review");
+      nudge("posture", "low", "intent", "intent.review"); // surface issues, not just pick one
+      nudge("proactivity", "low", "intent", "intent.review"); // flag, don't apply
     } else if (intent.kind === "focus") {
       nudge("tone", "high", "intent", "intent.focus");
     }

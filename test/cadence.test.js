@@ -105,6 +105,8 @@ test("detectPromptIntent: phrase cues classify, bare common words don't misfire"
   assert.equal(detectPromptIntent("alright, close this out"), "ship");
   assert.equal(detectPromptIntent("help me think through the tradeoffs here"), "think");
   assert.equal(detectPromptIntent("why is this test failing on CI?"), "debug");
+  assert.equal(detectPromptIntent("can we do a code review on this?"), "review");
+  assert.equal(detectPromptIntent("reviewing the diff before we merge"), "review");
   assert.equal(detectPromptIntent("heads down, deep work for the next hour"), "focus");
   // the bare words that the self-report regex leans on must NOT trigger here
   assert.equal(detectPromptIntent("can you just check this file?"), null);
@@ -120,6 +122,13 @@ test("deriveCadence: ship intent from the prompt drives decisive + act-freely", 
 
 test("deriveCadence: debug intent leads with hypotheses (low posture + proactivity)", () => {
   const c = deriveCadence(stateWith([{ source: "intent", kind: "debug" }]));
+  assert.equal(c.posture, "low");
+  assert.equal(c.proactivity, "low");
+});
+
+test("deriveCadence: review intent — slow + surface issues + don't apply (all three low)", () => {
+  const c = deriveCadence(stateWith([{ source: "intent", kind: "review" }]));
+  assert.equal(c.pace, "low");
   assert.equal(c.posture, "low");
   assert.equal(c.proactivity, "low");
 });

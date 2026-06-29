@@ -46,7 +46,7 @@ export interface ActivitySignal {
  * Weaker than a deliberate self-report, stronger than git inference. */
 export interface IntentSignal {
   source: "intent";
-  kind: "ship" | "think" | "debug" | "focus" | null;
+  kind: "ship" | "think" | "debug" | "review" | "focus" | null;
 }
 
 /* Esoteric flavor — opt-in, render-only, never moves a dial. */
