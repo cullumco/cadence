@@ -25,25 +25,27 @@ function requireString(payload, field, label) {
   if (!nonEmptyString(payload[field])) fail(`${label}.${field} must be a non-empty string`);
 }
 
-function validateManifest(manifest) {
-  if (!manifest || typeof manifest !== "object" || Array.isArray(manifest)) return;
+function isObj(value) {
+  return value && typeof value === "object" && !Array.isArray(value);
+}
 
-  for (const field of ["name", "version", "description", "skills"]) {
+function validateManifest(manifest) {
+  if (!isObj(manifest)) return;
+
+  for (const field of ["name", "version", "description"]) {
     requireString(manifest, field, "plugin.json");
   }
   if (manifest.skills !== "./skills/") {
     fail('plugin.json.skills must be "./skills/"');
   }
 
-  const author = manifest.author;
-  if (!author || typeof author !== "object" || Array.isArray(author)) {
+  if (!isObj(manifest.author)) {
     fail("plugin.json.author must be an object");
   } else {
-    requireString(author, "name", "plugin.json.author");
+    requireString(manifest.author, "name", "plugin.json.author");
   }
 
-  const iface = manifest.interface;
-  if (!iface || typeof iface !== "object" || Array.isArray(iface)) {
+  if (!isObj(manifest.interface)) {
     fail("plugin.json.interface must be an object");
     return;
   }
@@ -55,12 +57,12 @@ function validateManifest(manifest) {
     "category",
     "defaultPrompt",
   ]) {
-    requireString(iface, field, "plugin.json.interface");
+    requireString(manifest.interface, field, "plugin.json.interface");
   }
-  if (!Array.isArray(iface.capabilities)) {
+  if (!Array.isArray(manifest.interface.capabilities)) {
     fail("plugin.json.interface.capabilities must be an array");
   }
-  if (iface.brandColor && !/^#[0-9A-F]{6}$/i.test(iface.brandColor)) {
+  if (manifest.interface.brandColor && !/^#[0-9A-F]{6}$/i.test(manifest.interface.brandColor)) {
     fail("plugin.json.interface.brandColor must use #RRGGBB");
   }
 }
@@ -85,8 +87,8 @@ function parseFrontmatter(contents, skillName) {
   return frontmatter;
 }
 
-async function validateSkills() {
-  const skillsRoot = "skills";
+async function validateSkills(manifest) {
+  const skillsRoot = (manifest?.skills ?? "./skills/").replace(/^\.\//, "").replace(/\/$/, "");
   let entries = [];
   try {
     entries = await readdir(skillsRoot);
@@ -110,7 +112,7 @@ async function validateSkills() {
     if (!frontmatter) continue;
     const disableModelInvocation =
       frontmatter["disable-model-invocation"] ?? frontmatter.disable_model_invocation;
-    if (disableModelInvocation === "true" || disableModelInvocation === true) {
+    if (String(disableModelInvocation) === "true") {
       // Claude Code-only skill — not Codex-invocable, skip validation
       console.log(`  skipped ${entry} (disable-model-invocation=true, Claude Code-only)`);
       continue;
@@ -124,7 +126,7 @@ async function validateSkills() {
 
 const manifest = await readJson(".codex-plugin/plugin.json");
 validateManifest(manifest);
-await validateSkills();
+await validateSkills(manifest);
 
 if (errors.length > 0) {
   console.error("Codex plugin validation failed:");
