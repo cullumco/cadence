@@ -1010,6 +1010,148 @@ test("renderSignalsTable: wifi row is opt-in tri-state on darwin", () => {
   assert.match(linux, /wifi\s+— macOS only/);
 });
 
+// ── calendar (opt-in ICS feed → next-event proximity) ───────────────────────
+const SAMPLE_ICS = [
+  "BEGIN:VCALENDAR",
+  "VERSION:2.0",
+  "BEGIN:VEVENT",
+  "DTSTART:20260703T160000Z",
+  "DTEND:20260703T163000Z",
+  "SUMMARY:Standup with a very lo",
+  " ng folded line", // RFC 5545 folding: CRLF+space removed, mid-word continue
+  "END:VEVENT",
+  "BEGIN:VEVENT",
+  "DTSTART;TZID=America/New_York:20260703T140000",
+  "SUMMARY:NY afternoon sync",
+  "END:VEVENT",
+  "BEGIN:VEVENT",
+  "DTSTART:20260703T170000Z",
+  "RRULE:FREQ=WEEKLY",
+  "SUMMARY:Recurring — must be skipped",
+  "END:VEVENT",
+  "BEGIN:VEVENT",
+  "DTSTART;VALUE=DATE:20260703",
+  "SUMMARY:All-day — must be skipped",
+  "END:VEVENT",
+  "END:VCALENDAR",
+].join("\r\n");
+
+test("parseIcs: unfolds lines, keeps simple events, skips RRULE and all-day", async () => {
+  const { parseIcs } = await import("../dist/providers/calendar.js");
+  const events = parseIcs(SAMPLE_ICS);
+  assert.equal(events.length, 2); // recurring + all-day dropped, never guessed
+  const utc = events.find((e) => e.title === "Standup with a very long folded line");
+  assert.ok(utc, "folded SUMMARY should be joined");
+  assert.equal(utc.start, Date.UTC(2026, 6, 3, 16, 0, 0));
+  assert.equal(utc.end, Date.UTC(2026, 6, 3, 16, 30, 0));
+  // TZID converted via Intl: 14:00 New York in July (EDT, UTC-4) = 18:00Z
+  const ny = events.find((e) => e.title === "NY afternoon sync");
+  assert.equal(ny.start, Date.UTC(2026, 6, 3, 18, 0, 0));
+});
+
+test("parseIcs: SUMMARY escapes unescaped, garbage returns empty not throw", async () => {
+  const { parseIcs } = await import("../dist/providers/calendar.js");
+  // colons in the VALUE are legal unescaped; \, and \; and \\ are the escapes
+  const ics = "BEGIN:VEVENT\nDTSTART:20260703T160000Z\nSUMMARY:1:1 w/ Sam\\, weekly\nEND:VEVENT";
+  assert.equal(parseIcs(ics)[0].title, "1:1 w/ Sam, weekly");
+  assert.deepEqual(parseIcs("not an ics file at all"), []);
+  assert.deepEqual(parseIcs(""), []);
+});
+
+test("nextEvent: nearest future start within lookahead; past and in-progress ignored", async () => {
+  const { nextEvent, CALENDAR_LOOKAHEAD_MIN } = await import("../dist/providers/calendar.js");
+  const now = Date.UTC(2026, 6, 3, 12, 0, 0);
+  const min = 60_000;
+  const events = [
+    { start: now - 30 * min, end: now + 30 * min, title: "in progress — not a wrap-up nudge" },
+    { start: now + 12 * min, title: "next" },
+    { start: now + 90 * min, title: "later" },
+  ];
+  assert.deepEqual(nextEvent(events, now), { minutes: 12, title: "next" });
+  // beyond the lookahead window → silence, not a far-future countdown
+  assert.equal(nextEvent([{ start: now + (CALENDAR_LOOKAHEAD_MIN + 5) * min }], now), null);
+  assert.equal(nextEvent([{ start: now - 5 * min }], now), null); // only the past
+  assert.equal(nextEvent([], now), null);
+});
+
+test("calendarCacheFresh: same feed within TTL only (mirrors the weather cache)", async () => {
+  const { calendarCacheFresh, CALENDAR_CACHE_MS } = await import("../dist/providers/calendar.js");
+  const c = { at: 1_000_000, url: "https://cal/x.ics", events: [] };
+  assert.equal(calendarCacheFresh(c, "https://cal/x.ics", 1_000_000 + CALENDAR_CACHE_MS - 1), true);
+  assert.equal(calendarCacheFresh(c, "https://cal/x.ics", 1_000_000 + CALENDAR_CACHE_MS + 1), false); // expired
+  assert.equal(calendarCacheFresh(c, "https://cal/other.ics", 1_000_000 + 60_000), false); // feed changed
+  assert.equal(calendarCacheFresh(null, "https://cal/x.ics", 1_000_000), false);
+  assert.equal(calendarCacheFresh("junk", "https://cal/x.ics", 1_000_000), false);
+});
+
+test("calendarConfig: accepts url string or { ics, titles }, rejects the rest", async () => {
+  const { calendarConfig } = await import("../dist/providers/calendar.js");
+  assert.deepEqual(calendarConfig("https://cal/x.ics"), { ics: "https://cal/x.ics", titles: false });
+  assert.deepEqual(calendarConfig({ ics: "https://cal/x.ics", titles: true }), { ics: "https://cal/x.ics", titles: true });
+  assert.deepEqual(calendarConfig({ ics: "https://cal/x.ics" }), { ics: "https://cal/x.ics", titles: false });
+  assert.equal(calendarConfig(true), null); // enabled-but-empty is off, not a crash
+  assert.equal(calendarConfig("not-a-url"), null);
+  assert.equal(calendarConfig({ titles: true }), null);
+  assert.equal(calendarConfig(undefined), null);
+});
+
+test("deriveCadence: imminent calendar event moves pace/posture but never tone/proactivity", () => {
+  // mirrors the music boundary test — no single signal may move all four dials
+  const c = deriveCadence(stateWith([{ source: "calendar", minutesToNextEvent: 12 }]));
+  assert.equal(c.pace, "high"); // wrap-up pressure
+  assert.equal(c.posture, "high"); // give me the call
+  assert.equal(c.tone, "medium"); // a meeting is not a mood
+  assert.equal(c.proactivity, "medium"); // acting unasked stays the user's call
+});
+
+test("deriveCadence: a non-imminent event moves nothing", () => {
+  const c = deriveCadence(stateWith([{ source: "calendar", minutesToNextEvent: 45 }]));
+  assert.deepEqual(c, { pace: "medium", tone: "medium", posture: "medium", proactivity: "medium" });
+});
+
+test("deriveCadence: self-report outranks the calendar — 'thinking' beats the clock", () => {
+  const c = deriveCadence(
+    stateWith([
+      { source: "calendar", minutesToNextEvent: 10 },
+      { source: "self_report", text: "thinking through tradeoffs", setAt: 0 },
+    ])
+  );
+  assert.equal(c.pace, "low");
+  assert.equal(c.posture, "low");
+});
+
+test("deriveCadence: calendar deadline outranks the soundtrack on pace", () => {
+  const c = deriveCadence(
+    stateWith([
+      { source: "music", track: "x", energy: 0.2 }, // mellow → pace low…
+      { source: "calendar", minutesToNextEvent: 10 }, // …but the clock wins
+    ])
+  );
+  assert.equal(c.pace, "high");
+});
+
+test("render: calendar line is minutes-only unless a title was opted in", () => {
+  const base = { cadence: { pace: "high", tone: "medium", posture: "high", proactivity: "medium" }, pinned: [], reframe: "r", capturedAt: 0 };
+  const noTitle = render({ ...base, signals: [{ source: "calendar", minutesToNextEvent: 12 }] });
+  assert.match(noTitle, /calendar: next event in 12m\n/);
+  const withTitle = render({ ...base, signals: [{ source: "calendar", minutesToNextEvent: 0, eventTitle: "1:1" }] });
+  assert.match(withTitle, /calendar: next event starting now — "1:1"/);
+});
+
+test("renderSignalsTable: calendar row never vanishes — off, quiet, or the value", () => {
+  const base = { music: null, report: null, environment: null, git: null, now: 0, platform: "darwin" };
+  const off = renderSignalsTable({ ...base, providers: {} });
+  assert.match(off, /calendar\s+— off \(run: cadence calendar set-url <ics-url>\)/);
+  const quiet = renderSignalsTable({ ...base, calendar: null, providers: { calendar: { ics: "https://cal/x.ics" } } });
+  assert.match(quiet, /calendar\s+on — no event in the next 2h/);
+  const value = renderSignalsTable({
+    ...base,
+    calendar: { source: "calendar", minutesToNextEvent: 12, eventTitle: "Standup" },
+    providers: { calendar: { ics: "https://cal/x.ics", titles: true } },
+  });
+  assert.match(value, /calendar\s+next event in 12m — "Standup"/);
+});
+
 // ── answer in kind (the lens licenses the reply's register) ─────────────────
 test("buildReframe: lit boards license answering in kind", () => {
   const warmSlow = buildReframe({ pace: "low", tone: "low", posture: "medium", proactivity: "medium" });

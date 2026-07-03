@@ -3,8 +3,10 @@ import type {
   SelfReportSignal,
   GitSignal,
   EnvironmentSignal,
+  CalendarSignal,
 } from "./types.js";
 import { STALE_AFTER_MS } from "./providers/selfreport.js";
+import { CALENDAR_LOOKAHEAD_MIN } from "./providers/calendar.js";
 import { providerEnabled, providerSetting, type ProviderConfig } from "./config.js";
 
 /* ─────────────────────────────────────────────────────────────────────────
@@ -22,6 +24,7 @@ export interface RawSignals {
   report: SelfReportSignal | null;
   environment: EnvironmentSignal | null;
   git: GitSignal | null;
+  calendar?: CalendarSignal | null; // opt-in; absent on surfaces that skip the probe
   now: number; // injected so the view stays pure/testable
   platform: NodeJS.Platform; // ditto — decides "unavailable" vs "macOS only"
   providers?: ProviderConfig; // the opt-in registry, for "on/off" on opt-in signals
@@ -174,6 +177,18 @@ function intentRow(): string {
   return top("intent", "— reads your prompt (the hook infers ship/think/debug per-prompt)");
 }
 
+function calendarRow(c: CalendarSignal | null | undefined, providers: ProviderConfig): string {
+  if (!providerEnabled(providers, "calendar"))
+    return top("calendar", "— off (run: cadence calendar set-url <ics-url>)");
+  if (!c)
+    return top(
+      "calendar",
+      `on — no event in the next ${Math.round(CALENDAR_LOOKAHEAD_MIN / 60)}h (or feed unreachable)`
+    );
+  const when = c.minutesToNextEvent <= 0 ? "starting now" : `in ${c.minutesToNextEvent}m`;
+  return top("calendar", `next event ${when}${c.eventTitle ? ` — ${JSON.stringify(c.eventTitle)}` : ""}`);
+}
+
 function tempoRow(providers: ProviderConfig): string {
   return providerEnabled(providers, "typingTempo")
     ? top("typing tempo", "on (opt-in) — rapid vs. considered prompt rhythm → pace")
@@ -213,6 +228,7 @@ export function renderSignalsTable(raw: RawSignals): string {
     reportRow(raw.report, raw.now),
     intentRow(),
     gitRow(raw.git),
+    calendarRow(raw.calendar, providers),
     top("activity", "— session-only (the hook injects it per-prompt)"),
     tempoRow(providers),
     ...optInFlavorRows(providers, raw.environment),

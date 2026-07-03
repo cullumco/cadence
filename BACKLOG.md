@@ -129,8 +129,20 @@ front. Flavor for now; `focused app → posture/proactivity` stays a candidate
 nudge once real output shows it's worth steering on.
 
 **Calendar density: cut.** The audience is solo builders in a long project, not
-people racing between meetings — so meeting-proximity isn't a fit. Removed from
+people racing between meetings — so day-shape/density isn't a fit. Removed from
 the roadmap above.
+
+**Calendar proximity: shipped (opt-in, 2026-07).** Narrower than the cut
+density idea: just "next event in Nm" from a user-pasted secret ICS feed URL,
+because wrap-up pressure is the single most legible cadence nudge. ≤15 min →
+pace high + posture high (rule id `calendar.imminent`); never tone or
+proactivity. Minutes-only by default — titles are a sub-opt-in
+(`cadence calendar titles on`), and with titles off they're stripped before
+the cache write, so they never touch disk. Remaining gaps: recurring (RRULE)
+and all-day events are skipped by the v1 parser, so a weekly standup only
+registers if the feed expands instances (Google's secret ICS does not — it
+ships the RRULE); no "in a meeting now" read; feed fetch is a 900ms
+AbortController bound with a 20-min parsed-event cache shared by prompt+stop.
 
 ## Known nuance: intra-tier nudge collisions
 

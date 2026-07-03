@@ -31,6 +31,8 @@ export const OPT_IN_PROVIDERS: Record<string, string> = {
   typingTempo: "prompt rhythm — rapid-fire vs. one long considered prompt → pace",
   focusedApp: "frontmost non-terminal app (macOS) → flavor in the context line",
   wifi: "wifi network name (macOS) → place context, home vs. office vs. café",
+  calendar:
+    "next-event proximity from a secret ICS feed URL → pace/posture — run: cadence calendar set-url <url>",
   moon: "current moon phase (offline) → esoteric flavor",
   horoscope: "daily horoscope for your sign, e.g. `cadence enable horoscope leo`",
   tuning: "local learning log — derived prompt features (length/intent/cue classes, never text) → cadence tune",
