@@ -29,7 +29,7 @@
     "LICENSE"
   ],
   "scripts": {
-    "build": "tsc",
+    "build": "rm -rf dist && tsc",
     "dev": "tsc --watch",
     "test": "node --test test/cadence.test.js",
     "test:coverage": "c8 --include 'dist/**/*.js' --exclude 'dist/**/*.d.ts' --reporter=text --reporter=html node --test test/cadence.test.js",

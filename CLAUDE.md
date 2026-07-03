@@ -37,7 +37,9 @@ target a single case, use the Node test runner's `--test-name-pattern`:
 `node --test --test-name-pattern="ship-ish self-report" test/cadence.test.js`.
 
 **Plugin validation:** `npm run plugin:validate` runs Claude Code's `claude
-plugin validate --strict` on both `.claude-plugin/plugin.json` and
+plugin validate` on `.claude-plugin/plugin.json` (non-strict on purpose: the
+repo root doubles as the plugin root, so the dev-only CLAUDE.md — excluded
+from the tarball — trips a strict-mode warning) and `--strict` on
 `.claude-plugin/marketplace.json`. The Claude Code CLI must be installed.
 
 ## Architecture
