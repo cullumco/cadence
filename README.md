@@ -329,8 +329,14 @@ See [`BACKLOG.md`](BACKLOG.md). Highlights:
     they never steer the work.
   - **deeper Focus** — manual + scheduled Focus detection ship now; geofenced/
     iPhone-synced Focus leaves no local trace and stays undetectable.
-- **Calendar density** — intentionally *not* built: Cadence targets solo
-  builders deep in a project, not people racing between meetings.
+- **Calendar proximity** — *shipped (opt-in):* paste your calendar's secret
+  ICS feed URL (`cadence calendar set-url <url>`) and "next event in 12m"
+  becomes wrap-up pressure — an event ≤15 min out tightens pace + posture.
+  Minutes-only by default; event titles are a separate sub-opt-in
+  (`cadence calendar titles on`). v1 parser skips recurring (RRULE) and
+  all-day events. Calendar *density* (how packed the day is) stays
+  intentionally unbuilt: Cadence targets solo builders deep in a project,
+  not people racing between meetings.
 - **After-the-fact injection** — shipped: a `PostToolUse` hook watches git-ish
   commands and speaks once per transition — entering/leaving a merge/rebase
   conflict, and destructive-op thrash (reset --hard streaks, force-pushes).

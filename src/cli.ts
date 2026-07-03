@@ -7,6 +7,7 @@ import { getSelfReportSignal, STALE_AFTER_MS } from "./providers/selfreport.js";
 import { getEnvironmentSignal } from "./providers/environment.js";
 import { getGitSignal } from "./providers/git.js";
 import { getEsotericSignal } from "./providers/esoteric.js";
+import { getCalendarSignal, calendarConfig, CALENDAR_CACHE_FILE } from "./providers/calendar.js";
 import {
   deriveCadence,
   buildReframe,
@@ -92,7 +93,7 @@ interface Envelope {
 async function collectEnvelope(now = Date.now()): Promise<Envelope> {
   const signals: Signal[] = [];
   const providers = await loadProviders();
-  const [music, report, environment, git, esoteric, overrides, paused] = await Promise.all([
+  const [music, report, environment, git, esoteric, calendar, overrides, paused] = await Promise.all([
     getMusicSignal(providers).catch(() => null),
     getSelfReportSignal().catch(() => null),
     getEnvironmentSignal(new Date(now), {
@@ -101,6 +102,7 @@ async function collectEnvelope(now = Date.now()): Promise<Envelope> {
     }).catch(() => null),
     getGitSignal(process.cwd()).catch(() => null),
     getEsotericSignal(providers).catch(() => null),
+    getCalendarSignal(providers, new Date(now)).catch(() => null),
     loadOverrides(),
     isPaused(),
   ]);
@@ -109,6 +111,7 @@ async function collectEnvelope(now = Date.now()): Promise<Envelope> {
   if (environment) signals.push(environment);
   if (git) signals.push(git);
   if (esoteric) signals.push(esoteric);
+  if (calendar) signals.push(calendar);
 
   const state: UserState = { signals, capturedAt: now };
   const { cadence, pinned } = applyOverrides(deriveCadence(state), overrides);
@@ -116,7 +119,7 @@ async function collectEnvelope(now = Date.now()): Promise<Envelope> {
   const silent = signals.length === 0 && Object.keys(overrides).length === 0;
   return {
     state: silent ? null : { ...state, cadence, pinned, reframe },
-    raw: { music, report, environment, git, providers, now, platform: process.platform },
+    raw: { music, report, environment, git, calendar, providers, now, platform: process.platform },
     esoteric,
     cadence,
     pinned,
@@ -145,7 +148,7 @@ async function cmdTest() {
 // reason it's absent. Unlike `test`, this never goes silent.
 async function cmdSignals() {
   const providers = await loadProviders();
-  const [music, report, environment, git] = await Promise.all([
+  const [music, report, environment, git, calendar] = await Promise.all([
     getMusicSignal().catch(() => null),
     getSelfReportSignal().catch(() => null),
     getEnvironmentSignal(new Date(), {
@@ -153,6 +156,7 @@ async function cmdSignals() {
       wifiEnabled: providerEnabled(providers, "wifi"),
     }).catch(() => null),
     getGitSignal(process.cwd()).catch(() => null),
+    getCalendarSignal(providers).catch(() => null),
   ]);
   console.log(
     "\n" +
@@ -161,6 +165,7 @@ async function cmdSignals() {
         report,
         environment,
         git,
+        calendar,
         providers,
         now: Date.now(),
         platform: process.platform,
@@ -213,6 +218,12 @@ async function cmdEnable(args: string[]) {
     if (name === "dj") console.error("  dj takes setup — run: cadence dj setup");
     listProviders();
     process.exit(1);
+  }
+  // calendar needs its feed URL — a bare `true` would be an enabled-but-empty
+  // state the provider (rightly) treats as off. Point at the real command.
+  if (name === "calendar" && valueParts.length === 0) {
+    console.log("  calendar needs your ICS feed URL — run: cadence calendar set-url <url>");
+    return;
   }
   const cfg = await loadCfg();
   const providers = cfgProviders(cfg);
@@ -274,6 +285,90 @@ async function cmdTune(args: string[]) {
     return;
   }
   console.log("\n" + renderTuneReport(entries) + "\n");
+}
+
+// ── calendar: opt-in next-event proximity from a secret ICS feed ───────────
+// Follows weather's convention: the set-url command IS the enablement (no
+// separate `enable` step), and nothing fires until the user pastes a URL.
+// Titles are a further sub-opt-in — minutes-only is the default disclosure.
+const CALENDAR_HELP = `  cadence calendar — next-event proximity from your calendar (opt-in)
+
+  Paste the secret ICS feed URL your calendar exports (Google: Settings →
+  your calendar → "Secret address in iCal format"; Outlook: publish → ICS).
+  Cadence then knows "next event in 12m" and tightens pace/posture when one
+  is ≤15 minutes out. Minutes only by default — titles are a separate opt-in.
+
+    cadence calendar set-url <url>    store the feed URL (this turns it on)
+    cadence calendar titles on|off    include event titles in the block (default: off)
+    cadence calendar off              turn it off (also clears the local cache)
+
+  v1 parser limits: recurring (RRULE) and all-day events are skipped.`;
+
+async function cmdCalendar(args: string[]) {
+  const [sub, value] = args;
+  const cfg = await loadCfg();
+  const providers = cfgProviders(cfg);
+  const current = calendarConfig(providers["calendar"]);
+
+  if (sub === "set-url") {
+    if (!value || !/^https?:\/\//.test(value)) {
+      console.error("  usage: cadence calendar set-url <https://…ics-url>");
+      process.exit(1);
+    }
+    providers["calendar"] = { ics: value, titles: current?.titles === true };
+    cfg["providers"] = providers;
+    await saveCfg(cfg);
+    await rm(CALENDAR_CACHE_FILE, { force: true }); // stale feed's events must not linger
+    console.log("  calendar feed set — next-event proximity is now on (minutes only)");
+    console.log("  want titles in the block too? cadence calendar titles on");
+    return;
+  }
+  if (sub === "titles") {
+    if (value !== "on" && value !== "off") {
+      console.error("  usage: cadence calendar titles on|off");
+      process.exit(1);
+    }
+    if (!current) {
+      console.log("  no feed set yet — first: cadence calendar set-url <url>");
+      return;
+    }
+    providers["calendar"] = { ics: current.ics, titles: value === "on" };
+    cfg["providers"] = providers;
+    await saveCfg(cfg);
+    // either direction invalidates the cache: "off" must purge stored titles
+    // now; "on" shouldn't wait out a titles-stripped cache's TTL.
+    await rm(CALENDAR_CACHE_FILE, { force: true });
+    console.log(
+      value === "on"
+        ? "  event titles will show in the injected block"
+        : "  titles off — the block (and the local cache) keep minutes only"
+    );
+    return;
+  }
+  if (sub === "off") {
+    delete providers["calendar"];
+    cfg["providers"] = providers;
+    await saveCfg(cfg);
+    await rm(CALENDAR_CACHE_FILE, { force: true });
+    console.log("  calendar off — feed URL removed, local cache cleared");
+    return;
+  }
+  if (!sub) {
+    if (current) {
+      console.log(`  calendar: on (titles ${current.titles ? "on" : "off"})`);
+      console.log(`  feed: ${current.ics}`);
+      const sig = await getCalendarSignal(providers).catch(() => null);
+      console.log(
+        sig
+          ? `  next event ${sig.minutesToNextEvent <= 0 ? "starting now" : `in ${sig.minutesToNextEvent}m`}${sig.eventTitle ? ` — ${JSON.stringify(sig.eventTitle)}` : ""}`
+          : "  no event in the lookahead window (or feed unreachable)"
+      );
+      return;
+    }
+    console.log(CALENDAR_HELP);
+    return;
+  }
+  console.log(CALENDAR_HELP);
 }
 
 // Spotify is the cross-platform music source — opt-in, browser-authorized via
@@ -601,6 +696,11 @@ const HELP = `
   environment (time & day are automatic; weather is opt-in):
     cadence set-location <lat> <lon> [name]   turn on weather for your area
 
+  calendar (opt-in — next-event proximity from a secret ICS feed URL):
+    cadence calendar set-url <url>    turn it on (minutes-only by default)
+    cadence calendar titles on|off    also show event titles in the block
+    cadence calendar off              turn it off
+
   opt-in signals (off until you turn them on — as much as you're willing to give):
     cadence enable <signal> [value]   turn an opt-in signal on (e.g. typingTempo)
     cadence disable <signal>          turn it back off
@@ -658,6 +758,8 @@ async function main() {
       return cmdDisable(rest);
     case "tune":
       return cmdTune(rest);
+    case "calendar":
+      return cmdCalendar(rest);
     case "spotify":
       return cmdSpotify(rest);
     case "dj":

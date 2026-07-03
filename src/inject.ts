@@ -4,6 +4,7 @@ import type {
   SelfReportSignal,
   ActivitySignal,
   IntentSignal,
+  CalendarSignal,
   GitSignal,
   PlaceSignal,
   EnvironmentSignal,
@@ -47,6 +48,15 @@ function renderGit(g: GitSignal): string {
 function renderIntent(i: IntentSignal): string[] {
   if (!i.kind) return [];
   return [`    intent: ${i.kind} (read from your prompt)`];
+}
+
+// Minutes-only by default; the title only appears under its sub-opt-in.
+// The provider already gates emission to the lookahead window, so no extra
+// threshold here — one threshold source (the provider), never two.
+function renderCalendar(c: CalendarSignal): string {
+  const when =
+    c.minutesToNextEvent <= 0 ? "starting now" : `in ${c.minutesToNextEvent}m`;
+  return `    calendar: next event ${when}${c.eventTitle ? ` — ${quote(c.eventTitle)}` : ""}`;
 }
 
 function renderActivity(a: ActivitySignal): string {
@@ -119,6 +129,7 @@ export function render(state: StateWithCadence): string {
     else if (sig.source === "self_report") lines.push(renderReport(sig));
     else if (sig.source === "git") lines.push(renderGit(sig));
     else if (sig.source === "intent") lines.push(...renderIntent(sig));
+    else if (sig.source === "calendar") lines.push(renderCalendar(sig));
     else if (sig.source === "activity") lines.push(renderActivity(sig));
     else if (sig.source === "place") lines.push(renderPlace(sig));
     else if (sig.source === "environment") lines.push(renderEnvironment(sig));

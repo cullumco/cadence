@@ -57,6 +57,16 @@ export interface EsotericSignal {
   sign?: string; // the configured zodiac sign
 }
 
+/* Calendar proximity — opt-in via a secret ICS feed URL. Minutes-only by
+ * default: the event TITLE is a separate sub-opt-in (`cadence calendar titles
+ * on`) because "meeting soon" is cadence, but "Interview — Acme" in every
+ * prompt is a disclosure the user has to choose. */
+export interface CalendarSignal {
+  source: "calendar";
+  minutesToNextEvent: number; // next future event start, within the lookahead
+  eventTitle?: string; // only when the titles sub-opt-in is on
+}
+
 export interface GitSignal {
   source: "git";
   commitsLastHour: number;
@@ -100,6 +110,7 @@ export type Signal =
   | SelfReportSignal
   | ActivitySignal
   | IntentSignal
+  | CalendarSignal
   | GitSignal
   | PlaceSignal
   | EnvironmentSignal

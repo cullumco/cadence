@@ -12,6 +12,7 @@ import type {
   ActivitySignal,
   IntentSignal,
   EnvironmentSignal,
+  CalendarSignal,
 } from "./types.js";
 
 export const DIALS = ["pace", "tone", "posture", "proactivity"] as const;
@@ -35,6 +36,7 @@ const LEVELS: DialLevel[] = ["low", "medium", "high"];
  *   intent   { kind }                  ← read from the prompt you just typed
  *   music    { vibe, energy }          ← energy 0–1 drives pace; vibe colors tone
  *   git      { commitsLastHour, ... }  ← work rhythm
+ *   calendar { minutesToNextEvent }    ← opt-in ICS feed; wrap-up pressure
  *   activity { minSinceLastPrompt, promptLength, tempo }
  *
  * A working baseline is below so it runs end-to-end. The mapping is yours.
@@ -81,6 +83,9 @@ export function deriveCadenceTraced(state: UserState): {
   );
   const environment = state.signals.find(
     (s): s is EnvironmentSignal => s.source === "environment"
+  );
+  const calendar = state.signals.find(
+    (s): s is CalendarSignal => s.source === "calendar"
   );
 
   // Start neutral; each signal nudges individual dials.
@@ -141,6 +146,19 @@ export function deriveCadenceTraced(state: UserState): {
     (music?.vibe && /\b(calm|chilled|ethereal|romantic|warm|sexy)\b/.test(music.vibe))
   ) {
     nudge("tone", "low", "music", "music.warm");
+  }
+
+  // ── calendar → pace + posture (wrap-up pressure, opt-in) ──────────────────
+  // An event starting in ≤15 minutes is the hardest wall-clock fact in the
+  // room: wrap up, give me the call. Deliberately TWO dials only — never tone
+  // (a meeting isn't a mood) and never proactivity (acting without checking in
+  // stays the user's explicit call via self-report/intent/git, the same
+  // boundary music keeps). Sits above music — a deadline beats a soundtrack —
+  // but below git/intent/self-report: what you're doing and what you just
+  // said still outrank the clock.
+  if (calendar && calendar.minutesToNextEvent <= 15) {
+    nudge("pace", "high", "calendar", "calendar.imminent");
+    nudge("posture", "high", "calendar", "calendar.imminent");
   }
 
   // ── git → pace / proactivity (what you're DOING, not what you said) ───────

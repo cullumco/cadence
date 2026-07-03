@@ -14,6 +14,7 @@ import { getGitSignal } from "./providers/git.js";
 import { getActivitySignal } from "./providers/activity.js";
 import { getIntentSignal } from "./providers/intent.js";
 import { getEsotericSignal } from "./providers/esoteric.js";
+import { getCalendarSignal } from "./providers/calendar.js";
 import { deriveCadence, buildReframe, loadOverrides, applyOverrides } from "./cadence.js";
 import { loadProviders, providerEnabled } from "./config.js";
 import type { ProviderConfig } from "./config.js";
@@ -29,7 +30,7 @@ export async function collectSignals(
   providers: ProviderConfig
 ): Promise<Signal[]> {
   const tempoEnabled = providerEnabled(providers, "typingTempo");
-  const [music, report, environment, git, activity, intent, esoteric] = await Promise.allSettled([
+  const [music, report, environment, git, activity, intent, esoteric, calendar] = await Promise.allSettled([
     getMusicSignal(providers),
     getSelfReportSignal(),
     getEnvironmentSignal(new Date(), {
@@ -40,6 +41,7 @@ export async function collectSignals(
     getActivitySignal(prompt, Date.now(), { tempoEnabled }),
     getIntentSignal(prompt),
     getEsotericSignal(providers),
+    getCalendarSignal(providers),
   ]);
   const signals: Signal[] = [];
   if (music.status === "fulfilled" && music.value) signals.push(music.value);
@@ -49,6 +51,7 @@ export async function collectSignals(
   if (activity.status === "fulfilled" && activity.value) signals.push(activity.value);
   if (intent.status === "fulfilled" && intent.value) signals.push(intent.value);
   if (esoteric.status === "fulfilled" && esoteric.value) signals.push(esoteric.value);
+  if (calendar.status === "fulfilled" && calendar.value) signals.push(calendar.value);
   return signals;
 }
 
@@ -66,7 +69,9 @@ async function collectReadSignals(
   providers: ProviderConfig,
   now: () => number
 ): Promise<Signal[]> {
-  const [music, report, environment, git, esoteric] = await Promise.allSettled([
+  // calendar is safe on read surfaces: it only reads the cache (or does one
+  // TTL-bounded fetch) — no per-prompt state is written, unlike activity.
+  const [music, report, environment, git, esoteric, calendar] = await Promise.allSettled([
     getMusicSignal(providers),
     getSelfReportSignal(),
     getEnvironmentSignal(new Date(now()), {
@@ -75,6 +80,7 @@ async function collectReadSignals(
     }),
     getGitSignal(cwd),
     getEsotericSignal(providers),
+    getCalendarSignal(providers, new Date(now())),
   ]);
   const signals: Signal[] = [];
   if (music.status === "fulfilled" && music.value) signals.push(music.value);
@@ -82,6 +88,7 @@ async function collectReadSignals(
   if (environment.status === "fulfilled" && environment.value) signals.push(environment.value);
   if (git.status === "fulfilled" && git.value) signals.push(git.value);
   if (esoteric.status === "fulfilled" && esoteric.value) signals.push(esoteric.value);
+  if (calendar.status === "fulfilled" && calendar.value) signals.push(calendar.value);
   return signals;
 }
 
