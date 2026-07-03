@@ -13,8 +13,20 @@ on:
 
 jobs:
   verify:
-    name: Verify alpha package
-    runs-on: ubuntu-latest
+    name: Verify alpha package (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      # Both legs must report: a Linux degradation failure and a macOS
+      # rich-signal failure are independent findings.
+      fail-fast: false
+      matrix:
+        # Two legs, two contracts:
+        #   ubuntu-latest — "non-macOS degrades silently, never breaks the
+        #     hook": darwin-gated tests skip, everything else must pass with
+        #     the Mac probes absent.
+        #   macos-latest  — the rich-signal path: the darwin-only tests
+        #     (AppleScript compile, Focus probe) actually execute.
+        os: [ubuntu-latest, macos-latest]
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
