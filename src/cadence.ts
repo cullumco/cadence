@@ -1,6 +1,6 @@
 import { readFile } from "node:fs/promises";
 import { homedir } from "node:os";
-import { join } from "node:path";
+import { join, resolve, sep } from "node:path";
 import type {
   UserState,
   Cadence,
@@ -252,11 +252,24 @@ export function buildReframe(c: Cadence): string {
  * Manual overrides — "the mode is the user's determination, the rest is auto."
  *
  * A user can PIN any dial; pinned dials win, un-pinned dials stay inferred.
- * Two sources, checked in order (env wins over config file):
- *   1. ~/.cadence/config.json  → { "pace": "fast", "tone": "warm" }
- *   2. env vars                → CADENCE_PACE=fast CADENCE_TONE=warm
+ * Three sources, weakest → strongest (each layer overrides the one before it
+ * per dial):
+ *   1. global pins   ~/.cadence/config.json → { "pace": "fast" }
+ *   2. project pins  ~/.cadence/config.json → { "projects": {
+ *                      "/abs/dir": { "proactivity": "low" } } }
+ *      matched by walking UP from the hook's cwd, deepest directory wins
+ *   3. env vars      CADENCE_PACE=fast CADENCE_TONE=warm
  * ───────────────────────────────────────────────────────────────────────── */
 export type DialOverrides = Partial<Record<keyof Cadence, DialLevel>>;
+
+/** Where a pinned dial came from — kept so the CLI can tell the user which
+ * authority set it (the injected block keeps the plain `*`). */
+export type PinSource = "global" | "project" | "env";
+
+export interface ResolvedOverrides {
+  overrides: DialOverrides;
+  sources: Partial<Record<keyof Cadence, PinSource>>;
+}
 
 const CONFIG_FILE = join(homedir(), ".cadence", "config.json");
 
@@ -276,27 +289,97 @@ export function resolveDialLevel(dial: keyof Cadence, input: unknown): DialLevel
   return null;
 }
 
-export async function loadOverrides(): Promise<DialOverrides> {
+/* Per-project pins live ONLY in the user's ~/.cadence/config.json (the
+ * `projects` map, keyed by absolute directory path). We deliberately do NOT
+ * read pins from any file committed inside a repo: a repo-committed pin file
+ * would let whoever ships the repo pin proactivity=high on everyone who
+ * clones it — dial authority must stay with the user, in the user's own
+ * config. Don't "fix" this by adding a .cadence file loader.
+ *
+ * Pure resolution: given the raw `projects` value and a cwd, walk up the
+ * directory tree — a pin on a repo root applies in its subdirectories, and
+ * on a conflict the DEEPEST matching directory wins per dial. Garbled
+ * entries (non-objects, bad levels) read as "no pin," never throw. */
+export function resolveProjectPins(projectsRaw: unknown, cwd: string): DialOverrides {
+  if (!projectsRaw || typeof projectsRaw !== "object" || Array.isArray(projectsRaw) || !cwd)
+    return {};
+  const target = resolve(cwd);
+  const matches: { depth: number; pins: Record<string, unknown> }[] = [];
+  for (const [key, pins] of Object.entries(projectsRaw as Record<string, unknown>)) {
+    if (!pins || typeof pins !== "object" || Array.isArray(pins)) continue;
+    const dir = resolve(key);
+    // boundary-safe prefix match: "/a/b" matches "/a/b/c" but never "/a/bc"
+    if (target === dir || target.startsWith(dir.endsWith(sep) ? dir : dir + sep)) {
+      matches.push({ depth: dir.split(sep).length, pins: pins as Record<string, unknown> });
+    }
+  }
+  // shallowest first, so deeper directories override per dial (deepest wins)
+  matches.sort((a, b) => a.depth - b.depth);
   const ov: DialOverrides = {};
+  for (const m of matches) {
+    for (const dial of DIALS) {
+      const level = resolveDialLevel(dial, m.pins[dial]);
+      if (level) ov[dial] = level;
+    }
+  }
+  return ov;
+}
 
-  // config file first (lowest precedence)
+/** Pure precedence merge, weakest → strongest: global → project → env.
+ * Tracks which layer won each dial so the CLI can label it. */
+export function mergeOverrideLayers(
+  global: DialOverrides,
+  project: DialOverrides,
+  env: DialOverrides
+): ResolvedOverrides {
+  const overrides: DialOverrides = {};
+  const sources: Partial<Record<keyof Cadence, PinSource>> = {};
+  const layers: [DialOverrides, PinSource][] = [
+    [global, "global"],
+    [project, "project"],
+    [env, "env"],
+  ];
+  for (const [layer, source] of layers) {
+    for (const dial of DIALS) {
+      const v = layer[dial];
+      if (v) {
+        overrides[dial] = v;
+        sources[dial] = source;
+      }
+    }
+  }
+  return { overrides, sources };
+}
+
+/** Load pins with provenance. `cwd` scopes project pins (walk-up match);
+ * omit it and only global + env pins apply. */
+export async function loadOverridesDetailed(cwd?: string): Promise<ResolvedOverrides> {
+  const global: DialOverrides = {};
+  let project: DialOverrides = {};
+
   try {
     const cfg = JSON.parse(await readFile(CONFIG_FILE, "utf-8")) as Record<string, unknown>;
     for (const dial of DIALS) {
       const level = resolveDialLevel(dial, cfg[dial]);
-      if (level) ov[dial] = level;
+      if (level) global[dial] = level;
     }
+    if (cwd) project = resolveProjectPins(cfg["projects"], cwd);
   } catch {
     // no config file — fine
   }
 
-  // env vars override the file
+  // env vars beat everything
+  const env: DialOverrides = {};
   for (const dial of DIALS) {
     const level = resolveDialLevel(dial, process.env[`CADENCE_${dial.toUpperCase()}`]);
-    if (level) ov[dial] = level;
+    if (level) env[dial] = level;
   }
 
-  return ov;
+  return mergeOverrideLayers(global, project, env);
+}
+
+export async function loadOverrides(cwd?: string): Promise<DialOverrides> {
+  return (await loadOverridesDetailed(cwd)).overrides;
 }
 
 /** Merge pinned dials over the inferred cadence. Returns the final board and

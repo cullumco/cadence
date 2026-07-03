@@ -96,8 +96,8 @@ export async function buildEnvelope(opts: {
   const now = opts.now ?? Date.now;
   // Pins + the opt-in registry are tiny local reads; load them first so
   // collection knows which opt-in providers to run, then race only the
-  // subprocess-heavy collection against the budget.
-  const [overrides, providers] = await Promise.all([loadOverrides(), loadProviders()]);
+  // subprocess-heavy collection against the budget. cwd scopes project pins.
+  const [overrides, providers] = await Promise.all([loadOverrides(opts.cwd), loadProviders()]);
   const signals = await Promise.race<Signal[]>([
     collectReadSignals(opts.cwd, providers, now),
     // unref: the losing timer must not hold the caller's process open after

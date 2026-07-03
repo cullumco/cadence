@@ -40,8 +40,8 @@ async function main() {
 
   // Pins + the opt-in registry are tiny local reads; load them first so signal
   // collection knows which opt-in providers to run, then race only the
-  // subprocess-heavy collection against the budget.
-  const [overrides, providers] = await Promise.all([loadOverrides(), loadProviders()]);
+  // subprocess-heavy collection against the budget. cwd scopes project pins.
+  const [overrides, providers] = await Promise.all([loadOverrides(projectDir), loadProviders()]);
   const signals = await Promise.race<Signal[]>([
     collectSignals(projectDir, prompt, providers),
     // unref: the losing timer must not hold the process open after the

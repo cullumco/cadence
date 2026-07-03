@@ -4,7 +4,14 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { tagsToVibe } from "../dist/vibe.js";
-import { deriveCadence, buildReframe, applyOverrides, resolveDialLevel } from "../dist/cadence.js";
+import {
+  deriveCadence,
+  buildReframe,
+  applyOverrides,
+  resolveDialLevel,
+  resolveProjectPins,
+  mergeOverrideLayers,
+} from "../dist/cadence.js";
 import { render } from "../dist/inject.js";
 import { decideStop, isSoftHandoff } from "../dist/stop.js";
 import { activityFrom, computeTempo } from "../dist/providers/activity.js";
@@ -278,6 +285,81 @@ test("resolveDialLevel: accepts rendered dial words as well as levels", () => {
   assert.equal(resolveDialLevel("posture", "medium"), "medium");
   assert.equal(resolveDialLevel("proactivity", "act-freely"), "high");
   assert.equal(resolveDialLevel("pace", "warm"), null);
+});
+
+// ── project pins (per-directory, user config only) ──────────────────────────
+test("resolveProjectPins: exact directory match applies its pins", () => {
+  const pins = resolveProjectPins({ "/Users/x/prod": { proactivity: "low" } }, "/Users/x/prod");
+  assert.deepEqual(pins, { proactivity: "low" });
+});
+
+test("resolveProjectPins: a pin on the repo root applies in subdirectories", () => {
+  const pins = resolveProjectPins(
+    { "/Users/x/prod": { proactivity: "low", pace: "low" } },
+    "/Users/x/prod/packages/api/src"
+  );
+  assert.deepEqual(pins, { proactivity: "low", pace: "low" });
+});
+
+test("resolveProjectPins: deepest matching directory wins per dial, shallower still contributes", () => {
+  const pins = resolveProjectPins(
+    {
+      "/Users/x": { proactivity: "low", tone: "low" },
+      "/Users/x/sandbox": { proactivity: "high" },
+    },
+    "/Users/x/sandbox/scratch"
+  );
+  assert.equal(pins.proactivity, "high"); // deeper dir wins the conflict
+  assert.equal(pins.tone, "low"); // inherited from the shallower dir
+});
+
+test("resolveProjectPins: prefix without a path boundary is NOT a match", () => {
+  const projects = { "/Users/x/prod": { proactivity: "low" } };
+  assert.deepEqual(resolveProjectPins(projects, "/Users/x/production"), {});
+  assert.deepEqual(resolveProjectPins(projects, "/Users/x/other"), {});
+});
+
+test("resolveProjectPins: garbled config reads as no pins, dial words still resolve", () => {
+  assert.deepEqual(resolveProjectPins("not an object", "/a"), {});
+  assert.deepEqual(resolveProjectPins(null, "/a"), {});
+  assert.deepEqual(resolveProjectPins({ "/a": "not pins" }, "/a"), {});
+  assert.deepEqual(resolveProjectPins({ "/a": { pace: "sideways" } }, "/a"), {});
+  // trailing slash on the key, and the human word for the level, both fine
+  assert.deepEqual(resolveProjectPins({ "/a/": { pace: "fast" } }, "/a/b"), { pace: "high" });
+});
+
+test("mergeOverrideLayers: global < project < env, sources track who won", () => {
+  const { overrides, sources } = mergeOverrideLayers(
+    { pace: "low", tone: "low", posture: "low" }, // global
+    { pace: "high", proactivity: "low" }, // project beats global
+    { proactivity: "high" } // env beats everything
+  );
+  assert.deepEqual(overrides, { pace: "high", tone: "low", posture: "low", proactivity: "high" });
+  assert.deepEqual(sources, { pace: "project", tone: "global", posture: "global", proactivity: "env" });
+});
+
+test("mergeOverrideLayers: empty layers pin nothing", () => {
+  const { overrides, sources } = mergeOverrideLayers({}, {}, {});
+  assert.deepEqual(overrides, {});
+  assert.deepEqual(sources, {});
+});
+
+test("project-pinned proactivity=high counts as shipping authority for the stop hook", () => {
+  // resolve a project pin → apply as an override → the dial is PINNED, so the
+  // stop hook treats it exactly like a global pin (explicit user opt-in).
+  const project = resolveProjectPins({ "/Users/x/sandbox": { proactivity: "high" } }, "/Users/x/sandbox");
+  const { overrides } = mergeOverrideLayers({}, project, {});
+  const inferred = deriveCadence(stateWith([]));
+  const { cadence, pinned } = applyOverrides(inferred, overrides);
+  assert.deepEqual(pinned, ["proactivity"]);
+  const decision = decideStop(
+    { last_assistant_message: "All set. Do you want me to run the tests now?" },
+    [],
+    cadence,
+    pinned
+  );
+  assert.ok(decision, "should block the soft handoff");
+  assert.equal(decision.decision, "block");
 });
 
 // ── environment nudges ──────────────────────────────────────────────────────────
