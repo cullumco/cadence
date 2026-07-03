@@ -367,6 +367,7 @@ export const CURRENT_RULE_IDS: ReadonlySet<string> = new Set([
   "music.warm",
   "git.streak",
   "git.conflict",
+  "calendar.imminent",
   "intent.ship",
   "intent.think",
   "intent.debug",

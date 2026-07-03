@@ -2519,6 +2519,7 @@ test("CURRENT_RULE_IDS: registry stays honest against deriveCadenceTraced", () =
     [{ source: "music", track: "x", energy: 0.9, acoustic: 0.6, vibe: "chilled" }],
     [{ source: "music", track: "x", energy: 0.2 }],
     [{ source: "git", commitsLastHour: 4, filesDirty: 1, conflicted: true }],
+    [{ source: "calendar", minutesToNextEvent: 10 }],
     ...["ship", "think", "debug", "review", "focus"].map((kind) => [{ source: "intent", kind }]),
     ...["shipping it", "thinking through tradeoffs", "stuck and confused", "tired, chill", "focused crunch"].map(
       (text) => [{ source: "self_report", text, setAt: 0 }]
