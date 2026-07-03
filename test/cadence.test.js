@@ -1908,3 +1908,189 @@ test("posttool e2e: stays silent when the command can't change the read, or it's
   }, noRepo);
   assert.equal(r.out, "");
 });
+
+// ── learning loop, half two: per-rule pushback vs baseline (src/learn.ts) ────
+// Imports live here (top-level is legal anywhere in a module) so this whole
+// section stays append-only — easier to merge against parallel edits.
+import {
+  analyzePushback,
+  CURRENT_RULE_IDS,
+  MIN_SAMPLE,
+  FLAG_MIN_RATE,
+} from "../dist/learn.js";
+
+// One clean same-sitting pair per synthetic session: the graded entry, then
+// the follow-up whose features are the evidence. Distinct sessions keep
+// pairEntries from chaining follow-up→next-entry into extra pairs.
+const mkPair = (i, entryOver, followupPrompt) => [
+  tuneEntryWith({ at: i * 3_600_000, session: `p${i}`, ...entryOver }),
+  tuneEntryWith({
+    at: i * 3_600_000 + 60_000,
+    session: `p${i}`,
+    feat: promptFeatures(followupPrompt, 1),
+  }),
+];
+const PACE_LOW = { pace: "low", tone: "medium", posture: "medium", proactivity: "medium" };
+const MUSIC_LOW = { dial: "pace", level: "low", source: "music", rule: "music.energy-low" };
+
+test("detectCues: tone register cues — anchored complaints only", () => {
+  assert.deepEqual(detectCues("that was too formal, lighten up"), ["too-formal"]);
+  assert.deepEqual(detectCues("too chatty — keep it professional"), ["too-casual"]);
+  // bare-word traps: register words about OTHER things must not fire
+  assert.deepEqual(detectCues("write a professional bio for the site"), []);
+  assert.deepEqual(detectCues("casual Friday is cancelled"), []);
+});
+
+test("scorePair: tone now gradeable — warm lens vs 'too casual' disagrees, medium stays uncaptured", () => {
+  const warm = tuneEntryWith({
+    emitted: { pace: "medium", tone: "low", posture: "medium", proactivity: "medium" },
+    nudges: [{ dial: "tone", level: "low", source: "environment", rule: "env.weekend" }],
+  });
+  assert.equal(scorePair(warm, promptFeatures("too casual, keep it professional")).verdicts.tone, "disagree");
+  assert.equal(scorePair(warm, promptFeatures("too formal, lighten up")).verdicts.tone, "agree");
+  const crisp = tuneEntryWith({
+    emitted: { pace: "medium", tone: "high", posture: "medium", proactivity: "medium" },
+  });
+  assert.equal(scorePair(crisp, promptFeatures("too stiff, loosen up")).verdicts.tone, "disagree");
+  const medium = scorePair(tuneEntryWith(), promptFeatures("too formal, lighten up"));
+  assert.equal(medium.verdicts.tone, "no-evidence");
+  assert.deepEqual(medium.uncaptured, ["tone"]);
+});
+
+// shared synthetic log: env.late is genuinely contested (6/12 = 50% pushback),
+// music.energy-low provides the quiet background (2/20 = 10%) that becomes
+// env.late's baseline — and vice versa.
+const contestedLog = () => {
+  const entries = [];
+  for (let i = 0; i < 12; i++) {
+    entries.push(
+      ...mkPair(i, { emitted: PACE_LOW, nudges: [ENV_LATE] }, i < 6 ? "too long, be brief" : "x")
+    );
+  }
+  for (let i = 12; i < 32; i++) {
+    entries.push(
+      ...mkPair(i, { emitted: PACE_LOW, nudges: [MUSIC_LOW] }, i < 14 ? "too long, be brief" : "x")
+    );
+  }
+  return entries;
+};
+
+test("analyzePushback: per-rule rate vs its complement baseline, flag only above both bars", () => {
+  const pb = analyzePushback(contestedLog());
+  assert.equal(pb.pairs, 32);
+
+  const late = pb.rules.find((r) => r.rule === "env.late");
+  assert.equal(late.fired, 12);
+  assert.equal(late.observed, 12);
+  assert.equal(late.pushback, 6);
+  assert.equal(late.rate, 0.5);
+  assert.equal(late.baseline, 0.1); // 2 pushback pairs among the 20 it sat out
+  assert.equal(late.flagged, true, "50% vs 10% baseline over n=12 must flag");
+  assert.match(late.read, /consider softening/);
+  // pushback against pace=low pulled toward high; both authority paths named
+  assert.match(late.suggestion, /cadence set pace high/);
+  assert.match(late.suggestion, /deriveCadence\(\) \(src\/cadence\.ts, search "env\.late"\)/);
+
+  const music = pb.rules.find((r) => r.rule === "music.energy-low");
+  assert.equal(music.rate, 0.1);
+  assert.equal(music.baseline, 0.5);
+  assert.equal(music.flagged, false, "10% vs 50% baseline is the quiet rule, not the problem");
+  assert.match(music.read, /within baseline/);
+});
+
+test("analyzePushback: below MIN_SAMPLE is 'not enough data', never a flag", () => {
+  assert.equal(MIN_SAMPLE, 10); // the bar the report states
+  const entries = [];
+  for (let i = 0; i < 4; i++) {
+    entries.push(...mkPair(i, { emitted: PACE_LOW, nudges: [ENV_LATE] }, "too long, be brief"));
+  }
+  const pb = analyzePushback(entries);
+  const late = pb.rules.find((r) => r.rule === "env.late");
+  assert.equal(late.observed, 4);
+  assert.equal(late.flagged, false, "4/4 pushback is still noise at n=4");
+  assert.match(late.read, /not enough data yet/);
+  assert.match(late.read, /n≥10/);
+});
+
+test("analyzePushback: a globally grumpy week raises the baseline, indicts no rule", () => {
+  const entries = [];
+  // two rules, both drawing 50% pushback — each is the other's baseline
+  for (let i = 0; i < 10; i++) {
+    entries.push(
+      ...mkPair(i, { emitted: PACE_LOW, nudges: [ENV_LATE] }, i < 5 ? "too long, be brief" : "x")
+    );
+  }
+  for (let i = 10; i < 20; i++) {
+    entries.push(
+      ...mkPair(i, { emitted: PACE_LOW, nudges: [MUSIC_LOW] }, i < 15 ? "too long, be brief" : "x")
+    );
+  }
+  const pb = analyzePushback(entries);
+  for (const rule of ["env.late", "music.energy-low"]) {
+    const r = pb.rules.find((x) => x.rule === rule);
+    assert.equal(r.rate, 0.5);
+    assert.equal(r.baseline, 0.5);
+    assert.equal(r.flagged, false, `${rule}: 50% vs 50% baseline must not flag`);
+  }
+});
+
+test("analyzePushback: orphaned rule ids group by source, never in the tunable list", () => {
+  const oldNudge = { dial: "pace", level: "low", source: "environment", rule: "env.moonphase" };
+  const entries = [
+    ...mkPair(0, { emitted: PACE_LOW, nudges: [oldNudge] }, "too long, be brief"),
+    ...mkPair(1, { emitted: PACE_LOW, nudges: [oldNudge] }, "x"),
+  ];
+  const pb = analyzePushback(entries);
+  assert.ok(!pb.rules.some((r) => r.rule === "env.moonphase"));
+  assert.deepEqual(pb.orphans, [
+    { source: "environment", rules: ["env.moonphase"], fired: 2, observed: 2, pushback: 1 },
+  ]);
+});
+
+test("renderTuneReport: pushback section, stated bars, and advisory-only suggestions", () => {
+  const report = renderTuneReport(contestedLog());
+  assert.match(report, /per-rule pushback/);
+  assert.match(
+    report,
+    /env\.late: fired 12×, pushback followed 6× of 12 evaluated \(50% vs 10% baseline\) — consider softening/
+  );
+  assert.match(report, /flags need n≥10/); // the sample-size bar is legible in the output
+  assert.match(report, /suggested actions \(advisory only — cadence never edits mappings or pins for you\)/);
+  assert.match(report, /env\.late: consider `cadence set pace high`/);
+  // thin log → no flags, and the report says why instead of showing noise
+  const thin = renderTuneReport([
+    ...mkPair(0, { emitted: PACE_LOW, nudges: [ENV_LATE] }, "too long, be brief"),
+  ]);
+  assert.match(thin, /not enough data yet/);
+  assert.match(thin, /no rule crosses the flag bar/);
+  assert.equal(FLAG_MIN_RATE, 0.2);
+});
+
+test("CURRENT_RULE_IDS: registry stays honest against deriveCadenceTraced", () => {
+  // fire every branch once; any rule id the trace emits must be registered,
+  // or `cadence tune` would misfile a live rule as an orphan.
+  const probes = [
+    [{ source: "environment", partOfDay: "late night", dayOfWeek: "saturday", isWeekend: true, hour: 23, weather: "rain", onBattery: true, loadHigh: true }],
+    [{ source: "environment", partOfDay: "early morning", dayOfWeek: "monday", isWeekend: false, hour: 5 }],
+    [{ source: "music", track: "x", energy: 0.9, acoustic: 0.6, vibe: "chilled" }],
+    [{ source: "music", track: "x", energy: 0.2 }],
+    [{ source: "git", commitsLastHour: 4, filesDirty: 1, conflicted: true }],
+    ...["ship", "think", "debug", "review", "focus"].map((kind) => [{ source: "intent", kind }]),
+    ...["shipping it", "thinking through tradeoffs", "stuck and confused", "tired, chill", "focused crunch"].map(
+      (text) => [{ source: "self_report", text, setAt: 0 }]
+    ),
+    [{ source: "activity", minSinceLastPrompt: 40, promptLength: 10, tempo: "rapid" }],
+    [{ source: "activity", minSinceLastPrompt: 1, promptLength: 400, tempo: "considered" }],
+  ];
+  const seen = new Set();
+  for (const signals of probes) {
+    for (const n of deriveCadenceTraced(stateWith(signals)).nudges) seen.add(n.rule);
+  }
+  for (const rule of seen) {
+    assert.ok(CURRENT_RULE_IDS.has(rule), `rule "${rule}" fires but is not in CURRENT_RULE_IDS`);
+  }
+  // and the probes above actually cover the registry, so removals surface too
+  for (const rule of CURRENT_RULE_IDS) {
+    assert.ok(seen.has(rule), `registered rule "${rule}" never fired in the probe battery`);
+  }
+});
