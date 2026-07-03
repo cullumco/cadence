@@ -11,6 +11,7 @@ import {
   deriveCadence,
   buildReframe,
   loadOverrides,
+  loadOverridesDetailed,
   applyOverrides,
   resolveDialLevel,
   DIALS,
@@ -102,7 +103,7 @@ async function collectEnvelope(now = Date.now()): Promise<Envelope> {
     }).catch(() => null),
     getGitSignal(process.cwd()).catch(() => null),
     getEsotericSignal(providers).catch(() => null),
-    loadOverrides(),
+    loadOverrides(process.cwd()), // project pins apply where you're standing
     isPaused(),
   ]);
   if (music) signals.push(music);
@@ -351,11 +352,27 @@ async function cmdSpotify(args: string[]) {
 
 const LEVELS: DialLevel[] = ["low", "medium", "high"];
 
+/* Project pins live in the user's config under `projects` — absolute
+ * directory path → partial pins. User config ONLY, never a repo-committed
+ * file (see resolveProjectPins in cadence.ts for the security rationale). */
+function cfgProjects(cfg: Record<string, unknown>): Record<string, unknown> {
+  return cfg["projects"] && typeof cfg["projects"] === "object" && !Array.isArray(cfg["projects"])
+    ? (cfg["projects"] as Record<string, unknown>)
+    : {};
+}
+
+// `--project` scopes a pin/unpin to the current directory. Pull the flag out
+// wherever it appears so `cadence set --project pace fast` also works.
+function splitProjectFlag(args: string[]): { rest: string[]; project: boolean } {
+  return { rest: args.filter((a) => a !== "--project"), project: args.includes("--project") };
+}
+
 async function cmdSet(args: string[]) {
-  const [dial, value] = args;
+  const { rest, project } = splitProjectFlag(args);
+  const [dial, value] = rest;
   if (!dial || !value) {
-    console.log("  usage: cadence set <dial> <value>   e.g. cadence set pace fast");
-    console.log(`  dials: ${DIALS.join(", ")}`);
+    console.log("  usage: cadence set <dial> <value> [--project]   e.g. cadence set pace fast");
+    console.log(`  dials: ${DIALS.join(", ")}   (--project pins it for this directory only)`);
     return;
   }
   if (!(DIALS as readonly string[]).includes(dial)) {
@@ -369,50 +386,130 @@ async function cmdSet(args: string[]) {
     console.error(`  "${value}" isn't valid for ${dial}. Use: ${words}  (or low|medium|high)`);
     process.exit(1);
   }
-  await mkdir(CADENCE_DIR, { recursive: true });
-  let cfg: Record<string, string> = {};
-  try {
-    cfg = JSON.parse(await readFile(CONFIG_FILE, "utf-8"));
-  } catch {
-    // no config yet
+  const cfg = await loadCfg();
+  if (project) {
+    const dir = process.cwd();
+    const projects = cfgProjects(cfg);
+    const pins =
+      projects[dir] && typeof projects[dir] === "object" && !Array.isArray(projects[dir])
+        ? (projects[dir] as Record<string, unknown>)
+        : {};
+    pins[dial] = level;
+    projects[dir] = pins;
+    cfg["projects"] = projects;
+    await saveCfg(cfg);
+    console.log(`  pinned ${dial} = ${DIAL_WORDS[d][level]} (${level}) for ${dir}`);
+    console.log("  (applies in subdirectories too; deeper project pins win)");
+    return;
   }
   cfg[dial] = level;
-  await writeFile(CONFIG_FILE, JSON.stringify(cfg, null, 2), "utf-8");
+  await saveCfg(cfg);
   console.log(`  pinned ${dial} = ${DIAL_WORDS[d][level]} (${level})`);
 }
 
 async function cmdUnset(args: string[]) {
-  const [dial] = args;
-  await mkdir(CADENCE_DIR, { recursive: true });
-  let cfg: Record<string, string> = {};
-  try {
-    cfg = JSON.parse(await readFile(CONFIG_FILE, "utf-8"));
-  } catch {
-    // none
+  const { rest, project } = splitProjectFlag(args);
+  const [dial] = rest;
+  const cfg = await loadCfg();
+  if (project) {
+    const dir = process.cwd();
+    const projects = cfgProjects(cfg);
+    const entry =
+      projects[dir] && typeof projects[dir] === "object" && !Array.isArray(projects[dir])
+        ? (projects[dir] as Record<string, unknown>)
+        : null;
+    if (!entry) {
+      console.log(`  no project pins for ${dir}`);
+      return;
+    }
+    if (!dial || dial === "all") {
+      delete projects[dir];
+      console.log(`  cleared project pins for ${dir}`);
+    } else {
+      delete entry[dial];
+      if (Object.keys(entry).length === 0) delete projects[dir];
+      console.log(`  unpinned ${dial} for ${dir}`);
+    }
+    cfg["projects"] = projects;
+    await saveCfg(cfg);
+    return;
   }
   if (!dial || dial === "all") {
-    await writeFile(CONFIG_FILE, "{}", "utf-8");
-    console.log("  unpinned all dials — back to fully inferred");
+    // only the dial pins — providers, location, and project pins survive
+    for (const d of DIALS) delete cfg[d];
+    await saveCfg(cfg);
+    console.log("  unpinned all global dials — back to fully inferred");
     return;
   }
   delete cfg[dial];
-  await writeFile(CONFIG_FILE, JSON.stringify(cfg, null, 2), "utf-8");
+  await saveCfg(cfg);
   console.log(`  unpinned ${dial} — back to inferred`);
 }
 
+// The legibility view for project pins: every directory with pins, and which
+// one applies where you're standing. list / clear, mirroring cmdUnset's shape.
+async function cmdProjects(args: string[]) {
+  const cfg = await loadCfg();
+  if (args[0] === "clear") {
+    if (args[1] === "all") {
+      delete cfg["projects"];
+      await saveCfg(cfg);
+      console.log("  cleared project pins for all directories");
+      return;
+    }
+    const dir = process.cwd();
+    const projects = cfgProjects(cfg);
+    if (!projects[dir]) {
+      console.log(`  no project pins for ${dir}   (all of them: cadence projects clear all)`);
+      return;
+    }
+    delete projects[dir];
+    cfg["projects"] = projects;
+    await saveCfg(cfg);
+    console.log(`  cleared project pins for ${dir}`);
+    return;
+  }
+  const projects = cfgProjects(cfg);
+  const dirs = Object.keys(projects).sort();
+  if (dirs.length === 0) {
+    console.log("  no project pins — set one: cadence set <dial> <level> --project");
+    return;
+  }
+  const cwd = process.cwd();
+  console.log("\n  project pins (deepest matching directory wins; env vars beat all pins):\n");
+  for (const dir of dirs) {
+    const raw = projects[dir];
+    const pins: string[] = [];
+    if (raw && typeof raw === "object" && !Array.isArray(raw)) {
+      for (const d of DIALS) {
+        const level = resolveDialLevel(d, (raw as Record<string, unknown>)[d]);
+        if (level) pins.push(`${d}=${DIAL_WORDS[d][level]}`);
+      }
+    }
+    const here = cwd === dir || cwd.startsWith(dir.endsWith("/") ? dir : dir + "/");
+    console.log(`    ${dir}${here ? "   ← applies here" : ""}`);
+    console.log(`      ${pins.length ? pins.join("  ") : "(no valid pins)"}`);
+  }
+  console.log("\n  clear here: cadence projects clear   (everywhere: cadence projects clear all)\n");
+}
+
 async function cmdDials() {
-  const overrides = await loadOverrides();
-  console.log("\n  cadence dials (* = pinned by you):\n");
+  const { overrides, sources } = await loadOverridesDetailed(process.cwd());
+  console.log("\n  cadence dials (* = pinned by you, from here):\n");
   for (const dial of DIALS) {
     const pinnedLevel = overrides[dial];
     const opts = LEVELS.map((l) => {
       const word = DIAL_WORDS[dial][l as DialLevel];
       return l === pinnedLevel ? `[${word}]*` : word;
     }).join("  ");
-    console.log(`    ${dial.padEnd(12)} ${opts}`);
+    // Label non-global pins so a project pin never masquerades as a global one.
+    const src = sources[dial];
+    const tag = src === "project" ? "   ← project pin" : src === "env" ? "   ← env var" : "";
+    console.log(`    ${dial.padEnd(12)} ${opts}${tag}`);
   }
-  console.log("\n  pin one:  cadence set <dial> <low|medium|high>");
-  console.log("  unpin:    cadence unset <dial>   (or: cadence unset all)\n");
+  console.log("\n  pin one:  cadence set <dial> <low|medium|high>   (--project: this directory only)");
+  console.log("  unpin:    cadence unset <dial>   (or: cadence unset all)");
+  console.log("  project pins: cadence projects\n");
 }
 
 // Weather is opt-in: it only activates once a location is configured. No
@@ -593,11 +690,16 @@ const HELP = `
     cadence resume              start reading the room again
 
   dials (your determination — pinned dials override inference):
-    cadence dials               show the mixing board and what's pinned
+    cadence dials               show the mixing board and what's pinned here
     cadence set <dial> <level>  pin a dial (level: low|medium|high)
     cadence unset <dial>        un-pin a dial (or: cadence unset all)
                                 dials: pace, tone, posture, proactivity
                                 (env also works: CADENCE_PACE=fast)
+    cadence set <dial> <level> --project    pin for THIS directory only
+    cadence unset <dial> --project          un-pin here (or: unset all --project)
+    cadence projects            list every directory with project pins
+    cadence projects clear      clear this directory's pins (or: clear all)
+                                precedence: global < project (deepest dir wins) < env
 
   environment (time & day are automatic; weather is opt-in):
     cadence set-location <lat> <lon> [name]   turn on weather for your area
@@ -650,6 +752,8 @@ async function main() {
       return cmdUnset(rest);
     case "dials":
       return cmdDials();
+    case "projects":
+      return cmdProjects(rest);
     case "set-location":
       return cmdLocation(rest);
     case "pause":

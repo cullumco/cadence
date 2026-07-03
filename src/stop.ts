@@ -123,7 +123,10 @@ async function main() {
       collectSignals(projectDir),
       new Promise<Signal[]>((resolve) => setTimeout(() => resolve([]), TOTAL_BUDGET_MS).unref()),
     ]),
-    loadOverrides(),
+    // cwd scopes project pins — a project-pinned proactivity/posture=high is
+    // explicit user authority for THIS directory, so it counts as `pinned`
+    // in the shipping-authority check exactly like a global pin.
+    loadOverrides(projectDir),
   ]);
 
   const state: UserState = { signals, capturedAt: Date.now() };

@@ -5,8 +5,9 @@ import { join } from "node:path";
 /* ─────────────────────────────────────────────────────────────────────────
  * Config + the opt-in provider registry.
  *
- * `~/.cadence/config.json` already held pinned dials and a weather location.
- * It now also holds a `providers` block — the consent registry. Signals that
+ * `~/.cadence/config.json` already held pinned dials, per-project pins (the
+ * `projects` map — see resolveProjectPins in cadence.ts), and a weather
+ * location. It now also holds a `providers` block — the consent registry. Signals that
  * read something the user might not want shared (their calendar, the app
  * they're in, an esoteric feed) stay OFF until the user names them here:
  *

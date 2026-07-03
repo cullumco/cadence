@@ -77,7 +77,9 @@ async function collectInfo(): Promise<SessionInfo> {
   // be slow, and a session greeting must never delay the session.
   const [report, overrides, music] = await Promise.all([
     getSelfReportSignal().catch(() => null),
-    loadOverrides(),
+    // Claude Code runs hooks in the project directory, so process.cwd()
+    // scopes project pins for the greeting's "pinned …" readout.
+    loadOverrides(process.cwd()),
     Promise.race([
       getMusicSignal().catch(() => null),
       new Promise<null>((resolve) => setTimeout(() => resolve(null), BUDGET_MS).unref()),
