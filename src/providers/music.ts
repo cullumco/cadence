@@ -24,7 +24,7 @@ const MB_TIMEOUT_MS = 1000;
 const MAX_TAGS = 4;
 const UA = "cadence/0.1 (https://github.com/cullumco/cadence)";
 
-interface NowPlaying {
+export interface NowPlaying {
   track: string;
   artist: string;
   player: string;
@@ -86,7 +86,7 @@ export function osascript(script: string): Promise<string> {
 }
 
 // macOS now-playing via the desktop apps' scripting interface. Darwin-only —
-// osascript doesn't exist elsewhere, so non-Mac falls through to Spotify.
+// osascript doesn't exist elsewhere; non-Mac falls through to MPRIS/Spotify.
 async function getLocalNowPlaying(): Promise<NowPlaying | null> {
   if (process.platform !== "darwin") return null;
   for (const player of PLAYERS) {
@@ -103,10 +103,62 @@ async function getLocalNowPlaying(): Promise<NowPlaying | null> {
   return null;
 }
 
-// Local desktop apps first (zero-setup on Mac); the opt-in Spotify token path
-// second, so a Linux/Windows user who supplied creds still gets music.
+/* ── Linux: MPRIS via playerctl ──────────────────────────────────────────────
+ * playerctl speaks the MPRIS D-Bus spec, which Spotify and virtually every
+ * Linux player implements — one probe covers them all, no per-player scripts.
+ * `|||` mirrors the AppleScript separator above; status rides along so a
+ * paused player reads as "nothing playing", same as the darwin path. */
+const PLAYERCTL_FORMAT = "{{status}}|||{{playerName}}|||{{artist}}|||{{title}}";
+
+/* Pure parser over playerctl's formatted output, exported for tests (the
+ * platform gate + subprocess around it is a thin shell we can't run on CI
+ * Macs). Only a Playing line with both artist and title yields a signal. */
+export function parsePlayerctlOutput(out: string): NowPlaying | null {
+  const line = out.split("\n")[0]?.trim(); // defensive: one active player expected
+  if (!line) return null;
+  const parts = line.split("|||");
+  if (parts.length < 4) return null; // not our format (e.g. an error message)
+  const [status, player, artist] = parts;
+  const track = parts.slice(3).join("|||"); // title is last — may itself contain |||
+  if (status !== "Playing") return null; // paused/stopped = nothing playing
+  if (!artist || !track) return null;
+  return { track, artist, player: player || "mpris" };
+}
+
+// execFile (not exec) + its own timeout, same discipline as osascript above.
+// Missing binary (ENOENT), D-Bus errors, "No players found", timeouts — all
+// resolve to "" and the parser turns that into null. stderr only via debug().
+function playerctl(): Promise<string> {
+  return new Promise((resolve) => {
+    const child = execFile(
+      "playerctl",
+      ["metadata", "--format", PLAYERCTL_FORMAT],
+      { timeout: 800 },
+      (err, stdout, stderr) => {
+        if (err) debug("music", `playerctl failed: ${stderr.trim() || err.message}`);
+        resolve(err ? "" : stdout.trim());
+      }
+    );
+    child.on("error", (e) => {
+      debug("music", `playerctl spawn failed: ${e.message}`);
+      resolve("");
+    });
+  });
+}
+
+async function getLinuxNowPlaying(): Promise<NowPlaying | null> {
+  if (process.platform !== "linux") return null;
+  return parsePlayerctlOutput(await playerctl());
+}
+
+// Local players first (zero-setup: macOS scripting apps, Linux MPRIS); the
+// opt-in Spotify token path last, so anyone who supplied creds still gets music.
 async function getNowPlaying(providers: ProviderConfig): Promise<NowPlaying | null> {
-  return (await getLocalNowPlaying()) ?? (await getSpotifyNowPlaying(providers));
+  return (
+    (await getLocalNowPlaying()) ??
+    (await getLinuxNowPlaying()) ??
+    (await getSpotifyNowPlaying(providers))
+  );
 }
 
 async function loadCache(): Promise<Record<string, string>> {

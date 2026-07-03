@@ -19,7 +19,7 @@ export interface MusicSignal {
   source: "music";
   track?: string;
   artist?: string;
-  player?: string; // "Spotify" | "Music"
+  player?: string; // macOS: "Spotify" | "Music"; Linux: MPRIS player name
   vibe?: string; // clean mood words derived from genre tags, e.g. "chilled, calm"
   energy?: number; // 0–1 averaged from genre tags — feeds the pace + posture dials
   acoustic?: number; // 0–1 organic-ness — warms the tone dial when high
@@ -73,7 +73,8 @@ export interface PlaceSignal {
 
 /* Ambient context — cheap, mostly-local atmosphere. time/day are universal and
  * dependency-free (the one signal that works on every OS, never absent);
- * weather is opt-in (needs a config-set location + network); battery is macOS.
+ * weather is opt-in (needs a config-set location + network); battery is
+ * macOS (pmset) + Linux (sysfs).
  * Renders as flavor AND applies soft dial nudges (see deriveCadence). */
 export interface EnvironmentSignal {
   source: "environment";
@@ -82,8 +83,8 @@ export interface EnvironmentSignal {
   isWeekend: boolean;
   hour: number; // 0–23, for nudge thresholds
   weather?: string; // "rainy", "clear", "snowy" … only if location configured
-  onBattery?: boolean; // macOS: unplugged → likely mobile
-  batteryPct?: number; // macOS: 0–100, "8% left → wrap up"
+  onBattery?: boolean; // macOS/Linux: unplugged → likely mobile
+  batteryPct?: number; // macOS/Linux: 0–100, "8% left → wrap up"
   // machine vitals (cross-platform, pure Node)
   uptimeHours?: number; // os.uptime() — long uptime → fatigue
   loadHigh?: boolean; // os.loadavg vs cpu count — busy machine

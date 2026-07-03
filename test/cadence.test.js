@@ -502,6 +502,21 @@ test("renderSignalsTable: focus row is tri-state on darwin, macOS-only elsewhere
   assert.match(linux, /focus\s+— macOS only/);
 });
 
+test("renderSignalsTable: battery renders real values on linux (sysfs-backed)", () => {
+  const environment = { source: "environment", partOfDay: "afternoon", dayOfWeek: "friday",
+    isWeekend: false, hour: 15, onBattery: true, batteryPct: 42 };
+  const linux = renderSignalsTable({ music: null, report: null, environment, git: null, now: 0, platform: "linux" });
+  assert.match(linux, /battery\s+unplugged, 42%/);
+  // couldn't read sysfs → honest "unavailable", never "macOS only"
+  const noRead = renderSignalsTable({ music: null, report: null,
+    environment: { ...environment, onBattery: undefined, batteryPct: undefined },
+    git: null, now: 0, platform: "linux" });
+  assert.match(noRead, /battery\s+— unavailable/);
+  // platforms without a battery probe still get an honest reason
+  const win = renderSignalsTable({ music: null, report: null, environment, git: null, now: 0, platform: "win32" });
+  assert.match(win, /battery\s+— macOS\/Linux only/);
+});
+
 test("renderSignalsTable: self_report shows remaining TTL", () => {
   const HALF_HOUR = 1_800_000;
   const report = { source: "self_report", text: "ship mode", setAt: 0 };
@@ -602,6 +617,82 @@ test("music: player script template contains no dynamic tell target", async () =
     }
     assert.ok(script.includes(`"${app}"`));
   }
+});
+
+// ── music provider Linux MPRIS (playerctl) ──────────────────────────────────
+// The subprocess + platform gate is a thin shell; the parsing is pure and
+// fixture-tested here so the Linux path is verified from any dev machine.
+test("music: parsePlayerctlOutput reads a playing MPRIS line", async () => {
+  const { parsePlayerctlOutput } = await import("../dist/providers/music.js");
+  assert.deepEqual(
+    parsePlayerctlOutput("Playing|||spotify|||Daniel Caesar|||Best Part"),
+    { track: "Best Part", artist: "Daniel Caesar", player: "spotify" }
+  );
+  // only the first line counts (defensive: one active player expected)
+  assert.deepEqual(
+    parsePlayerctlOutput("Playing|||mpv|||Khruangbin|||Maria También\nPaused|||firefox|||X|||Y"),
+    { track: "Maria También", artist: "Khruangbin", player: "mpv" }
+  );
+  // the title is the last field — a "|||" inside it must not shear the track
+  assert.deepEqual(
+    parsePlayerctlOutput("Playing|||vlc|||A|||B|||C"),
+    { track: "B|||C", artist: "A", player: "vlc" }
+  );
+});
+
+test("music: parsePlayerctlOutput treats paused/stopped/empty/garbage as nothing playing", async () => {
+  const { parsePlayerctlOutput } = await import("../dist/providers/music.js");
+  assert.equal(parsePlayerctlOutput("Paused|||spotify|||Artist|||Track"), null);
+  assert.equal(parsePlayerctlOutput("Stopped|||spotify|||Artist|||Track"), null);
+  assert.equal(parsePlayerctlOutput(""), null); // playerctl missing / errored / timed out
+  assert.equal(parsePlayerctlOutput("No players found"), null); // stray error text
+  assert.equal(parsePlayerctlOutput("Playing|||spotify||||||Track"), null); // no artist
+  assert.equal(parsePlayerctlOutput("Playing|||spotify|||Artist|||"), null); // no title
+});
+
+// ── environment Linux battery (sysfs) ───────────────────────────────────────
+test("environment: parsePowerSupply — discharging laptop reads unplugged with pct", async () => {
+  const { parsePowerSupply } = await import("../dist/providers/environment.js");
+  assert.deepEqual(
+    parsePowerSupply([
+      { type: "Battery", status: "Discharging", capacity: "42" },
+      { type: "Mains", online: "0" },
+    ]),
+    { onBattery: true, pct: 42 }
+  );
+});
+
+test("environment: parsePowerSupply — AC adapter state is authoritative", async () => {
+  const { parsePowerSupply } = await import("../dist/providers/environment.js");
+  // adapter says online even though the battery reports a stale "Discharging"
+  assert.deepEqual(
+    parsePowerSupply([
+      { type: "Battery", status: "Discharging", capacity: "97" },
+      { type: "Mains", online: "1" },
+    ]),
+    { onBattery: false, pct: 97 }
+  );
+  // no adapter entry → the battery's own status decides
+  assert.deepEqual(
+    parsePowerSupply([{ type: "Battery", status: "Not charging", capacity: "80" }]),
+    { onBattery: false, pct: 80 }
+  );
+});
+
+test("environment: parsePowerSupply — desktop/unknown degrades to no signal", async () => {
+  const { parsePowerSupply } = await import("../dist/providers/environment.js");
+  // empty power_supply dir (VM, container)
+  assert.deepEqual(parsePowerSupply([]), { onBattery: undefined, pct: undefined });
+  // battery present but status unknown, garbage capacity → tri-state honesty
+  assert.deepEqual(
+    parsePowerSupply([{ type: "Battery", status: "Unknown", capacity: "banana" }]),
+    { onBattery: undefined, pct: undefined }
+  );
+  // desktop: only a mains entry → "plugged in", no pct
+  assert.deepEqual(
+    parsePowerSupply([{ type: "Mains", online: "1" }]),
+    { onBattery: false, pct: undefined }
+  );
 });
 
 // ── environment Focus probe ─────────────────────────────────────────────────────

@@ -113,10 +113,12 @@ without checking in stays your call, not the soundtrack's.
 
 - **Built for the Mac.** The richest ambient probes — music via AppleScript
   now-playing, battery, dark mode, displays, wifi (opt-in), Focus/DND, focused app —
-  read the Mac around you. On other platforms Cadence still runs and still
-  moves the dials: prompt intent, self-report, git, time/day, and typing tempo
-  work anywhere, Spotify can be linked for music, and the Mac-only probes
-  degrade silently.
+  read the Mac around you. On Linux, music comes in via MPRIS (`playerctl`,
+  covers Spotify and most players) and battery via `/sys/class/power_supply` —
+  both degrade silently if unavailable. On other platforms Cadence still runs
+  and still moves the dials: prompt intent, self-report, git, time/day, and
+  typing tempo work anywhere, Spotify can be linked for music, and the
+  platform-only probes degrade silently.
 - **Node 20+**
 - Claude Code for the alpha adapter
 
@@ -339,7 +341,8 @@ See [`BACKLOG.md`](BACKLOG.md). Highlights:
 ## Caveats
 
 - **Built for the Mac.** The richest ambient probes (music-via-OS, battery,
-  dark mode, displays, wifi (opt-in), Focus, focused app) are macOS. Other platforms
+  dark mode, displays, wifi (opt-in), Focus, focused app) are macOS. Linux gets
+  music (MPRIS via `playerctl`) and battery (sysfs). Other platforms
   keep the dial-movers — intent, self-report, git, time/day, typing tempo,
   linked Spotify — and the rest degrades silently.
 - **Spotify's audio-features API is not used** — Spotify deprecated it for new

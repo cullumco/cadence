@@ -83,9 +83,10 @@ function environmentRows(
   lines.push(
     row("weather", a.weather ?? "— off (run: cadence set-location <lat> <lon>)")
   );
+  // battery reads pmset on macOS and /sys/class/power_supply on Linux
   lines.push(
-    !mac
-      ? row("battery", macNote)
+    !mac && platform !== "linux"
+      ? row("battery", "— macOS/Linux only")
       : a.onBattery == null
         ? row("battery", "— unavailable")
         : a.onBattery
@@ -149,8 +150,8 @@ function environmentRows(
 
 function musicRows(m: MusicSignal | null, providers: ProviderConfig): string[] {
   const spotify = providerEnabled(providers, "spotify")
-    ? row("source", "macOS apps + Spotify (cross-platform, linked)")
-    : row("source", "macOS apps only", "(cross-platform: cadence spotify)");
+    ? row("source", "macOS apps + Linux MPRIS + Spotify (linked)")
+    : row("source", "macOS apps + Linux MPRIS", "(anywhere: cadence spotify)");
   if (!m?.track) return [top("music", "— nothing playing"), spotify];
   const lines = ["  music"];
   lines.push(row("track", musicValue(m)));

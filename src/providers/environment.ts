@@ -1,5 +1,5 @@
 import { exec } from "node:child_process";
-import { readFile, writeFile, mkdir } from "node:fs/promises";
+import { readFile, writeFile, mkdir, readdir } from "node:fs/promises";
 import { homedir, uptime, loadavg, cpus } from "node:os";
 import { join } from "node:path";
 import type { EnvironmentSignal } from "../types.js";
@@ -22,7 +22,7 @@ function sh(cmd: string, ms = 500): Promise<string | null> {
  *                 the signal that makes Cadence do something for everyone.
  *   weather     → opt-in: only if ~/.cadence/config.json has a location.
  *                 Keyless via Open-Meteo. No silent geolocation.
- *   battery     → macOS pmset, best-effort.
+ *   battery     → macOS pmset / Linux sysfs, best-effort.
  *
  * "Put the vibes back into engineering": this is the atmosphere layer.
  * ───────────────────────────────────────────────────────────────────────── */
@@ -45,6 +45,7 @@ function partOfDay(hour: number): EnvironmentSignal["partOfDay"] {
 }
 
 async function getBattery(): Promise<{ onBattery?: boolean; pct?: number }> {
+  if (process.platform === "linux") return getLinuxBattery();
   if (process.platform !== "darwin") return {};
   const out = await sh("pmset -g batt", 600);
   if (!out) return {};
@@ -56,6 +57,83 @@ async function getBattery(): Promise<{ onBattery?: boolean; pct?: number }> {
   const pctMatch = out.match(/(\d+)%/);
   const pct = pctMatch ? Number(pctMatch[1]) : undefined;
   return { onBattery, pct };
+}
+
+/* ── Linux battery: /sys/class/power_supply, pure fs reads, no subprocess ────
+ * Each supply directory exposes small text files: `type` ("Battery"/"Mains"/
+ * "USB"/…), and per-type either `status` + `capacity` (batteries) or `online`
+ * (AC adapters). Anything unreadable is simply absent — tri-state honesty:
+ * `undefined` means "couldn't look", never "observed off". */
+export interface PowerSupplyEntry {
+  type?: string; // "Battery" | "Mains" | "USB" | "UPS" | ...
+  status?: string; // batteries: "Discharging" | "Charging" | "Full" | "Not charging" | ...
+  capacity?: string; // batteries: "0".."100"
+  online?: string; // adapters: "1" | "0"
+}
+
+// Pure parser over the collected sysfs entries, exported for fixture tests.
+export function parsePowerSupply(
+  entries: PowerSupplyEntry[]
+): { onBattery?: boolean; pct?: number } {
+  let pct: number | undefined;
+  let batteryDischarging: boolean | undefined;
+  let mainsOnline: boolean | undefined;
+
+  for (const e of entries) {
+    const type = e.type?.trim();
+    if (type === "Battery") {
+      const cap = Number(e.capacity?.trim());
+      if (pct === undefined && Number.isFinite(cap) && cap >= 0 && cap <= 100) pct = cap;
+      const status = e.status?.trim().toLowerCase();
+      if (batteryDischarging === undefined) {
+        if (status === "discharging") batteryDischarging = true;
+        else if (status === "charging" || status === "full" || status === "not charging")
+          batteryDischarging = false;
+        // "unknown" or anything else → stays undefined
+      }
+    } else if (type === "Mains" || type === "USB" || type === "UPS") {
+      const online = e.online?.trim();
+      if (online === "1") mainsOnline = true;
+      else if (online === "0" && mainsOnline !== true) mainsOnline = false;
+    }
+  }
+
+  // The AC adapter's own state is authoritative when readable; otherwise fall
+  // back to what the battery says it's doing. Both absent → no signal at all
+  // (a desktop with an empty power_supply dir reports nothing, not "plugged in").
+  const onBattery = mainsOnline !== undefined ? !mainsOnline : batteryDischarging;
+  return { onBattery, pct };
+}
+
+const POWER_SUPPLY_DIR = "/sys/class/power_supply";
+
+async function readSysfs(path: string): Promise<string | undefined> {
+  try {
+    return (await readFile(path, "utf-8")).trim();
+  } catch {
+    return undefined;
+  }
+}
+
+async function getLinuxBattery(): Promise<{ onBattery?: boolean; pct?: number }> {
+  try {
+    const names = await readdir(POWER_SUPPLY_DIR);
+    const entries = await Promise.all(
+      names.map(async (name) => {
+        const dir = join(POWER_SUPPLY_DIR, name);
+        const [type, status, capacity, online] = await Promise.all([
+          readSysfs(join(dir, "type")),
+          readSysfs(join(dir, "status")),
+          readSysfs(join(dir, "capacity")),
+          readSysfs(join(dir, "online")),
+        ]);
+        return { type, status, capacity, online };
+      })
+    );
+    return parsePowerSupply(entries);
+  } catch {
+    return {}; // no sysfs (container, exotic kernel) → no signal, never an error
+  }
 }
 
 // ── machine vitals: pure Node, cross-platform, effectively free ──────────────
