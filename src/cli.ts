@@ -24,6 +24,7 @@ import { readTuneLog, renderTuneReport, tuneLogPath } from "./learn.js";
 import { connectSpotify, REDIRECT_URI } from "./spotify-auth.js";
 import { SHIP_PATTERN, maybeSpawnDj } from "./dj.js";
 import { cmdDj } from "./dj-cli.js";
+import { cmdEnvelope } from "./envelope-cli.js";
 import type {
   Signal,
   UserState,
@@ -620,6 +621,9 @@ const HELP = `
     cadence dj off                    turn dj off
 
   other surfaces:
+    cadence envelope            print the injectable <user_state> block for ANY
+                                agent harness (--json for structured output;
+                                empty stdout = nothing to inject, always exit 0)
     cadence mcp                 stdio MCP server — same room in Claude Desktop etc.
                                 (don't add it inside Claude Code: hooks already inject)
 `;
@@ -662,6 +666,10 @@ async function main() {
       return cmdSpotify(rest);
     case "dj":
       return cmdDj(rest);
+    case "envelope":
+      // The generic harness primitive: stdout is ONLY the injectable payload
+      // (block, JSON, or nothing) — see src/envelope-cli.ts for the contract.
+      return cmdEnvelope(rest);
     case "mcp":
       // stdio MCP server: from here on stdout is the JSON-RPC channel — print
       // nothing else. Runs until the client closes stdin.

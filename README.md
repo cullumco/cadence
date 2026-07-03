@@ -9,10 +9,11 @@ listening to, what you told it, how you want it to respond — into every prompt
 then asks Claude to *read your prompt through that lens*. The agent stops being
 deaf to the room.
 
-**Built for the Mac (alpha).** The richest ambient signals read the Mac around
-you. Other platforms still get the dial-movers — prompt intent, self-report,
-git, time/day, typing tempo — and can link Spotify for music
-(`cadence spotify connect`).
+**Richest signals on macOS; universal signals everywhere.** The deepest
+ambient probes read the Mac around you. Every platform gets the dial-movers —
+prompt intent, self-report, git, time/day, typing tempo — and can link Spotify
+for music (`cadence spotify connect`). The Mac-only probes degrade silently
+off macOS — a contract CI tests on Linux on every push.
 
 A [Cullum&Co](https://cullum.co) project · [cadence.cullum.co](https://cadence.cullum.co)
 
@@ -111,14 +112,15 @@ without checking in stays your call, not the soundtrack's.
 
 ## Requirements
 
-- **Built for the Mac.** The richest ambient probes — music via AppleScript
-  now-playing, battery, dark mode, displays, wifi (opt-in), Focus/DND, focused app —
-  read the Mac around you. On Linux, music comes in via MPRIS (`playerctl`,
-  covers Spotify and most players) and battery via `/sys/class/power_supply` —
-  both degrade silently if unavailable. On other platforms Cadence still runs
-  and still moves the dials: prompt intent, self-report, git, time/day, and
-  typing tempo work anywhere, Spotify can be linked for music, and the
-  platform-only probes degrade silently.
+- **Richest signals on macOS.** The deepest ambient probes — music via
+  AppleScript now-playing, battery, dark mode, displays, wifi (opt-in),
+  Focus/DND, focused app — read the Mac around you. On Linux, music comes in
+  via MPRIS (`playerctl`, covers Spotify and most players) and battery via
+  `/sys/class/power_supply` — both degrade silently if unavailable. On other
+  platforms Cadence still runs and still moves the dials: prompt intent,
+  self-report, git, time/day, and typing tempo work anywhere, Spotify can be
+  linked for music, and the platform-only probes degrade silently (CI runs the
+  suite on Linux to keep that true).
 - **Node 20+**
 - Claude Code for the alpha adapter
 
@@ -258,6 +260,45 @@ demand. The core signal types, cadence derivation, reframe lens, and rendering
 are kept separate so future adapters can deliver the same cadence state through
 other agent surfaces.
 
+## Use Cadence with any agent
+
+`cadence envelope` is the official generic integration primitive: it prints the
+exact `<user_state>` block the Claude Code hook injects — or *nothing at all* —
+so any agent harness with a pre-prompt hook can adopt Cadence in one line: run
+`cadence envelope` and prepend its stdout to the prompt.
+
+The contract is designed so you can inject stdout verbatim, blindly:
+
+- **Empty stdout means inject nothing.** No signals and no pinned dials → no
+  output, exit 0 — the hook's silent-when-empty behavior for free.
+- **It never exits nonzero for signal failures**, and collection is bounded
+  (~2s), so a broken probe can't wedge or fail your prompt path.
+- **Paused is honest**: `cadence pause` makes it print a one-line paused
+  notice instead of a stale room.
+- **It's a pure read** — no `~/.cadence` writes, same read surface as the MCP
+  server.
+
+`cadence envelope --json` prints the structured state instead (signals, the
+four dials, pinned, reframe) for harnesses that want to template it themselves.
+
+Concrete non-Claude example — wrapping [`llm`](https://llm.datasette.io) (or
+any prompt-taking CLI) so it reads the room first:
+
+```bash
+#!/usr/bin/env bash
+# ask — same prompt, different room, any model
+room="$(cadence envelope)"
+if [ -n "$room" ]; then
+  llm "$(printf '%s\n\n%s' "$room" "$*")"
+else
+  llm "$*"
+fi
+```
+
+The same pattern fits any harness with a pre-prompt/context hook: shell out to
+`cadence envelope`, prepend stdout. (Inside Claude Code you don't need it — the
+plugin's hooks already inject the room.)
+
 ## Same room in Claude Desktop (MCP)
 
 `cadence mcp` runs a zero-dependency MCP stdio server exposing the same
@@ -340,11 +381,11 @@ See [`BACKLOG.md`](BACKLOG.md). Highlights:
 
 ## Caveats
 
-- **Built for the Mac.** The richest ambient probes (music-via-OS, battery,
-  dark mode, displays, wifi (opt-in), Focus, focused app) are macOS. Linux gets
-  music (MPRIS via `playerctl`) and battery (sysfs). Other platforms
-  keep the dial-movers — intent, self-report, git, time/day, typing tempo,
-  linked Spotify — and the rest degrades silently.
+- **Richest signals on macOS.** The deepest ambient probes (music-via-OS,
+  battery, dark mode, displays, wifi (opt-in), Focus, focused app) are macOS.
+  Linux gets music (MPRIS via `playerctl`) and battery (sysfs). Other platforms
+  keep the universal dial-movers — intent, self-report, git, time/day, typing
+  tempo, linked Spotify — and the rest degrades silently.
 - **Spotify's audio-features API is not used** — Spotify deprecated it for new
   apps (2024) and gated dev-mode behind Premium (2026), so vibe comes from
   MusicBrainz, not Spotify. On macOS, Cadence reads what's playing at the OS

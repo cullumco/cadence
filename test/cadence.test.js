@@ -1132,6 +1132,99 @@ test("mcp e2e: spawned server speaks pure JSON-RPC and exits 0 on stdin close", 
   );
 });
 
+// ── `cadence envelope` — the generic harness primitive (deps injected) ──────
+// runEnvelope is the pure policy under `cadence envelope`: stdout is ONLY the
+// injectable payload, exit 0 for every signal-side outcome. Reuses the MCP
+// fixtures above — same buildEnvelope seam, same room.
+import { runEnvelope, ENVELOPE_BUDGET_MS, ENVELOPE_PAUSED_TEXT } from "../dist/envelope-cli.js";
+
+const envelopeDeps = (over = {}) => {
+  const stdout = [];
+  const stderr = [];
+  return {
+    deps: {
+      buildEnvelope: async () => ({ block: MCP_BLOCK, state: MCP_STATE }),
+      isPaused: async () => false,
+      cwd: () => "/tmp/envelope-test",
+      write: (t) => stdout.push(t),
+      writeErr: (t) => stderr.push(t),
+      ...over,
+    },
+    stdout: () => stdout.join(""),
+    stderr: () => stderr.join(""),
+  };
+};
+
+test("envelope: default prints the exact injected block; own cwd, bounded budget", async () => {
+  const calls = [];
+  const { deps, stdout, stderr } = envelopeDeps({
+    buildEnvelope: async (opts) => {
+      calls.push(opts);
+      return { block: MCP_BLOCK, state: MCP_STATE };
+    },
+  });
+  const code = await runEnvelope([], deps);
+  assert.equal(code, 0);
+  assert.equal(stdout(), MCP_BLOCK + "\n"); // byte-for-byte the hook's block
+  assert.equal(stderr(), "");
+  // the process's own cwd, and the MCP read budget — never the hook's 1500ms
+  assert.equal(calls[0].cwd, "/tmp/envelope-test");
+  assert.equal(calls[0].budgetMs, ENVELOPE_BUDGET_MS);
+  assert.equal(ENVELOPE_BUDGET_MS, 2000);
+});
+
+test("envelope --json: structured StateWithCadence, parseable from stdout", async () => {
+  const { deps, stdout } = envelopeDeps();
+  const code = await runEnvelope(["--json"], deps);
+  assert.equal(code, 0);
+  assert.deepEqual(JSON.parse(stdout()), MCP_STATE);
+});
+
+test("envelope paused: honest one-line notice, no collection at all, exit 0", async () => {
+  let collected = 0;
+  const { deps, stdout } = envelopeDeps({
+    isPaused: async () => true,
+    buildEnvelope: async () => {
+      collected += 1;
+      return null;
+    },
+  });
+  assert.equal(await runEnvelope([], deps), 0);
+  assert.equal(stdout(), ENVELOPE_PAUSED_TEXT + "\n");
+  assert.equal(collected, 0); // paused is checked FIRST — no probes run
+
+  const jsonRun = envelopeDeps({ isPaused: async () => true });
+  assert.equal(await runEnvelope(["--json"], jsonRun.deps), 0);
+  assert.deepEqual(JSON.parse(jsonRun.stdout()), { paused: true }); // mirrors the MCP envelope
+});
+
+test("envelope empty room: NO stdout, exit 0 — empty means inject nothing", async () => {
+  for (const args of [[], ["--json"]]) {
+    const { deps, stdout, stderr } = envelopeDeps({ buildEnvelope: async () => null });
+    assert.equal(await runEnvelope(args, deps), 0);
+    assert.equal(stdout(), ""); // a shell integration injects stdout verbatim
+    assert.equal(stderr(), "");
+  }
+});
+
+test("envelope fail-silent: a throwing collection prints nothing and still exits 0", async () => {
+  const { deps, stdout } = envelopeDeps({
+    buildEnvelope: async () => {
+      throw new Error("provider exploded");
+    },
+  });
+  assert.equal(await runEnvelope([], deps), 0); // never break the caller's prompt path
+  assert.equal(stdout(), "");
+});
+
+test("envelope usage error: unknown flag fails loudly on stderr, exit 1, no stdout", async () => {
+  const { deps, stdout, stderr } = envelopeDeps();
+  assert.equal(await runEnvelope(["--jsn"], deps), 1); // typos fail at setup time,
+  assert.equal(stdout(), ""); // not silently inject nothing forever
+  assert.match(stderr(), /unknown option/);
+  assert.match(stderr(), /--json/);
+});
+
 // ── the instrument (TUI) — pure frame renderer ──────────────────────────────
 // Frames are rendered with color:false and an injected clock, so every
 // assertion below is plain text — no ANSI, no real time, no terminal.
@@ -1803,6 +1896,42 @@ test("cli test: renders the exact injected block end-to-end (envelope → render
   assert.equal(preview.code, 0);
   assert.match(preview.out, /<user_state>/); // the block the hook injects
   assert.match(preview.out, /reviewing the parser/); // the self-report surfaces in it
+});
+
+test("cli envelope e2e: prints the injectable room on any platform; paused is honest", { timeout: 30_000 }, async () => {
+  const home = await freshHome();
+  await runCli(home, ["report", "shipping the adapter"]); // guarantee at least one signal
+
+  // default: the block, verbatim — what a harness's pre-prompt hook prepends
+  const block = await runCli(home, ["envelope"]);
+  assert.equal(block.code, 0);
+  assert.match(block.out, /<user_state>/);
+  assert.match(block.out, /shipping the adapter/);
+
+  // --json: the structured twin, parseable straight off stdout
+  const json = await runCli(home, ["envelope", "--json"]);
+  assert.equal(json.code, 0);
+  const state = JSON.parse(json.out);
+  assert.ok(Array.isArray(state.signals));
+  assert.ok(state.signals.some((s) => s.source === "self_report"));
+  assert.ok(state.cadence.pace); // dials + reframe travel with the JSON form
+  assert.equal(typeof state.reframe, "string");
+
+  // envelope is a READ surface: previewing the room must not stamp the
+  // activity tempo window (that write belongs to real prompts only)
+  await assert.rejects(fsReadFile(joinPath(home, ".cadence", "activity.json")));
+
+  // paused: one honest notice line, still exit 0
+  await runCli(home, ["pause"]);
+  const paused = await runCli(home, ["envelope"]);
+  assert.equal(paused.code, 0);
+  assert.match(paused.out, /paused/);
+
+  // usage error is the ONE loud path: fail at setup time, not silently forever
+  const typo = await runCli(home, ["envelope", "--jsn"]);
+  assert.equal(typo.code, 1);
+  assert.equal(typo.out, "");
+  assert.match(typo.err, /unknown option/);
 });
 
 test("cli unknown command: exits 1 and points at help", { timeout: 30_000 }, async () => {
