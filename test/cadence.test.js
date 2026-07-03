@@ -1169,7 +1169,7 @@ import {
   renderTuneReport,
   MAX_TUNE_ENTRIES,
 } from "../dist/learn.js";
-import { spawn } from "node:child_process";
+import { spawn, execSync } from "node:child_process";
 import { mkdtemp, readFile as fsReadFile, writeFile as fsWriteFile, mkdir as fsMkdir } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join as joinPath } from "node:path";
@@ -1719,4 +1719,192 @@ test("cli unknown command: exits 1 and points at help", { timeout: 30_000 }, asy
   const r = await runCli(home, ["definitely-not-a-command"]);
   assert.equal(r.code, 1);
   assert.match(r.err, /unknown command/);
+});
+
+// ── stop.ts: the remaining decideStop guards + isSoftHandoff shapes ──────────
+// The happy path (shipping self-report blocks) is covered above; these lock the
+// conservative-by-design guards that keep the block from over-firing.
+const SOFT_HANDOFF = "I can do that next. Would you like me to patch it?";
+
+test("decideStop: a running background task suppresses the block (never interrupt work)", () => {
+  const signals = [{ source: "self_report", text: "shipping, locked in", setAt: 0 }];
+  const cadence = deriveCadence(stateWith(signals));
+  // authority + soft handoff are both present — only the background task holds it back
+  const decision = decideStop(
+    { last_assistant_message: SOFT_HANDOFF, background_tasks: [{ id: "job-1" }] },
+    signals,
+    cadence,
+    []
+  );
+  assert.equal(decision, null);
+});
+
+test("decideStop: a user-pinned posture=high is shipping authority on its own", () => {
+  // no self-report at all — authority comes purely from the pinned dial
+  const decision = decideStop(
+    { last_assistant_message: SOFT_HANDOFF },
+    [],
+    { ...NEUTRAL, posture: "high" },
+    ["posture"]
+  );
+  assert.equal(decision?.decision, "block");
+});
+
+test("decideStop: a user-pinned proactivity=high is shipping authority on its own", () => {
+  const decision = decideStop(
+    { last_assistant_message: SOFT_HANDOFF },
+    [],
+    { ...NEUTRAL, proactivity: "high" },
+    ["proactivity"]
+  );
+  assert.equal(decision?.decision, "block");
+});
+
+test("decideStop: high dials that were INFERRED (not pinned) are not authority", () => {
+  // same high dials, but pinned is empty → inference alone must never block
+  const decision = decideStop(
+    { last_assistant_message: SOFT_HANDOFF },
+    [],
+    { ...NEUTRAL, posture: "high", proactivity: "high" },
+    []
+  );
+  assert.equal(decision, null);
+});
+
+test("decideStop: authority present but a decisive ending is not a handoff → no block", () => {
+  const signals = [{ source: "self_report", text: "shipping, locked in", setAt: 0 }];
+  const cadence = deriveCadence(stateWith(signals));
+  const decision = decideStop(
+    { last_assistant_message: "Patched, tested, and the suite is green." },
+    signals,
+    cadence,
+    []
+  );
+  assert.equal(decision, null);
+});
+
+test("isSoftHandoff: passive offers and empty/decisive endings", () => {
+  assert.equal(isSoftHandoff("Say the word and I'll continue."), true);
+  assert.equal(isSoftHandoff("If you'd like, I can add tests next."), true);
+  assert.equal(isSoftHandoff("Happy to keep going."), true);
+  assert.equal(isSoftHandoff(""), false); // nothing to read
+  assert.equal(isSoftHandoff("   \n  "), false); // whitespace only
+  // a permission verb without a trailing question mark is a statement, not a handoff
+  assert.equal(isSoftHandoff("I should probably refactor this later."), false);
+});
+
+// ── stop.ts hook e2e: spawn the compiled binary with an isolated HOME ────────
+// Covers main/readStdin/collectSignals — the wiring under the pure policy.
+const STOP_PATH = new URL("../dist/stop.js", import.meta.url).pathname;
+function runHookBinary(binPath, home, payload, cwd) {
+  const env = { ...process.env, HOME: home };
+  for (const k of Object.keys(env)) if (k.startsWith("CADENCE_")) delete env[k];
+  return new Promise((resolve, reject) => {
+    const p = spawn(process.execPath, [binPath], { env, cwd: cwd ?? home });
+    let out = "";
+    let err = "";
+    p.stdout.on("data", (d) => (out += d));
+    p.stderr.on("data", (d) => (err += d));
+    p.on("close", (code) => resolve({ code, out, err }));
+    p.on("error", reject);
+    p.stdin.write(JSON.stringify(payload));
+    p.stdin.end();
+  });
+}
+
+test("stop hook e2e: a live shipping self-report blocks a soft handoff", { timeout: 30_000 }, async () => {
+  const home = await mkdtemp(joinPath(tmpdir(), "cadence-stop-"));
+  await fsMkdir(joinPath(home, ".cadence"), { recursive: true });
+  await fsWriteFile(joinPath(home, ".cadence", "state.txt"), "shipping, locked in");
+
+  const blocked = await runHookBinary(STOP_PATH, home, {
+    cwd: home,
+    last_assistant_message: "I can do that next. Would you like me to patch it?",
+  });
+  assert.equal(blocked.code, 0);
+  const decision = JSON.parse(blocked.out);
+  assert.equal(decision.decision, "block");
+  assert.match(decision.reason, /shipping/);
+});
+
+test("stop hook e2e: nothing to block on stays silent (no self-report, no pins)", { timeout: 30_000 }, async () => {
+  const home = await mkdtemp(joinPath(tmpdir(), "cadence-stop-"));
+  const silent = await runHookBinary(STOP_PATH, home, {
+    cwd: home,
+    last_assistant_message: "Want me to patch it?",
+  });
+  assert.equal(silent.code, 0);
+  assert.equal(silent.out, ""); // no authority ⇒ no output at all
+});
+
+// ── posttool.ts hook e2e: the main() orchestration + workstate.json persistence
+const POSTTOOL_PATH = new URL("../dist/posttool.js", import.meta.url).pathname;
+function sh(dir, cmd) {
+  return execSync(cmd, { cwd: dir, stdio: "pipe" });
+}
+async function initRepo(dir) {
+  sh(dir, "git init -b main");
+  sh(dir, "git config user.email t@t.co && git config user.name t");
+  await fsWriteFile(joinPath(dir, "f.txt"), "a\n");
+  sh(dir, "git add f.txt && git commit -m base");
+  return dir;
+}
+
+test("posttool e2e: the tests-failing edge fires once, then the passing edge releases it", { timeout: 30_000 }, async () => {
+  const home = await mkdtemp(joinPath(tmpdir(), "cadence-pt-"));
+  const repo = await initRepo(home); // getGitSignal needs a real repo to observe
+
+  const base = { session_id: "s1", cwd: repo, tool_name: "Bash", tool_input: { command: "npm test" } };
+
+  // 1) suite goes red → debug-framing update, and the state is recorded
+  const failed = await runHookBinary(POSTTOOL_PATH, home, { ...base, tool_response: "tests 5\n1 failing" }, repo);
+  assert.equal(failed.code, 0);
+  assert.match(JSON.parse(failed.out).hookSpecificOutput.additionalContext, /test suite just started failing/);
+  const st1 = JSON.parse(await fsReadFile(joinPath(home, ".cadence", "workstate.json"), "utf-8"));
+  assert.equal(st1.s1.testsFailing, true);
+
+  // 2) suite goes green → release update (reads prev state back off disk)
+  const passed = await runHookBinary(POSTTOOL_PATH, home, { ...base, tool_response: "5 passing" }, repo);
+  assert.match(JSON.parse(passed.out).hookSpecificOutput.additionalContext, /passing again/);
+  const st2 = JSON.parse(await fsReadFile(joinPath(home, ".cadence", "workstate.json"), "utf-8"));
+  assert.equal(st2.s1.testsFailing, false);
+});
+
+test("posttool e2e: the merge-conflict edge is read straight off git", { timeout: 30_000 }, async () => {
+  const home = await mkdtemp(joinPath(tmpdir(), "cadence-pt-"));
+  const repo = await initRepo(home);
+  sh(repo, "git checkout -b feature");
+  await fsWriteFile(joinPath(repo, "f.txt"), "feature\n");
+  sh(repo, "git commit -am feature");
+  sh(repo, "git checkout main");
+  await fsWriteFile(joinPath(repo, "f.txt"), "mainline\n");
+  sh(repo, "git commit -am mainline");
+  try {
+    sh(repo, "git merge feature"); // conflicts on f.txt, leaves MERGE_HEAD
+  } catch {
+    // a conflicting merge exits non-zero — that mid-merge state is the point
+  }
+
+  const r = await runHookBinary(POSTTOOL_PATH, home, {
+    session_id: "c1", cwd: repo, tool_name: "Bash", tool_input: { command: "git status" },
+  }, repo);
+  assert.equal(r.code, 0);
+  assert.match(JSON.parse(r.out).hookSpecificOutput.additionalContext, /entered a merge\/rebase conflict/);
+});
+
+test("posttool e2e: stays silent when the command can't change the read, or it's not a repo", { timeout: 30_000 }, async () => {
+  const repoHome = await mkdtemp(joinPath(tmpdir(), "cadence-pt-"));
+  const repo = await initRepo(repoHome);
+  // a non-git, non-test command → gate 1 (shouldCheck) rejects it, no output
+  const notGit = await runHookBinary(POSTTOOL_PATH, repoHome, {
+    session_id: "n1", cwd: repo, tool_name: "Bash", tool_input: { command: "ls -la" },
+  }, repo);
+  assert.equal(notGit.out, "");
+
+  // a git command but no repo at cwd → git signal is null, nothing to observe
+  const noRepo = await mkdtemp(joinPath(tmpdir(), "cadence-pt-"));
+  const r = await runHookBinary(POSTTOOL_PATH, noRepo, {
+    session_id: "x1", cwd: noRepo, tool_name: "Bash", tool_input: { command: "git status" },
+  }, noRepo);
+  assert.equal(r.out, "");
 });
