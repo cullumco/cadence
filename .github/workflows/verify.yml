@@ -29,11 +29,14 @@ jobs:
         os: [ubuntu-latest, macos-latest]
     steps:
       - name: Check out repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Set up Node
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v5
         with:
+          # 20 = the engines floor in package.json, tested on purpose (the
+          # action itself runs on the runner's Node 24; this only picks the
+          # version our steps run on)
           node-version: "20"
           cache: npm
 
