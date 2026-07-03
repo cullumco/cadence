@@ -1,7 +1,6 @@
 ---
-name: cadence-try
 description: Show what Cadence is doing right now and give the user a quick way to feel the difference.
-disable-model-invocation: false
+disable-model-invocation: true
 ---
 
 # Try Cadence
@@ -14,7 +13,11 @@ If a `<user_state>` block is present in context:
 - Give the user one tiny prompt to try next that would make the difference obvious.
 
 If no `<user_state>` block is present:
-- Say Cadence does not appear to be injecting context in this session yet.
-- Tell the user to install/enable the plugin or run `cadence test` from the shell.
+- Run `cadence test` with Bash before diagnosing (if `cadence` is not on PATH,
+  run `node ${CLAUDE_PLUGIN_ROOT}/dist/cli.js test`).
+- If it says Cadence is paused, say that — paused is off, not broken — and
+  point at `/cadence:resume`.
+- Otherwise say Cadence does not appear to be injecting context in this
+  session yet, and suggest checking the install or running `cadence signals`.
 
 Keep the response short, warm, and practical. Do not explain the whole product.

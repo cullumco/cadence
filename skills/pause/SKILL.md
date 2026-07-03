@@ -1,6 +1,7 @@
 ---
 description: Pause Cadence — silence all hooks instantly; prompts go through untouched until resumed.
 disable-model-invocation: true
+allowed-tools: Bash(cadence pause)
 ---
 
 # Pause Cadence

@@ -152,12 +152,17 @@ expect to handle `array[i]` as possibly `undefined`.
 
 `skills/*/SKILL.md` are the user-invocable plugin skills: `/cadence:setup`
 (conversational onboarding — Claude interviews the user and drives the CLI),
-`/cadence:state`, `/cadence:try`, `/cadence:pause`, `/cadence:resume`. All have
-`disable-model-invocation: true` so they only fire on explicit user invocation,
-not automatic model matching. Keep their bodies short and operational — they
-should not re-explain the product. The rule that binds them: **skills
-orchestrate, the CLI is the source of truth** — a skill runs `cadence …`
-commands via Bash and never edits `~/.cadence/` files directly.
+`/cadence:state`, `/cadence:try`, `/cadence:tune`, `/cadence:pause`,
+`/cadence:resume`, plus `skills/cadence` (the manual readout path for
+harnesses without prompt hooks — the Codex plugin's entry point; the same
+directory is shared by both plugin manifests, so every skill must stay
+surface-neutral). All have `disable-model-invocation: true` so they only fire
+on explicit user invocation, not automatic model matching — this is an
+invariant; do not flip it for any surface. No `name:` frontmatter — the
+directory name is the invocation name. Keep their bodies short and
+operational — they should not re-explain the product. The rule that binds
+them: **skills orchestrate, the CLI is the source of truth** — a skill runs
+`cadence …` commands via Bash and never edits `~/.cadence/` files directly.
 
 ### Pause (the kill switch)
 

@@ -1,6 +1,7 @@
 ---
 description: Resume Cadence — start reading the room again after a pause.
 disable-model-invocation: true
+allowed-tools: Bash(cadence resume), Bash(cadence test)
 ---
 
 # Resume Cadence

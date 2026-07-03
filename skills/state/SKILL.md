@@ -1,7 +1,7 @@
 ---
-name: cadence-state
 description: Set or inspect the user's self-reported Cadence state, such as "shipping", "thinking", or "tired but pushing".
-disable-model-invocation: false
+argument-hint: '[how you''re doing, e.g. "shipping" or "tired but pushing"]'
+disable-model-invocation: true
 ---
 
 # Cadence State
