@@ -360,6 +360,7 @@ export const CURRENT_RULE_IDS: ReadonlySet<string> = new Set([
   "env.gloomy",
   "env.battery",
   "env.busy",
+  "env.focus",
   "music.energy-high",
   "music.energy-low",
   "music.intense",

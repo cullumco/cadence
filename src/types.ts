@@ -98,8 +98,10 @@ export interface EnvironmentSignal {
   // machine vitals (cross-platform, pure Node)
   uptimeHours?: number; // os.uptime() — long uptime → fatigue
   loadHigh?: boolean; // os.loadavg vs cpu count — busy machine
-  // mac context (best-effort shell-outs; flavor only)
+  // mac context (best-effort shell-outs; flavor unless noted)
   focus?: boolean; // Do Not Disturb / Focus on → heads-down
+  focusManual?: boolean; // true only when Focus was hand-flipped (an assertion,
+  // not a scheduled window) — the gesture that carries the env.focus nudge
   displays?: number; // external monitors → "at the desk"
   network?: string; // wifi SSID → home / office / café
   darkMode?: boolean; // UI dark mode → night session

@@ -127,6 +127,24 @@ export function deriveCadenceTraced(state: UserState): {
       nudge("pace", "high", "environment", "env.busy"); // something's running → get an answer, get back to it
       nudge("posture", "high", "environment", "env.busy"); // decisive while waiting — don't want a survey
     }
+    // env.focus (enabled 2026-07-03, formerly the last dormant nudge): a
+    // hand-flipped Focus is a gesture, not atmosphere — heads-down means fewer
+    // check-ins. MANUAL only (focusManual); a scheduled window is calendar-
+    // shaped routine and stays flavor. Still the weakest tier: git conflict,
+    // intent.debug, and any self-report all override — and inferred
+    // proactivity=high never grants Stop-hook authority (that takes a pin or
+    // a ship self-report; see stop.ts). Guard: environment is a bundle of
+    // independent facts, but it must never complete the whole board in one
+    // pass — if its other sub-rules already moved three dials, focus stays
+    // quiet ("no single signal moves all four", CLAUDE.md).
+    if (environment.focusManual) {
+      const envDials = new Set(
+        nudges.filter((n) => n.source === "environment").map((n) => n.dial)
+      );
+      if (envDials.size < 3) {
+        nudge("proactivity", "high", "environment", "env.focus");
+      }
+    }
   }
 
   // ── music → pace + posture + tone (move WITH the music) ───────────────────
@@ -217,9 +235,6 @@ export function deriveCadenceTraced(state: UserState): {
     if (/\b(beers?|tired|late|chill|relaxed|cozy)\b/.test(t)) nudge("tone", "low", "self_report", "report.chill");
     if (/\b(focused|formal|work|serious|crunch)\b/.test(t)) nudge("tone", "high", "self_report", "report.formal");
   }
-
-  // Still-dormant candidate nudges (see BACKLOG):
-  //   environment focus on → proactivity high (heads-down = fewer check-ins)
 
   // ── activity → pace (motor tempo + return-from-break) ─────────────────────
   // typing tempo (opt-in): rapid-fire short prompts read as fast; one long

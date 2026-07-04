@@ -198,8 +198,10 @@ section). Remaining candidate: ambient-light sensor.
   `ModeConfigurations.json` schedule math (`scheduleActive()`, fixture-tested,
   handles midnight-wrapping windows). Needs terminal Full Disk Access; degrades
   to absent without it. Remaining gap: geofenced/iPhone-synced Focus writes
-  neither file — undetectable from this Mac. Render-only flavor;
-  `focus on → proactivity high` is a dormant candidate nudge.
+  neither file — undetectable from this Mac. Flavor plus one nudge (shipped
+  2026-07-03): a MANUAL Focus assertion → `proactivity high` (`env.focus`,
+  ambient tier, guarded so environment never moves all four dials in one
+  pass); scheduled windows stay render-only flavor.
 - **More environment nudges** — ambient-light sensor is the one cheap candidate
   left (calendar density cut, focused app shipped opt-in).
 - **Valence boundary** — music energy/acoustic now move pace/posture/tone, but

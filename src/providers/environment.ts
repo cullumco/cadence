@@ -190,16 +190,22 @@ export function scheduleActive(json: unknown, now: Date): boolean {
 
 // Focus / DND — tri-state, read straight from the private donotdisturbd DB
 // (~1ms, no subprocess). Exported for the darwin smoke test.
-//   true      → a Focus mode is asserted (manual toggle) OR a scheduled
-//               Focus window is active right now
-//   false     → assertions read OK, none set, no schedule active → off
-//   undefined → unreadable: terminal lacks Full Disk Access (TCC denies the
-//               read silently — hook subprocesses never get a prompt), file
-//               moved, or shape changed → "unavailable", never "off"
+//   focus: true      → a Focus mode is asserted (manual toggle) OR a scheduled
+//                      Focus window is active right now
+//   focus: false     → assertions read OK, none set, no schedule active → off
+//   focus: undefined → unreadable: terminal lacks Full Disk Access (TCC denies
+//                      the read silently — hook subprocesses never get a
+//                      prompt), file moved, or shape changed → "unavailable",
+//                      never "off"
+//   manual: true only for the asserted (hand-flipped) case — the deliberate
+//   gesture that carries dial authority (env.focus); a scheduled window is
+//   calendar-shaped atmosphere and stays flavor-only.
 // Remaining gap: geofenced/iPhone-synced Focus writes neither an assertion
 // nor a local schedule — undetectable from this Mac.
-export async function getFocus(now: Date = new Date()): Promise<boolean | undefined> {
-  if (process.platform !== "darwin") return undefined;
+export async function getFocusDetail(
+  now: Date = new Date()
+): Promise<{ focus?: boolean; manual?: boolean }> {
+  if (process.platform !== "darwin") return {};
   let manual: boolean | undefined;
   try {
     const raw = await readFile(DND_ASSERTIONS, "utf-8");
@@ -209,15 +215,21 @@ export async function getFocus(now: Date = new Date()): Promise<boolean | undefi
   } catch {
     manual = undefined;
   }
-  if (manual) return true;
+  if (manual) return { focus: true, manual: true };
   // Manual focus is off (or unknowable) — a scheduled window may still be on.
   try {
     const raw = await readFile(DND_MODE_CONFIGS, "utf-8");
-    if (scheduleActive(JSON.parse(raw), now)) return true;
+    // manual carries through as false OR undefined — a schedule being on says
+    // nothing about whether the assertions file was readable.
+    if (scheduleActive(JSON.parse(raw), now)) return { focus: true, manual };
   } catch {
     // both files unreadable → truly unknown
   }
-  return manual;
+  return { focus: manual, manual };
+}
+
+export async function getFocus(now: Date = new Date()): Promise<boolean | undefined> {
+  return (await getFocusDetail(now)).focus;
 }
 
 // Frontmost app — opt-in, macOS, flavor only. Read at UserPromptSubmit, so the
@@ -242,13 +254,14 @@ export async function getFocusedApp(now: boolean): Promise<string | undefined> {
 // ── mac context: best-effort shell-outs, all flavor (no dial nudges) ─────────
 async function getMacContext(focusedAppEnabled: boolean, wifiEnabled: boolean): Promise<{
   focus?: boolean;
+  focusManual?: boolean;
   displays?: number;
   network?: string;
   darkMode?: boolean;
   focusedApp?: string;
 }> {
   if (process.platform !== "darwin") return {};
-  const [dark, ssid, displays, focus, focusedApp] = await Promise.all([
+  const [dark, ssid, displays, focusDetail, focusedApp] = await Promise.all([
     sh("defaults read -g AppleInterfaceStyle"), // "Dark", or error (=light)
     // SSID names your location — opt-in (2026-06-11), like everything
     // privacy-adjacent. Off → don't even spawn the probe.
@@ -257,16 +270,24 @@ async function getMacContext(focusedAppEnabled: boolean, wifiEnabled: boolean): 
       : Promise.resolve(null),
     // fast display count via AppleScript (~100ms) — NOT system_profiler (1-3s)
     sh(`osascript -e 'tell application "System Events" to count of desktops'`, 700),
-    getFocus(),
+    getFocusDetail(),
     getFocusedApp(focusedAppEnabled),
   ]);
 
-  const ctx: { focus?: boolean; displays?: number; network?: string; darkMode?: boolean; focusedApp?: string } = {};
+  const ctx: {
+    focus?: boolean;
+    focusManual?: boolean;
+    displays?: number;
+    network?: string;
+    darkMode?: boolean;
+    focusedApp?: string;
+  } = {};
   if (focusedApp) ctx.focusedApp = focusedApp;
   // `defaults read` exits non-zero when the key is unset — which is exactly
   // what light mode looks like. So error/null ⇒ light, not unknown.
   ctx.darkMode = dark != null && /dark/i.test(dark);
-  ctx.focus = focus;
+  ctx.focus = focusDetail.focus;
+  if (focusDetail.manual) ctx.focusManual = true;
   if (ssid) ctx.network = ssid.split("\n")[0]?.trim() || undefined;
   const n = displays ? Number(displays) : NaN;
   if (Number.isFinite(n) && n > 0) ctx.displays = n;
@@ -389,6 +410,7 @@ export async function getEnvironmentSignal(
     uptimeHours: vitals.uptimeHours,
     loadHigh: vitals.loadHigh,
     focus: mac.focus,
+    focusManual: mac.focusManual,
     displays: mac.displays,
     network: mac.network,
     darkMode: mac.darkMode,

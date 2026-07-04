@@ -400,7 +400,10 @@ See [`BACKLOG.md`](BACKLOG.md). Highlights:
     and a daily `horoscope` for your sign. Render-only — they color the room,
     they never steer the work.
   - **deeper Focus** — manual + scheduled Focus detection ship now; geofenced/
-    iPhone-synced Focus leaves no local trace and stays undetectable.
+    iPhone-synced Focus leaves no local trace and stays undetectable. *New:*
+    a manually flipped Focus (the gesture, never a scheduled window) nudges
+    proactivity high — heads-down means fewer check-ins. Weakest tier: git,
+    intent, and self-report all override it.
 - **Calendar proximity** — *shipped (opt-in):* paste your calendar's secret
   ICS feed URL (`cadence calendar set-url <url>`) and "next event in 12m"
   becomes wrap-up pressure — an event ≤15 min out tightens pace + posture.

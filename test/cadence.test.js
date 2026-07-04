@@ -105,6 +105,64 @@ test("deriveCadence: no signals → all dials neutral", () => {
   });
 });
 
+// ── env.focus (manual Focus → proactivity, enabled 2026-07-03) ──────────────
+const envBase = {
+  source: "environment",
+  partOfDay: "midday",
+  dayOfWeek: "tuesday",
+  isWeekend: false,
+  hour: 14,
+};
+
+test("deriveCadence: manual focus nudges proactivity only — never the other dials", () => {
+  const c = deriveCadence(stateWith([{ ...envBase, focus: true, focusManual: true }]));
+  assert.equal(c.proactivity, "high"); // heads-down → fewer check-ins
+  assert.equal(c.pace, "medium");
+  assert.equal(c.tone, "medium");
+  assert.equal(c.posture, "medium");
+});
+
+test("deriveCadence: scheduled focus (no focusManual) moves nothing — flavor only", () => {
+  const c = deriveCadence(stateWith([{ ...envBase, focus: true }]));
+  assert.deepEqual(c, {
+    pace: "medium",
+    tone: "medium",
+    posture: "medium",
+    proactivity: "medium",
+  });
+});
+
+test("deriveCadence: env.focus stays quiet when environment already moved three dials", () => {
+  // late saturday night on a busy machine: env.late (pace) + env.weekend
+  // (tone) + env.busy (pace, posture) = three dials — focus completing the
+  // board would let ONE signal move all four. The guard keeps it out.
+  const { cadence: c, nudges } = deriveCadenceTraced(
+    stateWith([
+      {
+        ...envBase,
+        dayOfWeek: "saturday",
+        isWeekend: true,
+        hour: 23,
+        loadHigh: true,
+        focus: true,
+        focusManual: true,
+      },
+    ])
+  );
+  assert.equal(c.proactivity, "medium");
+  assert.ok(!nudges.some((n) => n.rule === "env.focus"));
+});
+
+test("deriveCadence: env.focus is the weakest proactivity voice — git conflict overrides", () => {
+  const c = deriveCadence(
+    stateWith([
+      { ...envBase, focus: true, focusManual: true },
+      { source: "git", commitsLastHour: 0, filesDirty: 4, conflicted: true },
+    ])
+  );
+  assert.equal(c.proactivity, "low"); // mid-conflict: verify, don't barrel
+});
+
 // ── prompt intent ────────────────────────────────────────────────────────────
 test("detectPromptIntent: phrase cues classify, bare common words don't misfire", () => {
   assert.equal(detectPromptIntent("ok let's ship it, the retry logic is done"), "ship");
@@ -786,6 +844,17 @@ test("environment: getFocus resolves to a tri-state without throwing", {
   const { getFocus } = await import("../dist/providers/environment.js");
   const focus = await getFocus();
   assert.ok([true, false, undefined].includes(focus), `unexpected: ${focus}`);
+});
+
+test("environment: getFocusDetail agrees with getFocus; manual implies focus", {
+  skip: process.platform !== "darwin" ? "macOS-only" : false,
+}, async () => {
+  const { getFocusDetail } = await import("../dist/providers/environment.js");
+  const d = await getFocusDetail();
+  assert.ok([true, false, undefined].includes(d.focus), `unexpected: ${d.focus}`);
+  assert.ok([true, false, undefined].includes(d.manual), `unexpected: ${d.manual}`);
+  if (d.manual) assert.equal(d.focus, true); // a hand-flipped Focus IS a live Focus
+  if (d.focus === undefined) assert.equal(d.manual, undefined); // unknowable is unknowable
 });
 
 // ── scheduled Focus (ModeConfigurations.json schedule math) ─────────────────
@@ -2516,6 +2585,10 @@ test("CURRENT_RULE_IDS: registry stays honest against deriveCadenceTraced", () =
   const probes = [
     [{ source: "environment", partOfDay: "late night", dayOfWeek: "saturday", isWeekend: true, hour: 23, weather: "rain", onBattery: true, loadHigh: true }],
     [{ source: "environment", partOfDay: "early morning", dayOfWeek: "monday", isWeekend: false, hour: 5 }],
+    // dedicated probe: the kitchen-sink environment probe above moves three
+    // dials, which SUPPRESSES env.focus (the four-dial guard) — focus must
+    // fire from a quiet room to register here.
+    [{ source: "environment", partOfDay: "midday", dayOfWeek: "tuesday", isWeekend: false, hour: 14, focus: true, focusManual: true }],
     [{ source: "music", track: "x", energy: 0.9, acoustic: 0.6, vibe: "chilled" }],
     [{ source: "music", track: "x", energy: 0.2 }],
     [{ source: "git", commitsLastHour: 4, filesDirty: 1, conflicted: true }],

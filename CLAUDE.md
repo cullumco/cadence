@@ -112,8 +112,14 @@ Two notes on authority:
 - **Prompt intent** (`src/providers/intent.ts`) reads ship/think/debug cues
   from the live prompt and sits between git and self-report — strong enough to
   drive the "same prompt, different room" behavior without a separate CLI step,
-  but a deliberate self-report still outranks it. The one nudge that's still
-  commented-out dormant is `ambient focus → proactivity` (see `deriveCadence`).
+  but a deliberate self-report still outranks it.
+- **Ambient focus is live** (since 2026-07-03, formerly the last dormant
+  nudge): a MANUALLY flipped Focus (`focusManual`, an assertion — never a
+  scheduled window) → `proactivity high`, ambient tier, so git/intent/
+  self-report all override. It carries a guard: if the other environment
+  sub-rules already moved three dials, `env.focus` stays quiet — the
+  no-single-signal-moves-all-four invariant holds for the environment bundle
+  too. Inferred proactivity still never grants Stop-hook authority.
 
 ### Hook budget and "silent when empty"
 
