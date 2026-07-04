@@ -212,6 +212,7 @@ leaving the conversation:
                                   # influence and pick your opt-in signals
 /cadence:state two beers, shipping
 /cadence:try                      # what is Cadence seeing right now?
+/cadence:tune                     # how has the lens been landing? (needs tuning on)
 /cadence:pause                    # instant silence — prompts go through untouched
 /cadence:resume                   # back to reading the room
 ```
@@ -237,6 +238,34 @@ cadence unset all
 Pinned dials show with a `*` in the block so Claude knows they're your explicit
 choice, not a guess. You can also pin per-session with env vars:
 `CADENCE_PACE=fast`, `CADENCE_TONE=warm`, etc.
+
+Pins can be scoped to a project — "always terse in this repo, ask-first in
+prod infra":
+
+```bash
+cadence set proactivity low --project   # pin for the current directory tree only
+cadence projects                        # list project pins (marks the one that applies here)
+cadence projects clear                  # clear them
+```
+
+Project pins live in *your* `~/.cadence/config.json`, never in repo files — a
+cloned repo can't grant itself authority. Precedence: global pins → project
+pins → env vars.
+
+### The tune loop (opt-in): does the lens actually land?
+
+```bash
+cadence enable tuning     # start the local log (derived features only, never text)
+cadence tune              # per-rule report: which nudges do you push back on?
+```
+
+With tuning on, Cadence logs how each prompt landed against the lens and
+attributes pushback to the exact rule that nudged — "`env.late` fired 23×,
+pushback followed 39% of the time vs 13% baseline — consider softening." Flags
+require real sample sizes and must beat your baseline, so one grumpy week
+indicts nothing. The report only ever *suggests* pins (`cadence set …`);
+Cadence never edits its own mappings. Inside Claude Code, `/cadence:tune`
+reads the report for you.
 
 ## The file that matters: `src/cadence.ts`
 
@@ -384,6 +413,15 @@ See [`BACKLOG.md`](BACKLOG.md). Highlights:
   commands and speaks once per transition — entering/leaving a merge/rebase
   conflict, and destructive-op thrash (reset --hard streaks, force-pushes).
   Next material event: failing-test transitions.
+- **The learning loop** — *shipped (opt-in, report-only):* `cadence enable
+  tuning` starts a local log of derived features (never text); `cadence tune`
+  attributes next-prompt pushback to the exact rule that nudged, with
+  sample-size and baseline honesty. Suggests pins; never edits its own
+  mappings. Auto-dampening stays deliberately unbuilt until the report earns
+  trust.
+- **Per-project pins** — *shipped:* `cadence set <dial> <level> --project`
+  scopes a pin to the current directory tree (deepest match wins per dial).
+  Stored in your config, never in repo files, so authority stays with you.
 
 ## Caveats
 
