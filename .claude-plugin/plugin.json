@@ -1,7 +1,7 @@
 {
   "name": "cadence",
   "displayName": "Cadence",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "Ambient context for Claude Code: embodied signals, cadence dials, and finish-line guardrails. Richest signals on macOS; universal signals everywhere.",
   "author": {
     "name": "Cullum&Co",

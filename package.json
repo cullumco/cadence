@@ -1,6 +1,6 @@
 {
   "name": "@cullumco/cadence",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "Agents that read the room. Ambient context, cadence dials, and finish-line guardrails for Claude Code and any agent harness. Richest signals on macOS; universal signals (time, git, activity, intent, self-report) everywhere.",
   "type": "module",
   "bin": {
