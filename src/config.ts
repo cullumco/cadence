@@ -85,6 +85,16 @@ export function readPaused(cfg: Record<string, unknown>): boolean {
   return cfg["paused"] === true;
 }
 
+/* CADENCE_PAUSED=1 pauses per-process, without touching config.json. The use
+ * case that forced it: `cadence demo` spawns `claude -p` to generate its
+ * before/after responses, and the LIVE hook would otherwise inject the real
+ * room into those child sessions — contaminating the synthetic one. Also handy
+ * for CI. Env wins the same way it does for dial pins. */
+export function pausedByEnv(value: string | undefined): boolean {
+  return value === "1" || value === "true";
+}
+
 export async function isPaused(): Promise<boolean> {
+  if (pausedByEnv(process.env["CADENCE_PAUSED"])) return true;
   return readPaused(await loadConfig());
 }

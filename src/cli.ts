@@ -27,6 +27,7 @@ import { connectSpotify, REDIRECT_URI } from "./spotify-auth.js";
 import { SHIP_PATTERN, maybeSpawnDj } from "./dj.js";
 import { cmdDj } from "./dj-cli.js";
 import { cmdEnvelope } from "./envelope-cli.js";
+import { cmdDemo } from "./demo-cli.js";
 import type {
   Signal,
   UserState,
@@ -781,6 +782,9 @@ const HELP = `
     cadence clear               clear self-report
     cadence test                preview what the hook would inject right now
     cadence signals             every signal — live value, or why it's absent
+    cadence demo ["prompt"]     the before/after: same prompt in two synthetic
+                                rooms, live claude -p responses, markdown out
+                                (cadence demo --help for scenes/options)
     cadence pause               silence all hooks (state survives untouched)
     cadence resume              start reading the room again
 
@@ -846,6 +850,8 @@ async function main() {
       return cmdTest();
     case "signals":
       return cmdSignals();
+    case "demo":
+      return cmdDemo(rest);
     case "set":
       return cmdSet(rest);
     case "unset":
