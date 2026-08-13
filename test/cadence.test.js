@@ -2612,3 +2612,147 @@ test("CURRENT_RULE_IDS: registry stays honest against deriveCadenceTraced", () =
     assert.ok(seen.has(rule), `registered rule "${rule}" never fired in the probe battery`);
   }
 });
+
+// ── cadence demo — the before/after generator ───────────────────────────────
+// The demo's whole claim is "synthetic signals, real pipeline." These tests
+// pin the two canonical rooms' boards (they're the README's opening argument —
+// changing a scene should be a deliberate act that fails a test first) and
+// exercise the runner through injected deps, never a real claude spawn.
+const { DEMO_SCENES, composeScene, effectiveNudges, renderDemoMarkdown } = await import(
+  "../dist/demo.js"
+);
+const { parseDemoArgs, runDemo } = await import("../dist/demo-cli.js");
+const { pausedByEnv } = await import("../dist/config.js");
+
+test("demo: ship room reads fast/decisive/act-freely", () => {
+  const c = composeScene(DEMO_SCENES.ship, undefined, 0);
+  assert.equal(c.board, "pace=fast · tone=neutral · posture=decisive · proactivity=act-freely");
+  assert.ok(c.block.includes("<user_state>"));
+  assert.ok(c.block.includes("Overmono"));
+});
+
+test("demo: think room reads deliberate/warm/exploratory/ask-first", () => {
+  const c = composeScene(DEMO_SCENES.think, undefined, 0);
+  assert.equal(
+    c.board,
+    "pace=deliberate · tone=warm · posture=exploratory · proactivity=ask-first"
+  );
+  assert.ok(c.block.includes("mid-conflict"));
+});
+
+test("demo: the same prompt's intent fires in both rooms — the hierarchy resolves it", () => {
+  const prompt = "why does the auth test keep failing?"; // reads as debug intent
+  const ship = composeScene(DEMO_SCENES.ship, prompt, 0);
+  const think = composeScene(DEMO_SCENES.think, prompt, 0);
+  // both rooms carry the identical intent signal…
+  assert.ok(ship.block.includes("intent: debug"));
+  assert.ok(think.block.includes("intent: debug"));
+  // …but the ship room's self-report outranks it, and the think room keeps it
+  assert.equal(ship.state.cadence.proactivity, "high");
+  assert.ok(ship.why.includes("proactivity←report.ship"));
+  assert.equal(think.state.cadence.proactivity, "low");
+  assert.ok(think.why.includes("proactivity←intent.debug"));
+});
+
+test("demo: effectiveNudges keeps the last write per dial", () => {
+  const eff = effectiveNudges([
+    { dial: "pace", level: "low", source: "environment", rule: "env.late" },
+    { dial: "pace", level: "high", source: "self_report", rule: "report.ship" },
+  ]);
+  assert.equal(eff.pace, "report.ship");
+});
+
+test("demo: markdown carries prompt, both rooms, and the honesty line", () => {
+  const runs = ["ship", "think"].map((id) => ({
+    ...composeScene(DEMO_SCENES[id], "ship it", 0),
+    response: "ok\n\ndone",
+  }));
+  const md = renderDemoMarkdown({
+    prompt: "ship it",
+    runs,
+    baseline: "baseline text",
+    model: "sonnet",
+    generatedAt: "2026-08-12",
+  });
+  assert.ok(md.includes("## Friday night, shipping"));
+  assert.ok(md.includes("## Tuesday morning, thinking it through"));
+  assert.ok(md.includes("## Control — no Cadence"));
+  assert.ok(md.includes('**Prompt (identical in every room):** "ship it"'));
+  assert.ok(md.includes("unedited responses"));
+  assert.ok(md.includes("> ok")); // responses render as blockquotes
+});
+
+test("demo cli: parse defaults, scene selection, and usage errors", () => {
+  const all = parseDemoArgs(["fix", "the", "test"]);
+  assert.equal(all.prompt, "fix the test");
+  assert.equal(all.scenes.length, 2);
+  assert.equal(all.dry, false);
+  const dry = parseDemoArgs([]);
+  assert.equal(dry.dry, true); // no prompt → preview mode
+  const one = parseDemoArgs(["--scenes", "ship", "x"]);
+  assert.equal(one.scenes.length, 1);
+  assert.ok("error" in parseDemoArgs(["--scenes", "nope"]));
+  assert.ok("error" in parseDemoArgs(["--baseline"])); // control needs a prompt
+  assert.ok("error" in parseDemoArgs(["--frobnicate"]));
+});
+
+const demoDeps = (runClaude) => {
+  const out = { stdout: "", stderr: "", files: {} };
+  return [
+    out,
+    {
+      runClaude,
+      write: (t) => (out.stdout += t),
+      writeErr: (t) => (out.stderr += t),
+      writeFile: async (p, c) => (out.files[p] = c),
+      now: () => 0,
+    },
+  ];
+};
+
+test("demo cli: dry run emits markdown without ever spawning claude", async () => {
+  let calls = 0;
+  const [out, deps] = demoDeps(async () => (calls++, "x"));
+  const code = await runDemo([], deps);
+  assert.equal(code, 0);
+  assert.equal(calls, 0);
+  assert.ok(out.stdout.includes("dry preview"));
+});
+
+test("demo cli: full run prepends each room's block to the same prompt", async () => {
+  const prompts = [];
+  const [out, deps] = demoDeps(async (p) => (prompts.push(p), "the reply"));
+  const code = await runDemo(["check the failing test", "--baseline"], deps);
+  assert.equal(code, 0);
+  assert.equal(prompts.length, 3); // two rooms + control
+  const roomPrompts = prompts.filter((p) => p.startsWith("<user_state>"));
+  assert.equal(roomPrompts.length, 2);
+  for (const p of roomPrompts) assert.ok(p.endsWith("check the failing test"));
+  assert.ok(prompts.includes("check the failing test")); // the control, bare
+  assert.ok(out.stdout.includes("> the reply"));
+});
+
+test("demo cli: a failed claude run exits 1 and says why", async () => {
+  const [out, deps] = demoDeps(async () => {
+    throw new Error("claude exploded");
+  });
+  const code = await runDemo(["some prompt"], deps);
+  assert.equal(code, 1);
+  assert.ok(out.stderr.includes("claude exploded"));
+});
+
+test("demo cli: --out writes the file instead of stdout", async () => {
+  const [out, deps] = demoDeps(async () => "r");
+  const code = await runDemo(["p", "--out", "demo.md"], deps);
+  assert.equal(code, 0);
+  assert.equal(out.stdout, "");
+  assert.ok(out.files["demo.md"].includes("# Same prompt, different room"));
+});
+
+test("config: CADENCE_PAUSED env silences per-process (the demo child guard)", () => {
+  assert.equal(pausedByEnv("1"), true);
+  assert.equal(pausedByEnv("true"), true);
+  assert.equal(pausedByEnv("0"), false);
+  assert.equal(pausedByEnv(""), false);
+  assert.equal(pausedByEnv(undefined), false);
+});

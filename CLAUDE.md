@@ -25,6 +25,11 @@ npm run hook          # run dist/hook.js (UserPromptSubmit) directly
 npm run cli           # run dist/cli.js (the `cadence` CLI) directly
 
 node bin/cadence test # preview the exact <user_state> block the hook would inject right now
+node bin/cadence demo "<prompt>" # the before/after generator: same prompt through
+                      # synthetic rooms (src/demo.ts DEMO_SCENES), live claude -p
+                      # responses, README-pasteable markdown. Children run with
+                      # CADENCE_PAUSED=1 so the live hook can't contaminate the
+                      # synthetic room. No prompt = dry preview of the blocks.
 ```
 
 **Tests run against compiled `dist/`, not `src/`.** Every file in
