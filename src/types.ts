@@ -23,6 +23,7 @@ export interface MusicSignal {
   vibe?: string; // clean mood words derived from genre tags, e.g. "chilled, calm"
   energy?: number; // 0–1 averaged from genre tags — feeds the pace + posture dials
   acoustic?: number; // 0–1 organic-ness — warms the tone dial when high
+  recent?: string; // "4 tracks in 27m" — set when vibe/energy/acoustic are averaged over the session window
 }
 
 export interface SelfReportSignal {

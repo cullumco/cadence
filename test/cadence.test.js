@@ -1649,6 +1649,7 @@ import {
 import { spawn, execSync } from "node:child_process";
 import { mkdtemp, readFile as fsReadFile, writeFile as fsWriteFile, mkdir as fsMkdir } from "node:fs/promises";
 import { tmpdir } from "node:os";
+import { existsSync } from "node:fs";
 import { join as joinPath } from "node:path";
 
 test("deriveCadenceTraced: parity — traced cadence equals deriveCadence", () => {
@@ -2755,4 +2756,247 @@ test("config: CADENCE_PAUSED env silences per-process (the demo child guard)", (
   assert.equal(pausedByEnv("0"), false);
   assert.equal(pausedByEnv(""), false);
   assert.equal(pausedByEnv(undefined), false);
+});
+
+// ── music: Chrome audio (tabs + PWAs) ───────────────────────────────────────
+test("chrome audio: parseChromeMedia reads 'Artist - Track' and strips YouTube chrome", async () => {
+  const { parseChromeMedia } = await import("../dist/providers/music.js");
+  // notification count prefix + " - YouTube" suffix + en dash separator
+  assert.deepEqual(
+    parseChromeMedia("(56) Queen – Bohemian Rhapsody (Official Video Remastered) - YouTube|||https://www.youtube.com/watch?v=x"),
+    { artist: "Queen", track: "Bohemian Rhapsody (Official Video Remastered)", player: "YouTube" }
+  );
+  // only the FIRST separator splits: dashes inside the track stay in the track
+  assert.deepEqual(
+    parseChromeMedia("Daft Punk - Around the World - Radio Edit - YouTube|||https://www.youtube.com/watch?v=y"),
+    { artist: "Daft Punk", track: "Around the World - Radio Edit", player: "YouTube" }
+  );
+  assert.equal(parseChromeMedia(""), null);
+  assert.equal(parseChromeMedia("|||https://www.youtube.com/watch?v=z"), null);
+});
+
+test("chrome audio: a youtube.com title with no 'Artist - Track' shape is not music", async () => {
+  const { parseChromeMedia } = await import("../dist/providers/music.js");
+  // a talk's title must not become a fake artist sent to MusicBrainz
+  assert.equal(
+    parseChromeMedia("(56) When code is free, taste is everything | Google Cloud & Roboto Studio - YouTube|||https://www.youtube.com/watch?v=t"),
+    null
+  );
+  // ...and it must not block a real track further down the list
+  const out = [
+    "How to deploy in 5 minutes - YouTube|||https://www.youtube.com/watch?v=a",
+    "Khruangbin - Maria También - YouTube|||https://www.youtube.com/watch?v=b",
+  ].join("\n");
+  assert.equal(parseChromeMedia(out)?.artist, "Khruangbin");
+});
+
+test("chrome audio: dedicated music hosts are trusted without an artist in the title", async () => {
+  const { parseChromeMedia } = await import("../dist/providers/music.js");
+  assert.deepEqual(
+    parseChromeMedia("Blinding Lights - YouTube Music|||https://music.youtube.com/watch?v=z"),
+    { artist: "", track: "Blinding Lights", player: "YouTube Music" }
+  );
+  assert.equal(parseChromeMedia("Mix|||https://soundcloud.com/x/y")?.player, "SoundCloud");
+});
+
+test("chrome audio: script filters to media hosts inside osascript and scans active tabs, then background tabs", async () => {
+  const { chromeScript, CHROME_MEDIA_HOSTS } = await import("../dist/providers/music.js");
+  const script = chromeScript();
+  for (const h of CHROME_MEDIA_HOSTS) assert.ok(script.includes(`"${h}"`), `missing host ${h}`);
+  // every tell targets a literal (the -2741 lesson), and only Chrome is driven
+  for (const m of script.matchAll(/tell application ("[^"]+")/g)) assert.equal(m[1], '"Google Chrome"');
+  // pass 1: active tab of each window; pass 2: the rest by index (the all-tabs fix)
+  assert.match(script, /active tab of w/);
+  assert.match(script, /active tab index of w/);
+  assert.match(script, /if i is not ai/);
+  // the host filter guards the append in BOTH passes — non-media titles never leave osascript
+  assert.equal(script.match(/then set out to out/g).length, 2);
+});
+
+test("chrome audio: script compiles and runs (skipped without Chrome)", {
+  skip: process.platform !== "darwin" ? "macOS-only"
+    : !existsSync("/Applications/Google Chrome.app") ? "Chrome not installed (compiling would raise a locate-app picker)"
+    : false,
+}, async () => {
+  const { chromeScript, osascript } = await import("../dist/providers/music.js");
+  // the wrapper swallows errors into "" — swap BOTH returns for a sentinel (when
+  // Chrome is running the in-script `return out` fires first, and with no media
+  // tabs that is "") so any successful compile+run yields non-empty output
+  const script = chromeScript().replace(/return out\b/, 'return "compiled-ok"').replace(/return ""\s*$/, 'return "compiled-ok"');
+  assert.notEqual(script, chromeScript(), "sentinel swap missed — template changed?");
+  const out = await osascript(script);
+  assert.notEqual(out, "", "chromeScript failed to compile/run (error swallowed by wrapper)");
+});
+
+test("chrome audio: opt-in, listed in OPT_IN_PROVIDERS, off by default", async () => {
+  const { OPT_IN_PROVIDERS } = await import("../dist/config.js");
+  assert.ok(OPT_IN_PROVIDERS.chromeAudio);
+  assert.equal(providerEnabled({}, "chromeAudio"), false);
+  assert.equal(providerEnabled({ chromeAudio: true }, "chromeAudio"), true);
+});
+
+// ── music: session history (3 min while changing, 30 once stable) ────────────
+const MIN = 60_000;
+
+test("music history: pushSample dedupes a burst, re-adds after a fast interval, prunes the window, caps size", async () => {
+  const { pushSample, CHECK_FAST_MS, WINDOW_MS } = await import("../dist/providers/music.js");
+  const q = { artist: "Queen", track: "Bohemian Rhapsody", player: "YouTube" };
+  const now = 1_000_000_000_000;
+  let s = pushSample([], q, now);
+  assert.equal(s.length, 1);
+  assert.equal(pushSample(s, q, now + MIN).length, 1, "same track within a fast interval is skipped");
+  assert.equal(pushSample(s, q, now + CHECK_FAST_MS).length, 2, "same track a full interval later is kept");
+  assert.equal(pushSample(s, { ...q, track: "Another One" }, now + MIN).length, 2, "a new track is always kept");
+  // everything older than the window is dropped
+  assert.equal(pushSample(s, { ...q, track: "Z" }, now + WINDOW_MS + MIN).length, 1);
+  // bounded: a pathological stream of distinct tracks never grows past the cap
+  let big = [];
+  for (let i = 0; i < 100; i++) big = pushSample(big, { artist: "A", track: `t${i}`, player: "p" }, now + i * 10_000);
+  assert.ok(big.length <= 40, `cap exceeded: ${big.length}`);
+});
+
+test("music history: checkIntervalMs is 3 min while changing, 30 min once stable", async () => {
+  const { checkIntervalMs, CHECK_FAST_MS, CHECK_SLOW_MS } = await import("../dist/providers/music.js");
+  assert.equal(CHECK_FAST_MS, 3 * MIN);
+  assert.equal(CHECK_SLOW_MS, 30 * MIN);
+  assert.equal(checkIntervalMs({ stable: false }), CHECK_FAST_MS);
+  assert.equal(checkIntervalMs({ stable: true }), CHECK_SLOW_MS);
+});
+
+test("music history: summarizeWindow is duration-weighted, not sample-weighted", async () => {
+  const { summarizeWindow } = await import("../dist/providers/music.js");
+  const cache = { queen: "rock,classic rock", "brian eno": "ambient" }; // ~0.78 vs ~0.2 energy
+  const now = 2_000_000_000_000;
+  const S = (m, artist, track) => ({ t: now - m * MIN, artist, track, player: "YouTube" });
+
+  assert.equal(summarizeWindow([], cache, now), null);
+  // no cached tags: still reports shape, never invents a vibe (and never hits the network)
+  const bare = summarizeWindow([S(10, "Nobody", "x"), S(2, "Else", "y")], {}, now);
+  assert.deepEqual(bare, { tracks: 2, minutes: 10 });
+
+  const queenAlone = summarizeWindow([S(0, "Queen", "BR")], cache, now);
+  const enoAlone = summarizeWindow([S(0, "Brian Eno", "Airports")], cache, now);
+  assert.ok(queenAlone.energy > 0.7 && enoAlone.energy < 0.4, "fixture tags should straddle the pace thresholds");
+
+  // 33 minutes of Queen (2 samples after backoff) vs 3 minutes of Eno (1 sample):
+  // the long track must dominate even though samples are 2:1 — and it'd be
+  // identical with 1 Queen sample, because weight is time, not count.
+  const long = summarizeWindow([S(36, "Queen", "BR"), S(3, "Queen", "BR"), S(3, "Brian Eno", "A")].sort((a, b) => a.t - b.t), cache, now);
+  assert.equal(long.tracks, 2);
+  assert.ok(long.energy > 0.7, `long Queen should dominate, got ${long.energy}`);
+  // short Queen, long Eno flips it
+  const flipped = summarizeWindow([S(36, "Brian Eno", "A"), S(3, "Queen", "BR")], cache, now);
+  assert.ok(flipped.energy < 0.5, `long Eno should dominate, got ${flipped.energy}`);
+  // mixed evenly lands between the two
+  const mixed = summarizeWindow([S(12, "Queen", "BR"), S(6, "Brian Eno", "A")], cache, now);
+  assert.ok(mixed.energy < queenAlone.energy && mixed.energy > enoAlone.energy);
+  assert.ok(mixed.vibe.split(", ").length <= 3, "at most 3 mood words");
+});
+
+// recordMusic/loadLog bind ~/.cadence at module load, so the state machine runs
+// in a child process with an isolated HOME (same trick as the hook tests).
+async function withMusicHome(script, seed = {}) {
+  const home = await mkdtemp(joinPath(tmpdir(), "cadence-music-"));
+  await fsMkdir(joinPath(home, ".cadence"), { recursive: true });
+  // seeded tag cache = zero MusicBrainz traffic from the test
+  await fsWriteFile(
+    joinPath(home, ".cadence", "vibe-cache.json"),
+    JSON.stringify({ queen: "rock,classic rock", "brian eno": "ambient,electronic" })
+  );
+  for (const [name, body] of Object.entries(seed)) {
+    await fsWriteFile(joinPath(home, ".cadence", name), typeof body === "string" ? body : JSON.stringify(body));
+  }
+  const modUrl = new URL("../dist/providers/music.js", import.meta.url).href;
+  const code = `import * as m from ${JSON.stringify(modUrl)};\nconst MIN=60000, t0=1700000000000;\n${script}`;
+  const env = { ...process.env, HOME: home };
+  for (const k of Object.keys(env)) if (k.startsWith("CADENCE_")) delete env[k];
+  const out = await new Promise((resolve, reject) => {
+    const p = spawn(process.execPath, ["--input-type=module", "-e", code], { env });
+    let o = "", e = "";
+    p.stdout.on("data", (d) => (o += d));
+    p.stderr.on("data", (d) => (e += d));
+    p.on("close", (c) => (c === 0 ? resolve(o) : reject(new Error(`child exit ${c}: ${e}`))));
+    p.on("error", reject);
+  });
+  return { home, result: JSON.parse(out.trim().split("\n").pop()) };
+}
+
+test("music history: backs off to 30 min after the same track holds, and snaps back on change or silence", { timeout: 30_000 }, async () => {
+  const { result: r } = await withMusicHome(`
+    const Q={artist:"Queen",track:"Bohemian Rhapsody",player:"YouTube"}, E={artist:"Brian Eno",track:"Airports",player:"YouTube"};
+    const out=[]; const snap=async(l)=>{const g=await m.loadLog(); out.push([l,g.stable,m.checkIntervalMs(g)/MIN,g.samples.length]);};
+    await m.recordMusic(Q,t0);            await snap("first");
+    await m.recordMusic(Q,t0+1*MIN);      await snap("burst");
+    await m.recordMusic(Q,t0+3.5*MIN);    await snap("held");
+    await m.recordMusic(Q,t0+34*MIN);     await snap("slowcheck");
+    await m.recordMusic(E,t0+37*MIN);     await snap("changed");
+    await m.recordMusic(Q,t0+40*MIN);     await snap("changedAgain");
+    await m.recordMusic(null,t0+43*MIN);  await snap("silence");
+    console.log(JSON.stringify(out));
+  `);
+  const by = Object.fromEntries(r.map(([l, stable, next, n]) => [l, { stable, next, n }]));
+  assert.deepEqual(by.first, { stable: false, next: 3, n: 1 });
+  assert.deepEqual(by.burst, { stable: false, next: 3, n: 1 }, "a prompt burst a minute apart proves nothing");
+  assert.deepEqual(by.held, { stable: true, next: 30, n: 2 });
+  assert.equal(by.slowcheck.next, 30, "stays backed off while the track holds");
+  assert.equal(by.changed.next, 3, "a track change snaps back to fast");
+  assert.equal(by.changed.stable, false);
+  assert.equal(by.silence.next, 3, "silence stays fast");
+  assert.equal(by.silence.stable, false);
+});
+
+test("music history: maybeSpawnMusicSampler respects the current interval and stamps first", { timeout: 30_000 }, async () => {
+  // paused config: if the helper DOES get spawned it exits immediately (no probe, no network)
+  const paused = { paused: true };
+  const { result: r } = await withMusicHome(`
+    const at=async(checkedAt,stable,now)=>{
+      await (await import("node:fs/promises")).writeFile(process.env.HOME+"/.cadence/music-log.json",JSON.stringify({checkedAt,stable,samples:[]}));
+      const spawned=await m.maybeSpawnMusicSampler(now);
+      const l=await m.loadLog(); return [spawned,l.checkedAt===now];
+    };
+    const res={};
+    res.fast_2min   = await at(t0, false, t0+2*MIN);   // 2 < 3  -> no
+    res.fast_4min   = await at(t0, false, t0+4*MIN);   // 4 >= 3 -> yes, stamped
+    res.slow_10min  = await at(t0, true,  t0+10*MIN);  // 10 < 30 -> no
+    res.slow_31min  = await at(t0, true,  t0+31*MIN);  // 31 >= 30 -> yes, stamped
+    console.log(JSON.stringify(res));
+  `, { "config.json": paused });
+  assert.deepEqual(r.fast_2min, [false, false], "not due: no spawn, no stamp");
+  assert.deepEqual(r.fast_4min, [true, true], "due: spawn and stamp checkedAt first (no herd on a burst of tool calls)");
+  assert.deepEqual(r.slow_10min, [false, false], "backed off: 10 min is not enough");
+  assert.deepEqual(r.slow_31min, [true, true]);
+});
+
+test("music history: hook records a check inline and leaves nothing behind when paused", { timeout: 30_000 }, async () => {
+  const live = await mkdtemp(joinPath(tmpdir(), "cadence-music-hook-"));
+  await runHook(live, { cwd: live, prompt: "hello there", session_id: "m1" });
+  const log = JSON.parse(await fsReadFile(joinPath(live, ".cadence", "music-log.json"), "utf-8"));
+  assert.equal(typeof log.checkedAt, "number", "prompt hook stamps a check even with nothing playing");
+  assert.ok(Array.isArray(log.samples));
+
+  const quiet = await mkdtemp(joinPath(tmpdir(), "cadence-music-hook-"));
+  await fsMkdir(joinPath(quiet, ".cadence"), { recursive: true });
+  await fsWriteFile(joinPath(quiet, ".cadence", "config.json"), JSON.stringify({ paused: true }));
+  const res = await runHook(quiet, { cwd: quiet, prompt: "hello there", session_id: "m2" });
+  assert.equal(res.out, "", "paused hook is silent");
+  await assert.rejects(fsReadFile(joinPath(quiet, ".cadence", "music-log.json")), /ENOENT/, "paused: nothing is recorded");
+});
+
+test("music history: the prompt block shows the session window when the dials use it", () => {
+  const block = render({
+    signals: [{ source: "music", track: "Bohemian Rhapsody", artist: "Queen", player: "YouTube", vibe: "calm", recent: "4 tracks in 27m" }],
+    capturedAt: 0,
+    cadence: { pace: "medium", tone: "medium", posture: "medium", proactivity: "medium" },
+    pinned: [],
+    reframe: "",
+  });
+  assert.match(block, /recent: 4 tracks in 27m \(dials use the session average\)/);
+  const bare = render({
+    signals: [{ source: "music", track: "x", artist: "y", player: "YouTube" }],
+    capturedAt: 0,
+    cadence: { pace: "medium", tone: "medium", posture: "medium", proactivity: "medium" },
+    pinned: [],
+    reframe: "",
+  });
+  assert.doesNotMatch(bare, /recent:/);
 });

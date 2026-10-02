@@ -126,6 +126,20 @@ Two notes on authority:
   no-single-signal-moves-all-four invariant holds for the environment bundle
   too. Inferred proactivity still never grants Stop-hook authority.
 
+### Music history is hook-written, surface-read
+
+`getMusicSignal()` is also called by read-only surfaces (`cadence signals`, the
+MCP server, previews), so it only READS `~/.cadence/music-log.json` and folds the
+current track in memory. Only hooks write the log: the prompt hook via
+`recordMusic()` from the signal it already has, and PostToolUse/Stop via
+`maybeSpawnMusicSampler()`, which spawns `dist/music-sample.js` detached when a
+check is due (3 min while the track changes, 30 once it has held). Keep it that
+way, same reason `activity.json` is written only by the hook. `summarizeWindow`
+weights by play time, not sample count: with 30-minute backoff a long track has
+few samples but most of the time. The Chrome source (`chromeAudio`, opt-in) is a
+`pmset` audibility gate plus an AppleScript tab scan; Chrome cannot say which tab
+is audible, so the first media tab wins.
+
 ### Hook budget and "silent when empty"
 
 The `UserPromptSubmit` hook has a hard 1500ms total budget

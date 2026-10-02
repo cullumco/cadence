@@ -26,6 +26,7 @@ function renderMusic(m: MusicSignal): string[] {
       m.player ? ` (${quote(m.player)})` : ""
     }`,
   ];
+  if (m.recent) lines.push(`    recent: ${m.recent} (dials use the session average)`);
   if (m.vibe) lines.push(`    vibe: ${m.vibe}`);
   return lines;
 }
