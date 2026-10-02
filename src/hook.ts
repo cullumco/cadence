@@ -5,6 +5,7 @@ import { collectSignals } from "./envelope.js";
 import { render } from "./inject.js";
 import { buildTuneEntry, appendTuneEntryBounded } from "./learn.js";
 import { debug } from "./debug.js";
+import { recordMusic } from "./providers/music.js";
 import type { Signal, UserState, StateWithCadence, ActivitySignal } from "./types.js";
 
 const TOTAL_BUDGET_MS = 1500;
@@ -52,6 +53,18 @@ async function main() {
         resolve([]);
       }, TOTAL_BUDGET_MS).unref()
     ),
+  ]);
+
+  // Session history: log what's playing from the signal we already have (no
+  // second probe). Bounded + fail-silent so it never delays the prompt.
+  const music = signals.find((s) => s.source === "music");
+  await Promise.race([
+    recordMusic(
+      music?.source === "music" && music.track
+        ? { track: music.track, artist: music.artist ?? "", player: music.player ?? "" }
+        : null
+    ).catch(() => {}),
+    new Promise<void>((r) => setTimeout(r, 250).unref()),
   ]);
 
   // Nothing to say: no signals AND no pinned dials.

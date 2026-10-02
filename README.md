@@ -83,7 +83,10 @@ deliberate self-report just outranks it.
      a clean *vibe* (mood words) via [MusicBrainz](https://musicbrainz.org). No
      Spotify login, no API key, no Premium on macOS. Off the Mac, link Spotify
      once with `cadence spotify connect` (browser OAuth, opt-in). Music moves
-     three dials — energy → pace + posture, organic texture → warm tone.
+     three dials — energy → pace + posture, organic texture → warm tone. Once
+     two or more tracks have played, the dials use the last hour's average
+     (weighted by how long each track played), so one outlier song doesn't flip
+     them.
    - **self-report** — what you tell it: `cadence report "two beers, shipping"`.
    - **intent** — read from the prompt you just typed: "let's ship this" →
      decisive/act-freely, "help me debug" → verify-first. Cross-platform, no
@@ -174,6 +177,28 @@ Nothing to set up. If Spotify.app or Music.app is playing, Cadence reads the
 track, looks the artist's vibe up on MusicBrainz once, and caches it forever at
 `~/.cadence/vibe-cache.json`. If nothing's playing, the music signal is simply
 absent.
+
+**Session average.** One track is a snapshot; a work session is dozens. Cadence
+logs what's playing to `~/.cadence/music-log.json` (at most 40 samples, nothing
+older than an hour) and sets energy, texture and vibe from the window, weighted
+by play time. It checks every 3 minutes while the track is changing and backs
+off to every 30 once the same track has held across two checks, snapping back
+the moment it changes. There is no daemon: the prompt hook records inline, and
+the PostToolUse and Stop hooks spawn a detached sampler when a check is due, so
+a long agent run with no prompts is still sampled. The prompt block shows
+`recent: 4 tracks in 27m` when the average is in use. `cadence pause` stops it.
+
+**Listening in Chrome (opt-in, macOS).** YouTube, YouTube Music, SoundCloud,
+Bandcamp and the like have no scripting interface, so this is off until you run
+`cadence enable chromeAudio`. When Chrome holds a "Playing audio" power
+assertion, Cadence reads the titles and URLs of Chrome tabs on a short allowlist
+of music sites (the filtering happens inside AppleScript, so other tabs never
+reach Cadence) and parses `Artist - Track`. Chrome doesn't say which tab is
+audible, so with several music tabs open the first one wins (active tabs front to
+back, then background tabs). A title with no `Artist - Track` shape on plain
+youtube.com, such as a talk, is not treated as music. Installed PWAs
+(YouTube.app and friends) are hosted by the same Chrome process and are picked
+up when Chrome's window list exposes them, which it doesn't always do.
 
 **Off macOS?** Run `cadence spotify connect <clientId>` once: register a Spotify
 app (add `http://127.0.0.1:8888/callback` as a redirect URI), and Cadence does

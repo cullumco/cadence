@@ -7,6 +7,7 @@ import { getGitSignal } from "./providers/git.js";
 import { deriveCadence, loadOverrides, applyOverrides } from "./cadence.js";
 import { SHIP_PATTERN } from "./dj.js";
 import { isPaused } from "./config.js";
+import { maybeSpawnMusicSampler } from "./providers/music.js";
 import type { Cadence, Signal, UserState } from "./types.js";
 
 const TOTAL_BUDGET_MS = 1500;
@@ -116,6 +117,7 @@ export function decideStop(
 
 async function main() {
   if (await isPaused()) return; // user asked for silence — never block while paused
+  await maybeSpawnMusicSampler(); // long runs with no prompts still get a music sample every ~5 min
   const input = await readStdin();
   const projectDir = input.cwd ?? process.cwd();
   const [signals, overrides] = await Promise.all([

@@ -5,6 +5,7 @@ import { homedir } from "node:os";
 import { join } from "node:path";
 import { getGitSignal } from "./providers/git.js";
 import { isPaused } from "./config.js";
+import { maybeSpawnMusicSampler } from "./providers/music.js";
 import { djEventForTransitions, maybeSpawnDj } from "./dj.js";
 
 /* ─────────────────────────────────────────────────────────────────────────
@@ -222,6 +223,7 @@ async function readStdin(): Promise<PostToolInput> {
 
 async function main() {
   if (await isPaused()) return; // user asked for silence — observe nothing
+  await maybeSpawnMusicSampler(); // long runs with no prompts still get a music sample every ~5 min
   const input = await readStdin();
   if (!shouldCheck(input)) return;
 
