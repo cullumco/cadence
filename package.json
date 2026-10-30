@@ -31,7 +31,7 @@
   "scripts": {
     "build": "rm -rf dist && tsc",
     "dev": "tsc --watch",
-    "test": "node --test test/cadence.test.js",
+    "test": "node --test test/*.test.js",
     "test:coverage": "c8 --include 'dist/**/*.js' --exclude 'dist/**/*.d.ts' --reporter=text --reporter=html node --test test/cadence.test.js",
     "prepack": "npm run build",
     "prepublishOnly": "node scripts/verify-alpha.mjs --no-install-smoke",

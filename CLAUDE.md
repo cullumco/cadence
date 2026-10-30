@@ -17,9 +17,9 @@ is kept separate from the Claude-specific adapter so future surfaces can reuse i
 ```bash
 npm run build         # tsc → ./dist
 npm run dev           # tsc --watch
-npm test              # node --test test/cadence.test.js  (see warning below)
-npm run verify:alpha  # release gate: build + plugin validate + tests + dry-pack + consumer-install smoke test
-npm run release:alpha # full gate + npm publish (requires @cullumco npm auth)
+npm test              # node --test test/*.test.js  (see warning below)
+npm run verify:alpha  # build + manifest/version checks + tests + pack + consumer-install smoke test
+npm run release:alpha # local release dry run; publishing uses the Release workflow
 
 npm run hook          # run dist/hook.js (UserPromptSubmit) directly
 npm run cli           # run dist/cli.js (the `cadence` CLI) directly
@@ -37,8 +37,9 @@ node bin/cadence demo "<prompt>" # the before/after generator: same prompt throu
 `npm test` or you will be testing stale code. The `verify:alpha` script already
 builds first.
 
-**Single test:** `node --test test/cadence.test.js` runs the one test file. To
-target a single case, use the Node test runner's `--test-name-pattern`:
+**Single file:** `node --test test/cadence.test.js` runs the core tests;
+`node --test test/release.test.js` checks release failure/retry guards without
+network calls. To target a single case, use the Node test runner's `--test-name-pattern`:
 `node --test --test-name-pattern="ship-ish self-report" test/cadence.test.js`.
 
 **Plugin validation:** `npm run plugin:validate` runs Claude Code's `claude
@@ -46,6 +47,13 @@ plugin validate` on `.claude-plugin/plugin.json` (non-strict on purpose: the
 repo root doubles as the plugin root, so the dev-only CLAUDE.md — excluded
 from the tarball — trips a strict-mode warning) and `--strict` on
 `.claude-plugin/marketplace.json`. The Claude Code CLI must be installed.
+
+**Releases:** Follow `RELEASING.md`. Keep `package.json`, both root versions
+in `package-lock.json`, `.claude-plugin/plugin.json` and
+`.codex-plugin/plugin.json` synchronized, and commit `.github/releases/vX.Y.Z.md`
+before releasing. Publication uses the `Release` workflow with an exact reviewed
+main commit; the default workflow and local command only verify. Website
+deployment is separate and never publishes npm.
 
 ## Architecture
 

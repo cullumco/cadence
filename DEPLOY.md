@@ -1,62 +1,57 @@
 # Deploying the Cadence site
 
-The marketing site is a single static file: `docs/index.html` (inline CSS/JS;
-fonts from Google Fonts CDN; analytics via Vercel Web Analytics). No build step.
+The static site is `docs/index.html`, served at **https://cadence.cullum.co**
+by the **cadence** Vercel project in **CullumCo**. Its Git integration deploys
+`main` to production and other branches as previews. Keep that existing
+integration; no second GitHub Actions production-deploy job is needed.
 
-Canonical URL: **https://cadence.cullum.co** — served by **Vercel**.
+The site and plugin have separate delivery paths. A successful Vercel deployment
+proves that a source commit is live as a website, not that its npm package has
+shipped. See [RELEASING.md](RELEASING.md) for npm, marketplace and GitHub Releases.
+The site deliberately omits a hardcoded software version from its JSON-LD:
+the available plugin version is determined by npm `latest`.
 
-## One-time Vercel setup (dashboard)
+## Project configuration
 
-This is the account-side step that has to be done in the Vercel dashboard.
+The repository supports either of these existing static-site configurations.
+Check the Vercel project's settings before changing one; do not combine them.
 
-1. **Import the repo** — Vercel → *Add New… → Project* → import `cullumco/cadence`.
-2. **Configure the project:**
-   - **Framework Preset:** *Other* (it's static — no framework).
-   - **Root Directory:** `docs`  ← important; scopes the deploy to the site so
-     `src/`, `dist/`, etc. are not published. With this set, `index.html` is
-     served at `/`.
-   - **Build Command:** leave empty.
-   - **Output Directory:** leave empty/default.
-   - `docs/vercel.json` supplies `cleanUrls` + security headers automatically.
-3. **Production branch:** set to whatever you merge the site to (e.g. `main`).
-   Every push to it redeploys in ~30–60s.
-4. **Enable Web Analytics:** Project → *Analytics* tab → Enable. The beacon is
-   already in `index.html` and no-ops until this is on. Page views work on
-   every plan; the custom install-CTA events (`install-nav` / `install-hero` /
-   `install-impact`) record on plans with custom-events support.
+| Root directory | Output directory | Configuration |
+| --- | --- | --- |
+| Repository root | `docs` | Root `vercel.json` sets output, empty install/build commands and headers |
+| `docs` | Default/root | `docs/vercel.json` sets the same URL policy and headers; leave install/build empty |
 
-### Custom domain
+Use the **Other** framework preset and **main** as the production branch. The
+deployment output must contain only the site. Neither `src` nor plugin state
+belongs in the public output.
 
-5. Vercel → Project → *Settings → Domains* → add `cadence.cullum.co`.
-6. At your DNS provider for `cullum.co`, add the record Vercel shows — typically:
+For a new project only, import `cullumco/cadence` and choose one configuration.
+Add `cadence.cullum.co` under Domains and use the DNS record Vercel supplies.
+Changing the existing project, domain or production branch is an account-side
+deployment change, not a package-release step.
 
+## Verification
+
+After a reviewed merge, check the production deployment in Vercel:
+
+1. Team **CullumCo**, project **cadence**, environment **Production**, state
+   **Ready**.
+2. Git source **cullumco/cadence**, branch **main**, commit SHA exactly matching
+   the merge being checked.
+3. Alias **cadence.cullum.co** attached to that deployment.
+4. Open the site and check its content, installation links and response headers:
+
+   ```bash
+   curl --fail --silent --show-error --head https://cadence.cullum.co/
    ```
-   CNAME   cadence   cname.vercel-dns.com.
-   ```
 
-   Vercel provisions TLS automatically once the record resolves.
+Do not claim a deploy is current based only on HTTP 200; check the commit too.
+A failed deploy is diagnosed in that deployment's build logs. Do not run
+`vercel deploy --prod` to paper over a Git integration or configuration failure.
 
-## After it's verified live
+## Analytics
 
-- **Retire GitHub Pages:** repo *Settings → Pages* → set Source to *None*.
-  (All in-repo links — README, plugin/marketplace manifests, `package.json`
-  `homepage`, the `funnel` skill — already point at `cadence.cullum.co`.)
-- Re-publishing the npm package picks up the new `homepage` automatically; no
-  code change needed beyond what's already committed.
-
-## Verify (also in the `funnel` skill)
-
-```bash
-curl -s -o /dev/null -w "%{http_code}" https://cadence.cullum.co/   # expect 200
-curl -s https://cadence.cullum.co/ | grep -c "_vercel/insights"     # expect 1
-```
-
-## CLI alternative (optional)
-
-If you'd rather script it, install the CLI and provide a token instead of the
-dashboard:
-
-```bash
-npm i -g vercel
-cd docs && vercel deploy --prod   # first run links/creates the project
-```
+The page includes Vercel Web Analytics. Enable Analytics in the project settings
+if desired; page-view collection and custom install-CTA event availability
+depend on the project's plan and settings. This is independent of release
+verification and does not require republishing the npm package.

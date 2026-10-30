@@ -1,10 +1,21 @@
 #!/usr/bin/env node
 import { spawnSync } from "node:child_process";
-import { access, mkdir, mkdtemp, readFile, rm } from "node:fs/promises";
-import { join } from "node:path";
+import { createHash } from "node:crypto";
+import { access, mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { join, resolve } from "node:path";
 import { tmpdir } from "node:os";
+import { readMetadata } from "./release-policy.mjs";
 
 const installSmoke = !process.argv.includes("--no-install-smoke");
+const args = process.argv.slice(2);
+const packIndex = args.indexOf("--pack-dir");
+const destination = packIndex >= 0 ? args[packIndex + 1] : null;
+if (packIndex >= 0 && (!destination || destination.startsWith("--"))) throw new Error("--pack-dir requires a directory");
+const knownArgs = args.filter((_, index) => index !== packIndex && index !== packIndex + 1);
+if (packIndex < 0 ? args.some((arg) => arg !== "--no-install-smoke") : knownArgs.some((arg) => arg !== "--no-install-smoke")) {
+  throw new Error("Usage: verify-alpha.mjs [--no-install-smoke] [--pack-dir <directory>]");
+}
+if (destination && !installSmoke) throw new Error("--pack-dir requires the consumer install smoke test.");
 
 function run(command, args, options = {}) {
   const result = spawnSync(command, args, {
@@ -13,13 +24,14 @@ function run(command, args, options = {}) {
     shell: false,
     cwd: options.cwd,
     input: options.input,
+    env: options.env,
   });
   if (result.status !== 0) {
     if (options.capture) {
       process.stdout.write(result.stdout ?? "");
       process.stderr.write(result.stderr ?? "");
     }
-    process.exit(result.status ?? 1);
+    throw new Error(`${command} failed with exit code ${result.status}`);
   }
   return result.stdout ?? "";
 }
@@ -29,10 +41,12 @@ async function mustExist(path) {
     await access(path);
   } catch {
     console.error(`expected file missing: ${path}`);
-    process.exit(1);
+    throw new Error("Alpha verification failed");
   }
 }
 
+const metadata = await readMetadata();
+const expectedVersion = metadata.version;
 run("npm", ["run", "build"]);
 // plugin.json runs without --strict because the validator flags a root
 // CLAUDE.md as a warning ("not loaded as project context, use a skill"),
@@ -44,65 +58,63 @@ run("claude", ["plugin", "validate", "--strict", ".claude-plugin/marketplace.jso
 run("node", ["scripts/validate-codex-plugin.mjs"]);
 run("npm", ["test"]);
 
-// The single source of truth for the release version; the installed
-// plugin.json must agree so the two manifests can't drift apart.
-const { version: expectedVersion } = JSON.parse(await readFile("package.json", "utf-8"));
+// Build once, pack once, install these bytes, and pass the same tarball to
+// publication. No lifecycle script may silently rebuild a different artifact.
+const tempRoot = await mkdtemp(join(tmpdir(), "cadence-alpha-"));
+const packDir = destination ? resolve(destination) : tempRoot;
+await mkdir(packDir, { recursive: true });
+try {
+  const packOut = run("npm", ["pack", "--ignore-scripts", "--json", "--pack-destination", packDir], { capture: true });
+  const [pack] = JSON.parse(packOut);
+  const tarball = join(packDir, pack.filename);
+  const files = new Set(pack.files.map((file) => file.path));
 
-const packOut = run("npm", ["pack", "--dry-run", "--json"], { capture: true });
-const [pack] = JSON.parse(packOut);
-const files = new Set(pack.files.map((file) => file.path));
+  const required = [
+    ".claude-plugin/plugin.json",
+    ".claude-plugin/marketplace.json",
+    ".codex-plugin/plugin.json",
+    "hooks/hooks.json",
+    "skills/cadence/SKILL.md",
+    "skills/try/SKILL.md",
+    "skills/state/SKILL.md",
+    "skills/setup/SKILL.md",
+    "skills/pause/SKILL.md",
+    "skills/resume/SKILL.md",
+    "skills/tune/SKILL.md",
+    "bin/cadence",
+    "dist/hook.js",
+    "dist/stop.js",
+    "dist/posttool.js",
+    "dist/session-start.js",
+    "dist/cli.js",
+    "dist/config.js",
+    "dist/envelope.js",
+    "dist/mcp.js",
+    "dist/demo.js",
+    "dist/demo-cli.js",
+    "dist/music-sample.js",
+    "dist/spotify-auth.js",
+    "dist/providers/activity.js",
+    "dist/providers/intent.js",
+    "dist/providers/esoteric.js",
+    "dist/providers/spotify.js",
+    "README.md",
+    "ALPHA.md",
+  ];
 
-const required = [
-  ".claude-plugin/plugin.json",
-  ".claude-plugin/marketplace.json",
-  ".codex-plugin/plugin.json",
-  "hooks/hooks.json",
-  "skills/cadence/SKILL.md",
-  "skills/try/SKILL.md",
-  "skills/state/SKILL.md",
-  "skills/setup/SKILL.md",
-  "skills/pause/SKILL.md",
-  "skills/resume/SKILL.md",
-  "bin/cadence",
-  "dist/hook.js",
-  "dist/stop.js",
-  "dist/posttool.js",
-  "dist/session-start.js",
-  "dist/cli.js",
-  "dist/config.js",
-  "dist/envelope.js",
-  "dist/mcp.js",
-  "dist/spotify-auth.js",
-  "dist/providers/activity.js",
-  "dist/providers/intent.js",
-  "dist/providers/esoteric.js",
-  "dist/providers/spotify.js",
-  "README.md",
-  "ALPHA.md",
-];
+  const missing = required.filter((file) => !files.has(file));
+  if (missing.length > 0) {
+    console.error("alpha package missing required files:");
+    for (const file of missing) console.error(`  - ${file}`);
+    throw new Error("Alpha verification failed");
+  }
 
-const missing = required.filter((file) => !files.has(file));
-if (missing.length > 0) {
-  console.error("alpha package missing required files:");
-  for (const file of missing) console.error(`  - ${file}`);
-  process.exit(1);
-}
-
-if (installSmoke) {
-  const tempRoot = await mkdtemp(join(tmpdir(), "cadence-alpha-"));
-  try {
-    const tarballOut = run(
-      "npm",
-      ["pack", "--json", "--pack-destination", tempRoot],
-      { capture: true }
-    );
-    const [tarballPack] = JSON.parse(tarballOut);
-    const tarball = join(tempRoot, tarballPack.filename);
+  if (installSmoke) {
     const consumerDir = join(tempRoot, "consumer");
 
     await mkdir(consumerDir);
     run("npm", ["init", "-y"], { cwd: consumerDir, capture: true });
-    run("npm", ["install", tarball], { cwd: consumerDir, capture: true });
+    run("npm", ["install", tarball, "--offline", "--ignore-scripts", "--no-audit", "--no-fund"], { cwd: consumerDir, capture: true });
     // Exercise the canonical command AND the deprecated alias — the skill
     // shells out to `report`, older muscle memory still types `state`.
     run(join(consumerDir, "node_modules", ".bin", "cadence"), ["report"], {
@@ -117,11 +129,13 @@ if (installSmoke) {
     const plugin = JSON.parse(
       await readFile(join(installedRoot, ".claude-plugin", "plugin.json"), "utf-8")
     );
+    const codexPlugin = JSON.parse(await readFile(join(installedRoot, ".codex-plugin", "plugin.json"), "utf8"));
+    if (codexPlugin.version !== expectedVersion) throw new Error("Installed Codex plugin version drift.");
     if (plugin.name !== "cadence" || plugin.version !== expectedVersion) {
       console.error(
         `unexpected installed plugin manifest (want version ${expectedVersion}): ${JSON.stringify(plugin)}`
       );
-      process.exit(1);
+      throw new Error("Alpha verification failed");
     }
 
     const hooks = JSON.parse(await readFile(join(installedRoot, "hooks", "hooks.json"), "utf-8"));
@@ -130,15 +144,15 @@ if (installSmoke) {
     const sessionStartHook = hooks.hooks?.SessionStart?.[0]?.hooks?.[0]?.command;
     if (!promptHook?.includes("${CLAUDE_PLUGIN_ROOT}/dist/hook.js")) {
       console.error(`unexpected prompt hook command: ${promptHook}`);
-      process.exit(1);
+      throw new Error("Alpha verification failed");
     }
     if (!stopHook?.includes("${CLAUDE_PLUGIN_ROOT}/dist/stop.js")) {
       console.error(`unexpected Stop hook command: ${stopHook}`);
-      process.exit(1);
+      throw new Error("Alpha verification failed");
     }
     if (!sessionStartHook?.includes("${CLAUDE_PLUGIN_ROOT}/dist/session-start.js")) {
       console.error(`unexpected SessionStart hook command: ${sessionStartHook}`);
-      process.exit(1);
+      throw new Error("Alpha verification failed");
     }
     await mustExist(join(installedRoot, "dist", "hook.js"));
     await mustExist(join(installedRoot, "dist", "stop.js"));
@@ -155,6 +169,10 @@ if (installSmoke) {
         cwd: consumerDir,
         input: JSON.stringify({ cwd: process.cwd(), prompt: "alpha verify" }),
         capture: true,
+        // Installed-package smoke tests must not touch the user's active
+        // Cadence state or probe their music/calendar. Live provider paths are
+        // covered by the isolated integration fixtures in npm test.
+        env: { ...process.env, CADENCE_PAUSED: "1" },
       }
     );
 
@@ -164,6 +182,7 @@ if (installSmoke) {
     const mcpOut = run(join(consumerDir, "node_modules", ".bin", "cadence"), ["mcp"], {
       cwd: consumerDir,
       capture: true,
+      env: { ...process.env, CADENCE_PAUSED: "1" },
       input:
         JSON.stringify({
           jsonrpc: "2.0",
@@ -182,7 +201,7 @@ if (installSmoke) {
       mcpLines = mcpOut.trim().split("\n").map((line) => JSON.parse(line));
     } catch {
       console.error(`mcp stdout is not pure JSON-RPC lines:\n${mcpOut}`);
-      process.exit(1);
+      throw new Error("Alpha verification failed");
     }
     const [mcpInit, mcpCall] = mcpLines;
     if (
@@ -192,12 +211,18 @@ if (installSmoke) {
       typeof mcpCall?.result?.content?.[0]?.text !== "string"
     ) {
       console.error(`unexpected mcp round-trip output:\n${mcpOut}`);
-      process.exit(1);
+      throw new Error("Alpha verification failed");
     }
-  } finally {
-    await rm(tempRoot, { recursive: true, force: true });
   }
-}
 
-const suffix = installSmoke ? ", consumer install smoke-tested" : "";
-console.log(`alpha verification passed (${pack.files.length} packaged files${suffix})`);
+  if (destination && installSmoke) {
+    const integrity = `sha512-${createHash("sha512").update(await readFile(tarball)).digest("base64")}`;
+    const commit = run("git", ["rev-parse", "HEAD"], { capture: true }).trim();
+    const dirty = Boolean(run("git", ["status", "--porcelain"], { capture: true }).trim());
+    await writeFile(join(packDir, "release.json"), JSON.stringify({ name: metadata.name, version: expectedVersion, commit, dirty, filename: pack.filename, integrity }, null, 2) + "\n");
+  }
+  const suffix = installSmoke ? ", consumer install smoke-tested" : "";
+  console.log(`alpha verification passed (${pack.files.length} packaged files${suffix})`);
+} finally {
+  await rm(tempRoot, { recursive: true, force: true });
+}

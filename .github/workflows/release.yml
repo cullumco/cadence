@@ -1,75 +1,96 @@
-# Mirrors a release into GitHub: creates the vX.Y.Z tag (if needed) and a
-# GitHub Release whose body comes from the committed notes file
-# `.github/releases/vX.Y.Z.md` — so release notes live in git and the
-# Release just reflects them.
-#
-# Two triggers:
-#   - workflow_dispatch (tag + optional target): the canonical path, used by
-#     the release skill. Works from remote sessions, where the git proxy
-#     rejects tag pushes — GitHub creates the tag at `target` server-side.
-#   - tag push: convenience for locally-pushed annotated tags. Only fires for
-#     tags whose commit contains this file (GitHub runs the workflow version
-#     AT the tagged commit).
-#
-# Notes resolution order: committed notes file → annotated tag message →
-# GitHub auto-generated notes. Idempotent: an existing Release is a no-op.
-
+# A merge verifies a release candidate; publication is a separate, explicit
+# dispatch. npm is the marketplace source, so GitHub Release follows npm proof.
 name: Release
 
 on:
-  push:
-    tags: ["v*"]
   workflow_dispatch:
     inputs:
-      tag:
-        description: "Release tag (e.g. v0.1.5)"
+      target:
+        description: Full 40-character SHA of the reviewed current main commit
         required: true
         type: string
-      target:
-        description: "Commit SHA (or branch) to tag if the tag doesn't exist yet"
-        required: false
-        default: "main"
-        type: string
+      publish:
+        description: Publish the tested package to npm and create its GitHub Release
+        required: true
+        type: boolean
+        default: false
 
 permissions:
-  contents: write
+  contents: read
+
+concurrency:
+  group: cadence-release
+  cancel-in-progress: false
 
 jobs:
-  github-release:
-    name: Create GitHub Release
+  target:
     runs-on: ubuntu-latest
+    outputs:
+      sha: ${{ steps.target.outputs.sha }}
     steps:
-      - name: Check out repository (with tags)
-        uses: actions/checkout@v4
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
         with:
           fetch-depth: 0
-
-      - name: Create tag (if needed) and Release
+          persist-credentials: false
+      - name: Require an immutable target already on main
+        id: target
         env:
-          GH_TOKEN: ${{ github.token }}
-          TAG: ${{ inputs.tag || github.ref_name }}
-          TARGET: ${{ inputs.target || 'main' }}
+          RELEASE_TARGET: ${{ inputs.target }}
+          RELEASE_REF: ${{ github.ref }}
+          RELEASE_REPOSITORY: ${{ github.repository }}
+          RELEASE_WORKFLOW_SHA: ${{ github.sha }}
         run: |
-          if gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
-            echo "release $TAG already exists — nothing to do"
-            exit 0
-          fi
+          [[ "$RELEASE_REF" == "refs/heads/main" && "$RELEASE_REPOSITORY" == "cullumco/cadence" ]] || { echo 'Dispatch Release on cullumco/cadence main'; exit 1; }
+          [[ "$RELEASE_TARGET" =~ ^[a-f0-9]{40}$ ]] || { echo 'Use a full commit SHA'; exit 1; }
+          [[ "$RELEASE_TARGET" == "$RELEASE_WORKFLOW_SHA" ]] || { echo 'Target must match main at dispatch time'; exit 1; }
+          git cat-file -e "$RELEASE_TARGET^{commit}"
+          git merge-base --is-ancestor "$RELEASE_TARGET" origin/main
+          printf 'sha=%s\n' "$RELEASE_TARGET" >> "$GITHUB_OUTPUT"
 
-          args=(--repo "$GITHUB_REPOSITORY" --title "$TAG")
+  verify:
+    needs: target
+    uses: ./.github/workflows/verify.yml
+    with:
+      ref: ${{ needs.target.outputs.sha }}
+      release_artifact: true
 
-          notes_file=".github/releases/${TAG}.md"
-          if [ -f "$notes_file" ]; then
-            args+=(--notes-file "$notes_file")
-          elif git rev-parse -q --verify "refs/tags/$TAG" >/dev/null; then
-            args+=(--notes-from-tag)
-          else
-            args+=(--generate-notes)
-          fi
+  publish:
+    if: inputs.publish
+    needs: [target, verify]
+    runs-on: ubuntu-latest
+    environment: npm
+    permissions:
+      contents: write
+      id-token: write
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          ref: ${{ needs.target.outputs.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5
+        with:
+          node-version: '24'
+          package-manager-cache: false
+      - name: Install the reviewed npm CLI with trusted publishing support
+        run: npm install --global npm@11.16.0 --ignore-scripts --no-audit --no-fund
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          name: release-package
+          path: ${{ runner.temp }}/cadence-package
+      - name: Publish tested bytes, verify npm, then create the matching GitHub Release
+        env:
+          RELEASE_TARGET: ${{ needs.target.outputs.sha }}
+          GH_TOKEN: ${{ github.token }}
+        run: node scripts/release-alpha.mjs --publish "$RUNNER_TEMP/cadence-package"
 
-          if git rev-parse -q --verify "refs/tags/$TAG" >/dev/null; then
-            args+=(--verify-tag)
-          else
-            args+=(--target "$TARGET")  # GitHub creates the tag here
-          fi
-
-          gh release create "$TAG" "${args[@]}"
+  dry-run:
+    if: ${{ !inputs.publish }}
+    needs: [target, verify]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Report the verified candidate
+        env:
+          RELEASE_TARGET: ${{ needs.target.outputs.sha }}
+        run: |
+          printf 'Verified %s on Linux and macOS. Download release-package for the tarball and integrity receipt. No package, tag, release, or deployment was published.\n' "$RELEASE_TARGET" >> "$GITHUB_STEP_SUMMARY"
