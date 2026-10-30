@@ -725,7 +725,7 @@ test("decideStop: avoids recursive Stop-hook blocks", () => {
 // The fail-silent osascript wrapper masked the error, so music was silently
 // dead for everyone. These tests actually compile the shipped scripts.
 // darwin-only: osascript doesn't exist elsewhere; provider degrades silently.
-test("music: player AppleScript compiles and runs (the -2741/-2740 regressions)", {
+test("music: player AppleScript compiles without probing a live player (the -2741/-2740 regressions)", {
   skip: process.platform !== "darwin" ? "macOS-only" : false,
 }, async () => {
   const { playerScript, osascript } = await import("../dist/providers/music.js");
@@ -737,14 +737,12 @@ test("music: player AppleScript compiles and runs (the -2741/-2740 regressions)"
   assert.equal(echoed, "quoting-ok", "osascript wrapper mangled the script");
 
   // Compile regression (-2741): `tell application` needs a LITERAL app name.
-  // "Music" ships with macOS, so its dictionary is always compilable, and the
-  // in-script `is running` guard makes execution inert when it's not playing.
-  // The wrapper swallows errors into "" — swap the final `return ""` for a
-  // sentinel so ANY successful run (playing or not) yields non-empty output.
-  const script = playerScript("Music").replace(/return ""\s*$/, 'return "compiled-ok"');
-  assert.notEqual(script, playerScript("Music"), "sentinel swap missed — template changed?");
+  // "Music" ships with macOS, so its dictionary is always compilable. Compile
+  // the entire shipped script in an unreachable branch: verification must not
+  // depend on a user's active player or request Automation permissions.
+  const script = `if false then\n${playerScript("Music")}\nend if\nreturn "compiled-ok"`;
   const out = await osascript(script);
-  assert.notEqual(out, "", "script failed to compile/run (error swallowed by wrapper)");
+  assert.equal(out, "compiled-ok", "script failed to compile (error swallowed by wrapper)");
 });
 
 test("music: player script template contains no dynamic tell target", async () => {
@@ -2813,19 +2811,18 @@ test("chrome audio: script filters to media hosts inside osascript and scans act
   assert.equal(script.match(/then set out to out/g).length, 2);
 });
 
-test("chrome audio: script compiles and runs (skipped without Chrome)", {
+test("chrome audio: script compiles without reading live tabs (skipped without Chrome)", {
   skip: process.platform !== "darwin" ? "macOS-only"
     : !existsSync("/Applications/Google Chrome.app") ? "Chrome not installed (compiling would raise a locate-app picker)"
     : false,
 }, async () => {
   const { chromeScript, osascript } = await import("../dist/providers/music.js");
-  // the wrapper swallows errors into "" — swap BOTH returns for a sentinel (when
-  // Chrome is running the in-script `return out` fires first, and with no media
-  // tabs that is "") so any successful compile+run yields non-empty output
-  const script = chromeScript().replace(/return out\b/, 'return "compiled-ok"').replace(/return ""\s*$/, 'return "compiled-ok"');
-  assert.notEqual(script, chromeScript(), "sentinel swap missed — template changed?");
+  // Keep compile coverage for the real app dictionary, but never read the
+  // developer's tabs. Live browser/Automation latency can exceed the provider's
+  // 800ms timeout and is not a reliable release gate.
+  const script = `if false then\n${chromeScript()}\nend if\nreturn "compiled-ok"`;
   const out = await osascript(script);
-  assert.notEqual(out, "", "chromeScript failed to compile/run (error swallowed by wrapper)");
+  assert.equal(out, "compiled-ok", "chromeScript failed to compile (error swallowed by wrapper)");
 });
 
 test("chrome audio: opt-in, listed in OPT_IN_PROVIDERS, off by default", async () => {

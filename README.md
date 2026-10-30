@@ -163,8 +163,8 @@ Set a self-report so you can feel the difference:
 Change your mind anytime: `/cadence:pause` silences everything instantly,
 `/cadence:resume` brings it back.
 
-Alpha testers running from source — while `@cullumco/cadence` is pending npm
-publish — see [`ALPHA.md`](ALPHA.md).
+The marketplace installs the published npm package. To try unreleased changes
+from source, see [`ALPHA.md`](ALPHA.md).
 
 The prompt hook has a ~1.5s budget and exits silently when it has nothing to
 say, so it never blocks or slows a prompt. The Stop hook is conservative: it
@@ -388,19 +388,23 @@ Every read collects fresh signals — no cache, bounded at 2s. Notes:
 
 ## Alpha release checklist
 
-`@cullumco/cadence` is live on npm; each release is the same gated flow:
+`@cullumco/cadence` is live on npm. Merging to `main` verifies a candidate;
+publishing is an explicit step:
 
 ```bash
-npm run verify:alpha    # build + plugin validate + tests + dry-pack + install smoke test
-npm run release:alpha   # the full gate, then npm publish
-# then: write .github/releases/vX.Y.Z.md and dispatch the Release workflow —
-# it creates the tag + GitHub Release from that file
-gh workflow run Release -f tag=vX.Y.Z -f target=<bump-commit>
+npm ci --ignore-scripts
+npm run release:alpha -- --dry-run # build, validate, test, pack, install smoke test
 ```
 
-CI runs the same gate on every push/PR to `main`
-(`.github/workflows/verify.yml`); `.github/workflows/release.yml` turns each
-release into a tag + GitHub Release whose body is the committed notes file.
+The local release command always defaults to a dry run. The `Release` GitHub
+workflow verifies an exact reviewed commit on Linux and macOS, publishes the
+tested tarball, confirms its integrity on npm, then creates the matching tag
+and GitHub Release. Both plugin manifests, the lockfile and versioned release
+notes must match the package version. See [`RELEASING.md`](RELEASING.md) for
+trusted-publisher setup, dispatch and recovery.
+
+The [website deployment](DEPLOY.md) follows `main` through Vercel independently.
+It does not publish the plugin or update existing installations.
 
 ## What's next
 

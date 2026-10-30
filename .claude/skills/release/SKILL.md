@@ -1,68 +1,44 @@
 ---
 name: release
-description: Cut and publish a Cadence alpha release to npm. Use when the user says "release", "publish", "cut a version", or "ship it to npm". Invoking this skill IS the explicit authorization to publish.
+description: Prepare and publish a Cadence release through the verified GitHub Actions workflow. Use when the user says "release", "publish", "cut a version", or "ship it to npm". Explicitly invoking this skill authorizes publication unless the user limits the task to preparation or a dry run.
 ---
 
-# Release a Cadence alpha
+# Release Cadence
 
-The user invoking `/release` is the explicit go-ahead for the npm publish —
-do not re-ask.
+Follow `RELEASING.md`. Respect the user's requested scope: preparing a release,
+fixing the pipeline or running a dry run does not authorize publication. An
+explicit `/release` invocation authorizes the documented release flow unless
+the user limits it; do not ask for the same authorization again. Account-side
+publisher and environment settings require the account owner's authorization.
 
-## Steps
+1. Check the current npm version and GitHub Release. Decide an unpublished
+   version; do not assume `main` has already shipped.
+2. On a branch, synchronize `package.json`, both root versions in
+   `package-lock.json`, `.claude-plugin/plugin.json` and
+   `.codex-plugin/plugin.json`. The marketplace's npm source stays unpinned.
+3. Write `.github/releases/vX.Y.Z.md` before committing. Run
+   `npm run release:alpha -- --dry-run`: build, version/manifest checks, tests,
+   pack and temporary consumer smoke test. The local command never publishes.
+4. Commit the candidate, open a PR and wait for Linux/macOS `Verify` checks.
+   Merge only within the user's authorized scope. Record the full main merge SHA.
+5. Confirm the `npm` GitHub environment and npm trusted publisher are configured
+   as documented. Do not log in, create credentials or alter security settings
+   as a workaround for missing configuration.
+6. If publication is authorized, dispatch `Release` on **main** with `target`
+   equal to that reviewed current main SHA and `publish=true`. Otherwise use
+   `publish=false` or return the prepared PR. Never publish locally or push a tag.
 
-1. **Decide the bump.** Patch unless the user named a version. Check what's
-   live: `npm view @cullumco/cadence version`.
-2. **Bump BOTH manifests** — they must match or the verify gate fails
-   (the consumer smoke test checks the installed plugin version against
-   package.json):
-   - `package.json` → `version`
-   - `.claude-plugin/plugin.json` → `version`
-3. **Publish via the gate** (never `npm publish` directly):
    ```bash
-   npm run release:alpha
+   gh workflow run release.yml --ref main -f target=<full-reviewed-main-sha> -F publish=true
    ```
-   This runs `verify:alpha` (build, plugin validate, tests, dry-pack,
-   consumer-install smoke test) and then publishes. Requires @cullumco npm
-   auth (`npm whoami`).
-4. **Commit + push the bump** on main:
-   ```
-   Bump version to X.Y.Z
-   ```
-5. **Confirm**: `npm view @cullumco/cadence version` returns the new version.
-6. **Write the release notes file** — `.github/releases/vX.Y.Z.md`. This is
-   the GitHub Release body verbatim: a short changelog, user-visible changes
-   first. Commit + push it on main.
-7. **Dispatch the `Release` workflow** (`.github/workflows/release.yml`) with
-   the tag and the bump commit. GitHub creates the tag at `target`
-   server-side AND the Release from the notes file — no tag push needed
-   (the remote-session git proxy 403s tag pushes anyway). Idempotent: an
-   existing Release is a no-op.
-   ```bash
-   gh workflow run Release -f tag=vX.Y.Z -f target=<bump-commit-sha>
-   ```
-   (No `gh` in remote sessions — use the GitHub MCP `actions_run_trigger`
-   tool instead.)
-8. **Confirm the Release exists**: `gh release view vX.Y.Z` (or the MCP
-   `get_release_by_tag`).
 
-## Gotchas learned in real releases
+7. Follow the run through verification and its environment approval. It
+   publishes the tested artifact, confirms npm version/integrity, then creates
+   the matching GitHub tag and release. Compare the artifact receipt, npm
+   `latest` and the tag's commit before reporting success.
+8. If a step fails, use the recovery section in `RELEASING.md`. Re-run the
+   original failed job to retain its target/artifact; never overwrite a package
+   version, move a conflicting tag or manually mark an unverified release done.
 
-- Tests run against `dist/`, not `src/` — the gate builds first, but if you
-  ran tests by hand before bumping, rebuild.
-- `marketplace.json` has no per-plugin version field — nothing to bump there.
-- The npm downloads API takes ~24h to index a first publish; "not found"
-  from api.npmjs.org right after publishing is normal.
-- `npm view` itself can serve the OLD version for ~15s after publish
-  (registry read-replica lag) — wait and re-check before declaring failure.
-- Plugin installers get the new version through npm (`source: npm`), so
-  publishing is what actually ships hook changes to users — pushing main
-  alone does not.
-- Tag/Release AFTER the publish succeeds, not before — a public tag/Release
-  pointing at a version npm doesn't serve is the pitch running ahead of
-  reality.
-- Remote sessions cannot push tags (the git proxy 403s `refs/tags/*` while
-  branch pushes succeed, and reports a misleading "Everything up-to-date").
-  That's why the workflow creates the tag server-side via `--target`.
-- `target` must be the FULL 40-char commit SHA (or a branch name) —
-  GitHub's release API rejects abbreviated SHAs with
-  "Release.target_commitish is invalid". Use `git rev-parse <short-sha>`.
+Vercel deploys the website from `main` independently. Its success is not evidence
+of npm publication, and npm publication does not update users' plugin caches.
